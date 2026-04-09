@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
@@ -10,15 +10,62 @@ import ListingDetailsPage from './pages/ListingDetailsPage';
 import mockListings from './data/mockListings';
 import './App.css';
 
+const STORAGE_KEYS = {
+  USER_LISTINGS: 'storet_user_listings',
+  SAVED_LISTING_IDS: 'storet_saved_listing_ids',
+  CURRENT_USER: 'storet_current_user',
+};
+
+const defaultCurrentUser = {
+  fullName: 'Guest User',
+  email: 'guest@example.com',
+  role: 'Renter',
+  isAuthenticated: false,
+};
+
+function readStoredValue(key, fallback) {
+  try {
+    const storedValue = window.localStorage.getItem(key);
+
+    if (!storedValue) {
+      return fallback;
+    }
+
+    return JSON.parse(storedValue);
+  } catch (error) {
+    console.error(`Failed to read localStorage key: ${key}`, error);
+    return fallback;
+  }
+}
+
 function App() {
-  const [listings, setListings] = useState(mockListings);
-  const [savedListingIds, setSavedListingIds] = useState([]);
-  const [currentUser, setCurrentUser] = useState({
-    fullName: 'Guest User',
-    email: 'guest@example.com',
-    role: 'Renter',
-    isAuthenticated: false,
+  const [userListings, setUserListings] = useState(() => {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    return readStoredValue(STORAGE_KEYS.USER_LISTINGS, []);
   });
+
+  const [savedListingIds, setSavedListingIds] = useState(() => {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    return readStoredValue(STORAGE_KEYS.SAVED_LISTING_IDS, []);
+  });
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    if (typeof window === 'undefined') {
+      return defaultCurrentUser;
+    }
+
+    return readStoredValue(STORAGE_KEYS.CURRENT_USER, defaultCurrentUser);
+  });
+
+  const listings = useMemo(() => {
+    return [...userListings, ...mockListings];
+  }, [userListings]);
 
   function handleToggleSave(listingId) {
     setSavedListingIds((prev) =>
@@ -59,7 +106,7 @@ function App() {
       createdBy: 'user',
     };
 
-    setListings((prev) => [newListing, ...prev]);
+    setUserListings((prev) => [newListing, ...prev]);
     return newListing;
   }
 
@@ -76,7 +123,28 @@ function App() {
     savedListingIds.includes(listing.id)
   );
 
-  const myListings = listings.filter((listing) => listing.createdBy === 'user');
+  const myListings = userListings;
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.USER_LISTINGS,
+      JSON.stringify(userListings)
+    );
+  }, [userListings]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.SAVED_LISTING_IDS,
+      JSON.stringify(savedListingIds)
+    );
+  }, [savedListingIds]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.CURRENT_USER,
+      JSON.stringify(currentUser)
+    );
+  }, [currentUser]);
 
   return (
     <div className="app-shell">
