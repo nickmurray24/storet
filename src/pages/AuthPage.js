@@ -1,8 +1,13 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 function AuthPage({ currentUser, onAuthSubmit }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const redirectTo = location.state?.redirectTo || '/explore';
+  const accessMessage = location.state?.message || '';
+
   const [mode, setMode] = useState('login');
   const [formData, setFormData] = useState({
     fullName: currentUser.isAuthenticated ? currentUser.fullName : '',
@@ -63,7 +68,7 @@ function AuthPage({ currentUser, onAuthSubmit }) {
       role: mode === 'signup' ? formData.role : currentUser.role || 'Renter',
     });
 
-    navigate('/explore');
+    navigate(redirectTo, { replace: true });
   }
 
   return (
@@ -77,6 +82,7 @@ function AuthPage({ currentUser, onAuthSubmit }) {
           >
             Log In
           </button>
+
           <button
             type="button"
             className={`auth-tab ${mode === 'signup' ? 'active' : ''}`}
@@ -92,6 +98,12 @@ function AuthPage({ currentUser, onAuthSubmit }) {
             ? 'Log in to search listings, save spaces, and manage your activity.'
             : 'Choose how you want to use Storet so the app can guide you to the right experience.'}
         </p>
+
+        {accessMessage && (
+          <div className="auth-message-banner">
+            {accessMessage}
+          </div>
+        )}
 
         <form className="auth-form" onSubmit={handleSubmit}>
           {mode === 'signup' && (

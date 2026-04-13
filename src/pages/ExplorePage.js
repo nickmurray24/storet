@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import SidebarFilters from '../components/SidebarFilters';
 import MapPlaceholder from '../components/MapPlaceholder';
 import ListingCard from '../components/ListingCard';
@@ -38,11 +39,15 @@ function getSizeCategory(sizeValue) {
 }
 
 function getInitialModeFromRole(role) {
-  if (role === 'Host') {
+  if (role === 'Host' || role === 'Both') {
     return 'host';
   }
 
   return 'renter';
+}
+
+function isHostRole(role) {
+  return role === 'Host' || role === 'Both';
 }
 
 function ExplorePage({
@@ -56,6 +61,9 @@ function ExplorePage({
   onDeleteListing,
   onToggleListingStatus,
 }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const [mode, setMode] = useState(getInitialModeFromRole(currentUser.role));
   const [filters, setFilters] = useState(defaultFilters);
   const [selectedListingId, setSelectedListingId] = useState(
@@ -65,6 +73,44 @@ function ExplorePage({
   useEffect(() => {
     setMode(getInitialModeFromRole(currentUser.role));
   }, [currentUser.role]);
+
+  function redirectToAuth(message) {
+    navigate('/auth', {
+      state: {
+        redirectTo: location.pathname,
+        message,
+      },
+    });
+  }
+
+  function handleModeChange(nextMode) {
+    if (nextMode === 'host' && !currentUser.isAuthenticated) {
+      redirectToAuth('Log in with a Host or Both account to access host tools.');
+      return;
+    }
+
+    if (nextMode === 'host' && !isHostRole(currentUser.role)) {
+      navigate('/auth', {
+        state: {
+          redirectTo: '/explore',
+          message:
+            'Host tools require a Host or Both account. Use sign up mode to update your role.',
+        },
+      });
+      return;
+    }
+
+    setMode(nextMode);
+  }
+
+  function handleProtectedSave(listingId) {
+    if (!currentUser.isAuthenticated) {
+      redirectToAuth('Log in to save listings to your profile.');
+      return;
+    }
+
+    onToggleSave(listingId);
+  }
 
   function handleFilterChange(event) {
     const { name, value, type, checked } = event.target;
@@ -169,7 +215,7 @@ function ExplorePage({
           <button
             type="button"
             className={`toggle-button ${mode === 'renter' ? 'active' : ''}`}
-            onClick={() => setMode('renter')}
+            onClick={() => handleModeChange('renter')}
           >
             I need storage
           </button>
@@ -177,7 +223,7 @@ function ExplorePage({
           <button
             type="button"
             className={`toggle-button ${mode === 'host' ? 'active' : ''}`}
-            onClick={() => setMode('host')}
+            onClick={() => handleModeChange('host')}
           >
             I have space
           </button>
@@ -195,7 +241,7 @@ function ExplorePage({
             ? 'You can switch between renter and host views anytime.'
             : currentUser.role === 'Host'
             ? 'Host mode is prioritized for your account, but you can still browse listings.'
-            : 'Renter mode is prioritized for your account, but you can still host too.'}
+            : 'Renter mode is prioritized for your account.'}
         </p>
       </div>
 
@@ -221,7 +267,7 @@ function ExplorePage({
                   ? savedListingIds.includes(selectedListing.id)
                   : false
               }
-              onToggleSave={onToggleSave}
+              onToggleSave={handleProtectedSave}
             />
 
             <section className="listings-section">
@@ -247,7 +293,7 @@ function ExplorePage({
                       key={listing.id}
                       listing={listing}
                       isSaved={savedListingIds.includes(listing.id)}
-                      onToggleSave={onToggleSave}
+                      onToggleSave={handleProtectedSave}
                       isSelected={selectedListingId === listing.id}
                       onSelectListing={setSelectedListingId}
                     />

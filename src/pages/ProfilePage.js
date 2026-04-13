@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import ListingCard from '../components/ListingCard';
 
 function formatDateTime(dateValue) {
@@ -20,7 +20,11 @@ function ProfilePage({
   hostMessages = [],
   onDeleteListing,
   onToggleListingStatus,
+  onUpdateRole,
+  onLogout,
 }) {
+  const navigate = useNavigate();
+
   function handleDelete(listing) {
     const shouldDelete = window.confirm(
       `Delete "${listing.title}"? This will remove it from your listings.`
@@ -33,11 +37,16 @@ function ProfilePage({
     onDeleteListing(listing.id);
   }
 
+  function handleLogoutClick() {
+    onLogout();
+    navigate('/');
+  }
+
   return (
     <div className="profile-page">
       <div className="page-header-block">
         <h1>My Profile</h1>
-        <p>Manage your account, saved spaces, listings, and activity.</p>
+        <p>Manage your account, role, listings, saved spaces, and activity.</p>
       </div>
 
       <div className="profile-grid">
@@ -57,6 +66,40 @@ function ProfilePage({
           <p>Messages Sent: {hostMessages.length}</p>
         </div>
       </div>
+
+      <section className="profile-section">
+        <div className="profile-card account-controls-card">
+          <h3>Account Controls</h3>
+          <p className="results-subtext">
+            Switch the role for this demo account or log out.
+          </p>
+
+          <div className="role-switch-grid">
+            {['Renter', 'Host', 'Both'].map((role) => (
+              <button
+                key={role}
+                type="button"
+                className={`role-switch-button ${
+                  currentUser.role === role ? 'active' : ''
+                }`}
+                onClick={() => onUpdateRole(role)}
+              >
+                {role}
+              </button>
+            ))}
+          </div>
+
+          <div className="management-actions">
+            <button
+              type="button"
+              className="danger-button"
+              onClick={handleLogoutClick}
+            >
+              Log Out
+            </button>
+          </div>
+        </div>
+      </section>
 
       <section className="profile-section">
         <div className="section-header">
@@ -238,7 +281,9 @@ function ProfilePage({
         ) : (
           <div className="empty-state-card">
             <h3>You have not created any listings yet</h3>
-            <p>Create your first listing and it will show up here automatically.</p>
+            <p>
+              Only listings created by this signed-in account appear here.
+            </p>
             <Link to="/create-listing" className="primary-button">
               Create Listing
             </Link>

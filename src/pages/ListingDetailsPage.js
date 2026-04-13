@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import BookingRequestForm from '../components/BookingRequestForm';
 import ContactHostForm from '../components/ContactHostForm';
 
@@ -12,6 +12,8 @@ function ListingDetailsPage({
   onSubmitHostMessage,
 }) {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarMode, setSidebarMode] = useState('default');
 
   const listing = listings.find((item) => item.id === Number(id));
@@ -31,6 +33,45 @@ function ListingDetailsPage({
   }
 
   const isSaved = savedListingIds.includes(listing.id);
+  const isOwner =
+    currentUser.isAuthenticated &&
+    listing.createdByAccountEmail === currentUser.email;
+
+  function redirectToAuth(message) {
+    navigate('/auth', {
+      state: {
+        redirectTo: location.pathname,
+        message,
+      },
+    });
+  }
+
+  function handleReserveClick() {
+    if (!currentUser.isAuthenticated) {
+      redirectToAuth('Log in to send a reservation request.');
+      return;
+    }
+
+    setSidebarMode('booking');
+  }
+
+  function handleContactClick() {
+    if (!currentUser.isAuthenticated) {
+      redirectToAuth('Log in to contact the host.');
+      return;
+    }
+
+    setSidebarMode('contact');
+  }
+
+  function handleSaveClick() {
+    if (!currentUser.isAuthenticated) {
+      redirectToAuth('Log in to save listings to your profile.');
+      return;
+    }
+
+    onToggleSave(listing.id);
+  }
 
   return (
     <div className="listing-details-page">
@@ -61,15 +102,15 @@ function ListingDetailsPage({
 
             <div className="info-block">
               <h3>Storage Details</h3>
-              <p>
-                <strong>Size:</strong> {listing.size}
-              </p>
-              <p>
-                <strong>Access:</strong> {listing.access}
-              </p>
-              <p>
-                <strong>Host:</strong> {listing.hostName}
-              </p>
+              <p><strong>Size:</strong> {listing.size}</p>
+              <p><strong>Access:</strong> {listing.access}</p>
+              <p><strong>Host:</strong> {listing.hostName}</p>
+              {listing.status && (
+                <p>
+                  <strong>Status:</strong>{' '}
+                  {listing.status === 'paused' ? 'Paused' : 'Active'}
+                </p>
+              )}
             </div>
 
             <div className="info-block">
@@ -86,50 +127,72 @@ function ListingDetailsPage({
         <aside className="listing-sidebar-card">
           {sidebarMode === 'default' && (
             <>
-              <h3>Reserve, Contact, or Save</h3>
-              <p>
-                Choose the next step for this space. Reservation requests and
-                host messages are now saved into Storet activity state.
-              </p>
+              {isOwner ? (
+                <>
+                  <h3>Manage Your Listing</h3>
+                  <p>
+                    You created this listing, so you’re seeing owner controls
+                    instead of renter actions.
+                  </p>
 
-              <div className="listing-sidebar-actions">
-                <button
-                  type="button"
-                  className="primary-button full-width"
-                  onClick={() => setSidebarMode('booking')}
-                >
-                  Reserve Space
-                </button>
+                  <div className="listing-sidebar-actions">
+                    <Link
+                      to={`/edit-listing/${listing.id}`}
+                      className="primary-button full-width"
+                    >
+                      Edit Listing
+                    </Link>
 
-                <button
-                  type="button"
-                  className="secondary-button full-width"
-                  onClick={() => setSidebarMode('contact')}
-                >
-                  Contact Host
-                </button>
+                    <Link
+                      to="/profile"
+                      className="secondary-button full-width"
+                    >
+                      View My Listings
+                    </Link>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3>Reserve, Contact, or Save</h3>
+                  <p>
+                    Choose the next step for this space. Signing in is required for
+                    reservation requests, host messages, and saved listings.
+                  </p>
 
-                <button
-                  type="button"
-                  className={`save-button full-width detail-save-button ${
-                    isSaved ? 'active' : ''
-                  }`}
-                  onClick={() => onToggleSave(listing.id)}
-                >
-                  {isSaved ? 'Saved to Profile' : 'Save Listing'}
-                </button>
-              </div>
+                  <div className="listing-sidebar-actions">
+                    <button
+                      type="button"
+                      className="primary-button full-width"
+                      onClick={handleReserveClick}
+                    >
+                      Reserve Space
+                    </button>
+
+                    <button
+                      type="button"
+                      className="secondary-button full-width"
+                      onClick={handleContactClick}
+                    >
+                      Contact Host
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`save-button full-width detail-save-button ${
+                        isSaved ? 'active' : ''
+                      }`}
+                      onClick={handleSaveClick}
+                    >
+                      {isSaved ? 'Saved to Profile' : 'Save Listing'}
+                    </button>
+                  </div>
+                </>
+              )}
 
               <div className="sidebar-meta">
-                <p>
-                  <strong>Type:</strong> {listing.type}
-                </p>
-                <p>
-                  <strong>Availability:</strong> {listing.availability}
-                </p>
-                <p>
-                  <strong>Price:</strong> {listing.price}
-                </p>
+                <p><strong>Type:</strong> {listing.type}</p>
+                <p><strong>Availability:</strong> {listing.availability}</p>
+                <p><strong>Price:</strong> {listing.price}</p>
               </div>
 
               <Link to="/explore" className="text-button back-link">
@@ -138,7 +201,7 @@ function ListingDetailsPage({
             </>
           )}
 
-          {sidebarMode === 'booking' && (
+          {!isOwner && sidebarMode === 'booking' && (
             <>
               <BookingRequestForm
                 listingTitle={listing.title}
@@ -147,6 +210,7 @@ function ListingDetailsPage({
                   onSubmitBookingRequest(listing, formData)
                 }
               />
+
               <button
                 type="button"
                 className="text-button back-link"
@@ -157,7 +221,7 @@ function ListingDetailsPage({
             </>
           )}
 
-          {sidebarMode === 'contact' && (
+          {!isOwner && sidebarMode === 'contact' && (
             <>
               <ContactHostForm
                 hostName={listing.hostName}
@@ -167,6 +231,7 @@ function ListingDetailsPage({
                   onSubmitHostMessage(listing, formData)
                 }
               />
+
               <button
                 type="button"
                 className="text-button back-link"
