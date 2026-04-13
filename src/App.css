@@ -1259,4 +1259,62 @@ textarea {
       flex-direction: column;
     }
   }
+
+  .auth-message-banner {
+    margin: 16px 0 4px;
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: #eff6ff;
+    border: 1px solid #bfdbfe;
+    color: #1d4ed8;
+    font-weight: 600;
+  }
+
+  .nav-logout-button {
+    border: 1px solid #d9e2ef;
+    background: white;
+    color: #334155;
+  }
+
+  .nav-logout-button:hover {
+    background: #f8fbff;
+  }
+
+  .account-controls-card {
+    display: grid;
+    gap: 16px;
+  }
+
+  .role-switch-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .role-switch-button {
+    border: 1px solid #d9e2ef;
+    background: white;
+    color: #334155;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: 0.2s ease;
+  }
+
+  .role-switch-button:hover {
+    background: #f8fbff;
+  }
+
+  .role-switch-button.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+  }
+
+  @media (max-width: 640px) {
+    .role-switch-grid {
+      grid-template-columns: 1fr;
+    }
+  }
 }

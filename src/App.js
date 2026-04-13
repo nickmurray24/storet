@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
@@ -51,6 +51,62 @@ function normalizeListing(listing) {
   };
 }
 
+function isHostRole(role) {
+  return role === 'Host' || role === 'Both';
+}
+
+function RequireSignedIn({ currentUser, children }) {
+  const location = useLocation();
+
+  if (!currentUser.isAuthenticated) {
+    return (
+      <Navigate
+        to="/auth"
+        replace
+        state={{
+          redirectTo: location.pathname,
+          message: 'Please log in to access that page.',
+        }}
+      />
+    );
+  }
+
+  return children;
+}
+
+function RequireHostAccess({ currentUser, children }) {
+  const location = useLocation();
+
+  if (!currentUser.isAuthenticated) {
+    return (
+      <Navigate
+        to="/auth"
+        replace
+        state={{
+          redirectTo: location.pathname,
+          message: 'Please log in with a Host or Both account to access host tools.',
+        }}
+      />
+    );
+  }
+
+  if (!isHostRole(currentUser.role)) {
+    return (
+      <Navigate
+        to="/auth"
+        replace
+        state={{
+          redirectTo: location.pathname,
+          message:
+            'Host tools require a Host or Both account. Update your role in Profile.',
+        }}
+      />
+    );
+  }
+
+  return children;
+}
+
 function App() {
   const [userListings, setUserListings] = useState(() => {
     if (typeof window === 'undefined') {
@@ -60,20 +116,20 @@ function App() {
     return readStoredValue(STORAGE_KEYS.USER_LISTINGS, []);
   });
 
-  const [savedListingIds, setSavedListingIds] = useState(() => {
-    if (typeof window === 'undefined') {
-      return [];
-    }
-
-    return readStoredValue(STORAGE_KEYS.SAVED_LISTING_IDS, []);
-  });
-
   const [currentUser, setCurrentUser] = useState(() => {
     if (typeof window === 'undefined') {
       return defaultCurrentUser;
     }
 
     return readStoredValue(STORAGE_KEYS.CURRENT_USER, defaultCurrentUser);
+  });
+
+  const [savedListingIdsStore, setSavedListingIdsStore] = useState(() => {
+    if (typeof window === 'undefined') {
+      return {};
+    }
+
+    return readStoredValue(STORAGE_KEYS.SAVED_LISTING_IDS, {});
   });
 
   const [bookingRequests, setBookingRequests] = useState(() => {
@@ -92,6 +148,14 @@ function App() {
     return readStoredValue(STORAGE_KEYS.HOST_MESSAGES, []);
   });
 
+  useEffect(() => {
+    if (Array.isArray(savedListingIdsStore) && currentUser.isAuthenticated) {
+      setSavedListingIdsStore({
+        [currentUser.email]: savedListingIdsStore,
+      });
+    }
+  }, [savedListingIdsStore, currentUser]);
+
   const allListings = useMemo(() => {
     return [...userListings.map(normalizeListing), ...mockListings.map(normalizeListing)];
   }, [userListings]);
@@ -101,11 +165,52 @@ function App() {
   }, [allListings]);
 
   const myListings = useMemo(() => {
-    return userListings.map(normalizeListing);
-  }, [userListings]);
+    if (!currentUser.isAuthenticated) {
+      return [];
+    }
+
+    return userListings
+      .filter((listing) => listing.createdByAccountEmail === currentUser.email)
+      .map(normalizeListing);
+  }, [userListings, currentUser]);
+
+  const savedListingIds = useMemo(() => {
+    if (!currentUser.isAuthenticated) {
+      return [];
+    }
+
+    if (Array.isArray(savedListingIdsStore)) {
+      return savedListingIdsStore;
+    }
+
+    return savedListingIdsStore[currentUser.email] || [];
+  }, [savedListingIdsStore, currentUser]);
+
+  function updateSavedIdsForCurrentUser(updater) {
+    if (!currentUser.isAuthenticated) {
+      return;
+    }
+
+    setSavedListingIdsStore((prev) => {
+      const normalizedStore = Array.isArray(prev)
+        ? { [currentUser.email]: prev }
+        : prev;
+
+      const currentIds = normalizedStore[currentUser.email] || [];
+
+      return {
+        ...normalizedStore,
+        [currentUser.email]: updater(currentIds),
+      };
+    });
+  }
 
   function handleToggleSave(listingId) {
-    setSavedListingIds((prev) =>
+    if (!currentUser.isAuthenticated) {
+      return;
+    }
+
+    updateSavedIdsForCurrentUser((prev) =>
       prev.includes(listingId)
         ? prev.filter((id) => id !== listingId)
         : [...prev, listingId]
@@ -156,6 +261,10 @@ function App() {
       return null;
     }
 
+    if (existingListing.createdByAccountEmail !== currentUser.email) {
+      return null;
+    }
+
     const normalizedPrice = formData.price.trim().startsWith('$')
       ? `${formData.price.trim()}/mo`
       : `$${formData.price.trim()}/mo`;
@@ -189,13 +298,47 @@ function App() {
   }
 
   function handleDeleteListing(listingId) {
+    const targetListing = userListings.find((listing) => listing.id === listingId);
+
+    if (!targetListing) {
+      return;
+    }
+
+    if (targetListing.createdByAccountEmail !== currentUser.email) {
+      return;
+    }
+
     setUserListings((prev) => prev.filter((listing) => listing.id !== listingId));
-    setSavedListingIds((prev) => prev.filter((id) => id !== listingId));
+
+    setSavedListingIdsStore((prev) => {
+      if (Array.isArray(prev)) {
+        return prev.filter((id) => id !== listingId);
+      }
+
+      const nextStore = {};
+
+      Object.entries(prev).forEach(([email, ids]) => {
+        nextStore[email] = ids.filter((id) => id !== listingId);
+      });
+
+      return nextStore;
+    });
+
     setBookingRequests((prev) => prev.filter((request) => request.listingId !== listingId));
     setHostMessages((prev) => prev.filter((message) => message.listingId !== listingId));
   }
 
   function handleToggleListingStatus(listingId) {
+    const targetListing = userListings.find((listing) => listing.id === listingId);
+
+    if (!targetListing) {
+      return;
+    }
+
+    if (targetListing.createdByAccountEmail !== currentUser.email) {
+      return;
+    }
+
     setUserListings((prev) =>
       prev.map((listing) => {
         if (listing.id !== listingId) {
@@ -217,6 +360,17 @@ function App() {
       role: userData.role,
       isAuthenticated: true,
     });
+  }
+
+  function handleLogout() {
+    setCurrentUser(defaultCurrentUser);
+  }
+
+  function handleUpdateRole(nextRole) {
+    setCurrentUser((prev) => ({
+      ...prev,
+      role: nextRole,
+    }));
   }
 
   function handleSubmitBookingRequest(listing, formData) {
@@ -293,9 +447,9 @@ function App() {
   useEffect(() => {
     window.localStorage.setItem(
       STORAGE_KEYS.SAVED_LISTING_IDS,
-      JSON.stringify(savedListingIds)
+      JSON.stringify(savedListingIdsStore)
     );
-  }, [savedListingIds]);
+  }, [savedListingIdsStore]);
 
   useEffect(() => {
     window.localStorage.setItem(
@@ -320,7 +474,7 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Navbar currentUser={currentUser} />
+      <Navbar currentUser={currentUser} onLogout={handleLogout} />
 
       <main className="page-content">
         <Routes>
@@ -356,45 +510,53 @@ function App() {
           <Route
             path="/create-listing"
             element={
-              <CreateListingPage
-                listings={myListings}
-                currentUser={currentUser}
-                onCreateListing={handleCreateListing}
-                onUpdateListing={handleUpdateListing}
-                onDeleteListing={handleDeleteListing}
-                onToggleListingStatus={handleToggleListingStatus}
-              />
+              <RequireHostAccess currentUser={currentUser}>
+                <CreateListingPage
+                  listings={myListings}
+                  currentUser={currentUser}
+                  onCreateListing={handleCreateListing}
+                  onUpdateListing={handleUpdateListing}
+                  onDeleteListing={handleDeleteListing}
+                  onToggleListingStatus={handleToggleListingStatus}
+                />
+              </RequireHostAccess>
             }
           />
 
           <Route
             path="/edit-listing/:id"
             element={
-              <CreateListingPage
-                listings={myListings}
-                currentUser={currentUser}
-                onCreateListing={handleCreateListing}
-                onUpdateListing={handleUpdateListing}
-                onDeleteListing={handleDeleteListing}
-                onToggleListingStatus={handleToggleListingStatus}
-              />
+              <RequireHostAccess currentUser={currentUser}>
+                <CreateListingPage
+                  listings={myListings}
+                  currentUser={currentUser}
+                  onCreateListing={handleCreateListing}
+                  onUpdateListing={handleUpdateListing}
+                  onDeleteListing={handleDeleteListing}
+                  onToggleListingStatus={handleToggleListingStatus}
+                />
+              </RequireHostAccess>
             }
           />
 
           <Route
             path="/profile"
             element={
-              <ProfilePage
-                currentUser={currentUser}
-                savedListings={savedListings}
-                myListings={myListings}
-                savedListingIds={savedListingIds}
-                onToggleSave={handleToggleSave}
-                bookingRequests={myBookingRequests}
-                hostMessages={myHostMessages}
-                onDeleteListing={handleDeleteListing}
-                onToggleListingStatus={handleToggleListingStatus}
-              />
+              <RequireSignedIn currentUser={currentUser}>
+                <ProfilePage
+                  currentUser={currentUser}
+                  savedListings={savedListings}
+                  myListings={myListings}
+                  savedListingIds={savedListingIds}
+                  onToggleSave={handleToggleSave}
+                  bookingRequests={myBookingRequests}
+                  hostMessages={myHostMessages}
+                  onDeleteListing={handleDeleteListing}
+                  onToggleListingStatus={handleToggleListingStatus}
+                  onUpdateRole={handleUpdateRole}
+                  onLogout={handleLogout}
+                />
+              </RequireSignedIn>
             }
           />
 
@@ -411,6 +573,8 @@ function App() {
               />
             }
           />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </div>
