@@ -3,7 +3,14 @@ import { Link, useParams } from 'react-router-dom';
 import BookingRequestForm from '../components/BookingRequestForm';
 import ContactHostForm from '../components/ContactHostForm';
 
-function ListingDetailsPage({ listings, savedListingIds, onToggleSave }) {
+function ListingDetailsPage({
+  listings,
+  savedListingIds,
+  onToggleSave,
+  currentUser,
+  onSubmitBookingRequest,
+  onSubmitHostMessage,
+}) {
   const { id } = useParams();
   const [sidebarMode, setSidebarMode] = useState('default');
 
@@ -54,9 +61,15 @@ function ListingDetailsPage({ listings, savedListingIds, onToggleSave }) {
 
             <div className="info-block">
               <h3>Storage Details</h3>
-              <p><strong>Size:</strong> {listing.size}</p>
-              <p><strong>Access:</strong> {listing.access}</p>
-              <p><strong>Host:</strong> {listing.hostName}</p>
+              <p>
+                <strong>Size:</strong> {listing.size}
+              </p>
+              <p>
+                <strong>Access:</strong> {listing.access}
+              </p>
+              <p>
+                <strong>Host:</strong> {listing.hostName}
+              </p>
             </div>
 
             <div className="info-block">
@@ -75,12 +88,13 @@ function ListingDetailsPage({ listings, savedListingIds, onToggleSave }) {
             <>
               <h3>Reserve, Contact, or Save</h3>
               <p>
-                Choose the next step for this space. This is now connected to a
-                booking request flow, host message flow, and saved listings flow.
+                Choose the next step for this space. Reservation requests and
+                host messages are now saved into Storet activity state.
               </p>
 
               <div className="listing-sidebar-actions">
                 <button
+                  type="button"
                   className="primary-button full-width"
                   onClick={() => setSidebarMode('booking')}
                 >
@@ -88,6 +102,7 @@ function ListingDetailsPage({ listings, savedListingIds, onToggleSave }) {
                 </button>
 
                 <button
+                  type="button"
                   className="secondary-button full-width"
                   onClick={() => setSidebarMode('contact')}
                 >
@@ -95,6 +110,7 @@ function ListingDetailsPage({ listings, savedListingIds, onToggleSave }) {
                 </button>
 
                 <button
+                  type="button"
                   className={`save-button full-width detail-save-button ${
                     isSaved ? 'active' : ''
                   }`}
@@ -105,9 +121,15 @@ function ListingDetailsPage({ listings, savedListingIds, onToggleSave }) {
               </div>
 
               <div className="sidebar-meta">
-                <p><strong>Type:</strong> {listing.type}</p>
-                <p><strong>Availability:</strong> {listing.availability}</p>
-                <p><strong>Price:</strong> {listing.price}</p>
+                <p>
+                  <strong>Type:</strong> {listing.type}
+                </p>
+                <p>
+                  <strong>Availability:</strong> {listing.availability}
+                </p>
+                <p>
+                  <strong>Price:</strong> {listing.price}
+                </p>
               </div>
 
               <Link to="/explore" className="text-button back-link">
@@ -118,8 +140,15 @@ function ListingDetailsPage({ listings, savedListingIds, onToggleSave }) {
 
           {sidebarMode === 'booking' && (
             <>
-              <BookingRequestForm listingTitle={listing.title} />
+              <BookingRequestForm
+                listingTitle={listing.title}
+                currentUser={currentUser}
+                onSubmitRequest={(formData) =>
+                  onSubmitBookingRequest(listing, formData)
+                }
+              />
               <button
+                type="button"
                 className="text-button back-link"
                 onClick={() => setSidebarMode('default')}
               >
@@ -133,8 +162,13 @@ function ListingDetailsPage({ listings, savedListingIds, onToggleSave }) {
               <ContactHostForm
                 hostName={listing.hostName}
                 listingTitle={listing.title}
+                currentUser={currentUser}
+                onSubmitMessage={(formData) =>
+                  onSubmitHostMessage(listing, formData)
+                }
               />
               <button
+                type="button"
                 className="text-button back-link"
                 onClick={() => setSidebarMode('default')}
               >

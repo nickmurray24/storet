@@ -1,10 +1,24 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 
-function CreateListingPage({ onCreateListing }) {
-  const navigate = useNavigate();
+function buildFormData(listing, currentUser) {
+  if (listing) {
+    return {
+      title: listing.title || '',
+      type: listing.type || 'Private',
+      location: listing.location || '',
+      price: listing.price ? listing.price.replace('/mo', '').replace('$', '') : '',
+      size: listing.size || '',
+      duration: listing.duration || 'Short-term',
+      availability: listing.availability || 'Available now',
+      access: listing.access || '',
+      hostName: listing.hostName || '',
+      description: listing.description || '',
+      features: Array.isArray(listing.features) ? listing.features.join(', ') : '',
+    };
+  }
 
-  const [formData, setFormData] = useState({
+  return {
     title: '',
     type: 'Private',
     location: '',
@@ -13,12 +27,39 @@ function CreateListingPage({ onCreateListing }) {
     duration: 'Short-term',
     availability: 'Available now',
     access: '',
-    hostName: '',
+    hostName: currentUser?.isAuthenticated ? currentUser.fullName : '',
     description: '',
     features: '',
-  });
+  };
+}
 
+function CreateListingPage({
+  listings,
+  currentUser,
+  onCreateListing,
+  onUpdateListing,
+  onDeleteListing,
+  onToggleListingStatus,
+}) {
+  const navigate = useNavigate();
+  const { id } = useParams();
+
+  const isEditing = Boolean(id);
+
+  const editingListing = useMemo(() => {
+    if (!isEditing) {
+      return null;
+    }
+
+    return listings.find((listing) => listing.id === Number(id)) || null;
+  }, [id, isEditing, listings]);
+
+  const [formData, setFormData] = useState(buildFormData(editingListing, currentUser));
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    setFormData(buildFormData(editingListing, currentUser));
+  }, [editingListing, currentUser]);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -74,18 +115,99 @@ function CreateListingPage({ onCreateListing }) {
       return;
     }
 
+    if (isEditing) {
+      const updatedListing = onUpdateListing(editingListing.id, formData);
+
+      if (updatedListing) {
+        navigate(`/listing/${updatedListing.id}`);
+      }
+
+      return;
+    }
+
     const createdListing = onCreateListing(formData);
     navigate(`/listing/${createdListing.id}`);
+  }
+
+  function handleDelete() {
+    if (!editingListing) {
+      return;
+    }
+
+    const shouldDelete = window.confirm(
+      `Delete "${editingListing.title}"? This will remove it from your listings.`
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    onDeleteListing(editingListing.id);
+    navigate('/profile');
+  }
+
+  function handleToggleStatus() {
+    if (!editingListing) {
+      return;
+    }
+
+    onToggleListingStatus(editingListing.id);
+    navigate('/profile');
+  }
+
+  if (isEditing && !editingListing) {
+    return (
+      <div className="form-page">
+        <div className="page-header-block">
+          <h1>Listing not found</h1>
+          <p>We couldn’t find that listing in your host inventory.</p>
+          <Link to="/profile" className="primary-button">
+            Back to Profile
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="form-page">
       <div className="page-header-block">
-        <h1>Create a Listing</h1>
+        <h1>{isEditing ? 'Edit Listing' : 'Create a Listing'}</h1>
         <p>
-          Publish a new storage space. When you save it, it will immediately
-          appear in Explore and in your Profile.
+          {isEditing
+            ? 'Update your storage listing details, pause visibility, or remove the listing entirely.'
+            : 'Publish a new storage space. When you save it, it will immediately appear in Explore and in your Profile.'}
         </p>
+
+        {isEditing && editingListing && (
+          <div className="management-actions">
+            <span
+              className={`status-pill ${
+                editingListing.status === 'paused' ? 'paused' : 'active'
+              }`}
+            >
+              {editingListing.status === 'paused' ? 'Paused' : 'Active'}
+            </span>
+
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={handleToggleStatus}
+            >
+              {editingListing.status === 'paused'
+                ? 'Resume Listing'
+                : 'Pause Listing'}
+            </button>
+
+            <button
+              type="button"
+              className="danger-button"
+              onClick={handleDelete}
+            >
+              Delete Listing
+            </button>
+          </div>
+        )}
       </div>
 
       <form className="listing-form-card" onSubmit={handleSubmit}>
@@ -246,9 +368,15 @@ function CreateListingPage({ onCreateListing }) {
           )}
         </div>
 
-        <button type="submit" className="primary-button">
-          Save Listing
-        </button>
+        <div className="management-actions">
+          <button type="submit" className="primary-button">
+            {isEditing ? 'Update Listing' : 'Save Listing'}
+          </button>
+
+          <Link to="/profile" className="secondary-button">
+            Cancel
+          </Link>
+        </div>
       </form>
     </div>
   );
