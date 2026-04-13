@@ -51,6 +51,10 @@ function ExplorePage({
   savedListingIds,
   onToggleSave,
   currentUser,
+  bookingRequests,
+  hostMessages,
+  onDeleteListing,
+  onToggleListingStatus,
 }) {
   const [mode, setMode] = useState(getInitialModeFromRole(currentUser.role));
   const [filters, setFilters] = useState(defaultFilters);
@@ -269,7 +273,13 @@ function ExplorePage({
           </div>
         </div>
       ) : (
-        <HostDashboardPanel myListings={myListings} />
+        <HostDashboardPanel
+          myListings={myListings}
+          bookingRequests={bookingRequests}
+          hostMessages={hostMessages}
+          onDeleteListing={onDeleteListing}
+          onToggleListingStatus={onToggleListingStatus}
+        />
       )}
     </div>
   );

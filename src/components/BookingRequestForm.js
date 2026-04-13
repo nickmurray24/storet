@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
-function BookingRequestForm({ listingTitle }) {
+function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
+    fullName: currentUser?.isAuthenticated ? currentUser.fullName : '',
+    email: currentUser?.isAuthenticated ? currentUser.email : '',
     moveInDate: '',
     duration: '',
     notes: '',
@@ -58,6 +58,14 @@ function BookingRequestForm({ listingTitle }) {
       return;
     }
 
+    onSubmitRequest({
+      fullName: formData.fullName,
+      email: formData.email,
+      moveInDate: formData.moveInDate,
+      duration: formData.duration,
+      notes: formData.notes,
+    });
+
     setIsSubmitted(true);
   }
 
@@ -67,17 +75,29 @@ function BookingRequestForm({ listingTitle }) {
         <p className="booking-success-tag">Request Sent</p>
         <h3>Your reservation request is in.</h3>
         <p>
-          We’ve saved your request for <strong>{listingTitle}</strong>. In a real
-          version of the app, this is where the host would be notified and the
-          user would receive a confirmation email.
+          We saved your request for <strong>{listingTitle}</strong>. It will now
+          appear in your profile activity and in the host dashboard for that
+          listing.
         </p>
 
         <div className="booking-summary">
-          <p><strong>Name:</strong> {formData.fullName}</p>
-          <p><strong>Email:</strong> {formData.email}</p>
-          <p><strong>Move-in date:</strong> {formData.moveInDate}</p>
-          <p><strong>Duration:</strong> {formData.duration}</p>
-          {formData.notes && <p><strong>Notes:</strong> {formData.notes}</p>}
+          <p>
+            <strong>Name:</strong> {formData.fullName}
+          </p>
+          <p>
+            <strong>Email:</strong> {formData.email}
+          </p>
+          <p>
+            <strong>Move-in date:</strong> {formData.moveInDate}
+          </p>
+          <p>
+            <strong>Duration:</strong> {formData.duration}
+          </p>
+          {formData.notes && (
+            <p>
+              <strong>Notes:</strong> {formData.notes}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -100,7 +120,9 @@ function BookingRequestForm({ listingTitle }) {
           onChange={handleChange}
           placeholder="Your name"
         />
-        {errors.fullName && <span className="form-error">{errors.fullName}</span>}
+        {errors.fullName && (
+          <span className="form-error">{errors.fullName}</span>
+        )}
       </div>
 
       <div className="filter-group">
@@ -145,7 +167,9 @@ function BookingRequestForm({ listingTitle }) {
             <option value="3-6 months">3-6 months</option>
             <option value="6+ months">6+ months</option>
           </select>
-          {errors.duration && <span className="form-error">{errors.duration}</span>}
+          {errors.duration && (
+            <span className="form-error">{errors.duration}</span>
+          )}
         </div>
       </div>
 

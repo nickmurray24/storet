@@ -1,9 +1,14 @@
 import { useState } from 'react';
 
-function ContactHostForm({ hostName, listingTitle }) {
+function ContactHostForm({
+  hostName,
+  listingTitle,
+  currentUser,
+  onSubmitMessage,
+}) {
   const [formData, setFormData] = useState({
-    fullName: '',
-    email: '',
+    fullName: currentUser?.isAuthenticated ? currentUser.fullName : '',
+    email: currentUser?.isAuthenticated ? currentUser.email : '',
     message: '',
   });
 
@@ -52,6 +57,12 @@ function ContactHostForm({ hostName, listingTitle }) {
       return;
     }
 
+    onSubmitMessage({
+      fullName: formData.fullName,
+      email: formData.email,
+      message: formData.message,
+    });
+
     setIsSubmitted(true);
   }
 
@@ -61,14 +72,21 @@ function ContactHostForm({ hostName, listingTitle }) {
         <p className="booking-success-tag">Message Sent</p>
         <h3>Your message is on its way.</h3>
         <p>
-          In a real version of Storet, <strong>{hostName}</strong> would receive
-          this message about <strong>{listingTitle}</strong>.
+          We saved your message to <strong>{hostName}</strong> about{' '}
+          <strong>{listingTitle}</strong>. It will now appear in your profile
+          activity and in the host dashboard for that listing.
         </p>
 
         <div className="booking-summary">
-          <p><strong>Name:</strong> {formData.fullName}</p>
-          <p><strong>Email:</strong> {formData.email}</p>
-          <p><strong>Message:</strong> {formData.message}</p>
+          <p>
+            <strong>Name:</strong> {formData.fullName}
+          </p>
+          <p>
+            <strong>Email:</strong> {formData.email}
+          </p>
+          <p>
+            <strong>Message:</strong> {formData.message}
+          </p>
         </div>
       </div>
     );
@@ -92,7 +110,9 @@ function ContactHostForm({ hostName, listingTitle }) {
           onChange={handleChange}
           placeholder="Your name"
         />
-        {errors.fullName && <span className="form-error">{errors.fullName}</span>}
+        {errors.fullName && (
+          <span className="form-error">{errors.fullName}</span>
+        )}
       </div>
 
       <div className="filter-group">
@@ -118,7 +138,9 @@ function ContactHostForm({ hostName, listingTitle }) {
           onChange={handleChange}
           placeholder="Hi, I’m interested in this storage space. Is it still available?"
         />
-        {errors.message && <span className="form-error">{errors.message}</span>}
+        {errors.message && (
+          <span className="form-error">{errors.message}</span>
+        )}
       </div>
 
       <button type="submit" className="primary-button full-width">
