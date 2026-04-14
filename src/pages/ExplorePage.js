@@ -50,6 +50,19 @@ function isHostRole(role) {
   return role === 'Host' || role === 'Both';
 }
 
+function getPriceValue(price) {
+  const numeric = Number(String(price).replace(/[^0-9.]/g, ''));
+  return Number.isNaN(numeric) ? 0 : numeric;
+}
+
+function getNewestValue(listing) {
+  if (listing.createdAt) {
+    return new Date(listing.createdAt).getTime();
+  }
+
+  return listing.id || 0;
+}
+
 function ExplorePage({
   listings,
   myListings,
@@ -66,6 +79,7 @@ function ExplorePage({
 
   const [mode, setMode] = useState(getInitialModeFromRole(currentUser.role));
   const [filters, setFilters] = useState(defaultFilters);
+  const [sortBy, setSortBy] = useState('recommended');
   const [selectedListingId, setSelectedListingId] = useState(
     listings.length > 0 ? listings[0].id : null
   );
@@ -94,7 +108,7 @@ function ExplorePage({
         state: {
           redirectTo: '/explore',
           message:
-            'Host tools require a Host or Both account. Use sign up mode to update your role.',
+            'Host tools require a Host or Both account. Update your role in Profile.',
         },
       });
       return;
@@ -126,7 +140,7 @@ function ExplorePage({
   }
 
   const filteredListings = useMemo(() => {
-    return listings.filter((listing) => {
+    const results = listings.filter((listing) => {
       const searchValue = filters.location.trim().toLowerCase();
 
       const matchesSearch =
@@ -169,7 +183,25 @@ function ExplorePage({
         matchesAvailability
       );
     });
-  }, [filters, listings]);
+
+    if (sortBy === 'price-low-high') {
+      return results.sort((a, b) => getPriceValue(a.price) - getPriceValue(b.price));
+    }
+
+    if (sortBy === 'price-high-low') {
+      return results.sort((a, b) => getPriceValue(b.price) - getPriceValue(a.price));
+    }
+
+    if (sortBy === 'newest') {
+      return results.sort((a, b) => getNewestValue(b) - getNewestValue(a));
+    }
+
+    if (sortBy === 'alphabetical') {
+      return results.sort((a, b) => a.title.localeCompare(b.title));
+    }
+
+    return results;
+  }, [filters, listings, sortBy]);
 
   useEffect(() => {
     if (filteredListings.length === 0) {
@@ -271,7 +303,7 @@ function ExplorePage({
             />
 
             <section className="listings-section">
-              <div className="section-header">
+              <div className="section-header results-toolbar">
                 <div>
                   <h2>Available Listings</h2>
                   <p className="results-subtext">
@@ -283,6 +315,22 @@ function ExplorePage({
                         } active`
                       : ''}
                   </p>
+                </div>
+
+                <div className="sort-control">
+                  <label htmlFor="sortBy">Sort by</label>
+                  <select
+                    id="sortBy"
+                    className="sort-select"
+                    value={sortBy}
+                    onChange={(event) => setSortBy(event.target.value)}
+                  >
+                    <option value="recommended">Recommended</option>
+                    <option value="newest">Newest</option>
+                    <option value="price-low-high">Price: Low to High</option>
+                    <option value="price-high-low">Price: High to Low</option>
+                    <option value="alphabetical">Alphabetical</option>
+                  </select>
                 </div>
               </div>
 
