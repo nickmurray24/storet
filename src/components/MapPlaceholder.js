@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import L from 'leaflet';
 import {
+  Circle,
   CircleMarker,
   MapContainer,
   Popup,
@@ -20,17 +21,33 @@ function hasCoordinates(listing) {
   );
 }
 
-function MapViewportController({ listings, selectedListingId }) {
+function hasSearchCenter(searchCenter) {
+  return (
+    searchCenter &&
+    typeof searchCenter.latitude === 'number' &&
+    Number.isFinite(searchCenter.latitude) &&
+    typeof searchCenter.longitude === 'number' &&
+    Number.isFinite(searchCenter.longitude)
+  );
+}
+
+function MapViewportController({ listings, selectedListingId, searchCenter }) {
   const map = useMap();
 
   useEffect(() => {
-    if (listings.length === 0) {
+    const validListingPoints = listings
+      .filter(hasCoordinates)
+      .map((listing) => [listing.latitude, listing.longitude]);
+
+    const hasCenter = hasSearchCenter(searchCenter);
+
+    if (validListingPoints.length === 0 && !hasCenter) {
       map.setView(DEFAULT_CENTER, 11);
       return;
     }
 
     const selectedListing = listings.find(
-      (listing) => listing.id === selectedListingId
+      (listing) => listing.id === selectedListingId && hasCoordinates(listing)
     );
 
     if (selectedListing) {
@@ -44,36 +61,39 @@ function MapViewportController({ listings, selectedListingId }) {
       return;
     }
 
-    if (listings.length === 1) {
-      map.setView([listings[0].latitude, listings[0].longitude], 13);
+    if (validListingPoints.length === 0 && hasCenter) {
+      map.setView([searchCenter.latitude, searchCenter.longitude], 12);
       return;
     }
 
-    const validPoints = listings
-      .filter(hasCoordinates)
-      .map((listing) => [listing.latitude, listing.longitude]);
+    const allPoints = hasCenter
+      ? [
+          ...validListingPoints,
+          [searchCenter.latitude, searchCenter.longitude],
+        ]
+      : validListingPoints;
 
-    if (validPoints.length === 0) {
-      map.setView(DEFAULT_CENTER, 11);
+    if (allPoints.length === 1) {
+      map.setView(allPoints[0], 13);
       return;
     }
 
-    if (validPoints.length === 1) {
-      map.setView(validPoints[0], 13);
-      return;
-    }
-
-    const bounds = L.latLngBounds(validPoints);
-
+    const bounds = L.latLngBounds(allPoints);
     map.fitBounds(bounds, {
       padding: [40, 40],
     });
-  }, [listings, selectedListingId, map]);
+  }, [listings, selectedListingId, searchCenter, map]);
 
   return null;
 }
 
-function MapPlaceholder({ listings, selectedListingId, onSelectListing }) {
+function MapPlaceholder({
+  listings,
+  selectedListingId,
+  onSelectListing,
+  searchCenter,
+  radiusMiles,
+}) {
   const mappedListings = useMemo(
     () => listings.filter(hasCoordinates),
     [listings]
@@ -83,6 +103,7 @@ function MapPlaceholder({ listings, selectedListingId, onSelectListing }) {
     listings.find((listing) => listing.id === selectedListingId) || null;
 
   const hiddenCount = listings.length - mappedListings.length;
+  const showMap = mappedListings.length > 0 || hasSearchCenter(searchCenter);
 
   return (
     <section className="real-map-section">
@@ -97,7 +118,7 @@ function MapPlaceholder({ listings, selectedListingId, onSelectListing }) {
           </p>
         </div>
 
-        {mappedListings.length > 0 ? (
+        {showMap ? (
           <MapContainer
             center={DEFAULT_CENTER}
             zoom={11}
@@ -113,7 +134,46 @@ function MapPlaceholder({ listings, selectedListingId, onSelectListing }) {
             <MapViewportController
               listings={mappedListings}
               selectedListingId={selectedListingId}
+              searchCenter={searchCenter}
             />
+
+            {hasSearchCenter(searchCenter) && (
+              <>
+                <Circle
+                  center={[searchCenter.latitude, searchCenter.longitude]}
+                  radius={radiusMiles * 1609.34}
+                  pathOptions={{
+                    color: '#f97316',
+                    fillColor: '#fdba74',
+                    fillOpacity: 0.12,
+                    weight: 2,
+                  }}
+                />
+
+                <CircleMarker
+                  center={[searchCenter.latitude, searchCenter.longitude]}
+                  radius={8}
+                  pathOptions={{
+                    color: '#ea580c',
+                    fillColor: '#f97316',
+                    fillOpacity: 0.95,
+                    weight: 2,
+                  }}
+                >
+                  <Popup>
+                    <div className="map-popup-card">
+                      <h3>Search Center</h3>
+                      <p className="map-popup-meta">
+                        {searchCenter.label || 'Chosen renter search point'}
+                      </p>
+                      <p className="map-popup-copy">
+                        Showing listings within {radiusMiles} miles.
+                      </p>
+                    </div>
+                  </Popup>
+                </CircleMarker>
+              </>
+            )}
 
             {mappedListings.map((listing) => {
               const isSelected = listing.id === selectedListingId;
@@ -139,6 +199,12 @@ function MapPlaceholder({ listings, selectedListingId, onSelectListing }) {
                       <p className="map-popup-meta">
                         {listing.location} • {listing.price}
                       </p>
+                      {listing.distanceMiles !== null &&
+                        listing.distanceMiles !== undefined && (
+                          <p className="map-popup-meta">
+                            {listing.distanceMiles.toFixed(1)} miles away
+                          </p>
+                        )}
                       <p className="map-popup-copy">{listing.description}</p>
                       <Link
                         to={`/listing/${listing.id}`}
@@ -156,8 +222,8 @@ function MapPlaceholder({ listings, selectedListingId, onSelectListing }) {
           <div className="map-empty-state">
             <h3>No mapped listings yet</h3>
             <p>
-              Add latitude and longitude to listings to place them on the live
-              map.
+              Search near an address or add coordinates to listings to place
+              them on the live map.
             </p>
           </div>
         )}

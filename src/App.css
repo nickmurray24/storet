@@ -1553,4 +1553,106 @@ textarea {
     width: 100%;
     height: 100%;
   }
+
+  .location-geocode-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: start;
+  }
+
+  .geocode-button {
+    min-width: 140px;
+  }
+
+  .geocode-status {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .geocode-status.success {
+    color: #15803d;
+  }
+
+  .geocode-status.error {
+    color: #dc2626;
+  }
+
+  @media (max-width: 640px) {
+    .location-geocode-row {
+      grid-template-columns: 1fr;
+    }
+
+    .geocode-button {
+      width: 100%;
+    }
+  }
+
+  .near-search-summary {
+    display: grid;
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .listing-distance {
+    margin: 0 0 10px;
+    color: #ea580c;
+    font-weight: 700;
+  }
+
+  .selected-distance {
+    margin-top: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .near-search-summary {
+      gap: 8px;
+    }
+  }
+
+  .location-action-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, auto);
+    gap: 12px;
+  }
+
+  .recent-searches-block {
+    display: grid;
+    gap: 10px;
+    margin-top: 8px;
+  }
+
+  .recent-searches-title {
+    margin: 0;
+    color: #475569;
+    font-size: 0.9rem;
+    font-weight: 700;
+  }
+
+  .recent-searches-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .recent-search-chip {
+    border: 1px solid #d9e2ef;
+    background: white;
+    color: #334155;
+    border-radius: 999px;
+    padding: 8px 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s ease;
+  }
+
+  .recent-search-chip:hover {
+    background: #f8fbff;
+  }
+
+  @media (max-width: 640px) {
+    .location-action-buttons {
+      grid-template-columns: 1fr;
+    }
+  }
 }

@@ -6,6 +6,7 @@ function ListingCard({
   onToggleSave,
   isSelected,
   onSelectListing,
+  distanceMiles,
 }) {
   return (
     <div className={`listing-card ${isSelected ? 'selected' : ''}`}>
@@ -28,6 +29,9 @@ function ListingCard({
 
       <h3>{listing.title}</h3>
       <p className="listing-location">{listing.location}</p>
+      {distanceMiles !== null && distanceMiles !== undefined && (
+        <p className="listing-distance">{distanceMiles.toFixed(1)} miles away</p>
+      )}
       <p className="listing-size">Size: {listing.size}</p>
       <p className="listing-description">{listing.description}</p>
 

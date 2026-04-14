@@ -1,6 +1,11 @@
 import { Link } from 'react-router-dom';
 
-function SelectedListingPanel({ listing, isSaved, onToggleSave }) {
+function SelectedListingPanel({
+  listing,
+  isSaved,
+  onToggleSave,
+  distanceMiles,
+}) {
   if (!listing) {
     return null;
   }
@@ -14,6 +19,11 @@ function SelectedListingPanel({ listing, isSaved, onToggleSave }) {
           <p className="selected-listing-location">
             {listing.location} • {listing.type}
           </p>
+          {distanceMiles !== null && distanceMiles !== undefined && (
+            <p className="listing-distance selected-distance">
+              {distanceMiles.toFixed(1)} miles from your searched area
+            </p>
+          )}
         </div>
 
         <div className="selected-listing-price-box">
