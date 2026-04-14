@@ -15,6 +15,19 @@ function buildFormData(listing, currentUser) {
       hostName: listing.hostName || '',
       description: listing.description || '',
       features: Array.isArray(listing.features) ? listing.features.join(', ') : '',
+      restrictions: Array.isArray(listing.restrictions)
+        ? listing.restrictions.join(', ')
+        : '',
+      security: listing.security || '',
+      imageUrl: listing.imageUrl || '',
+      latitude:
+        listing.latitude === null || listing.latitude === undefined
+          ? ''
+          : String(listing.latitude),
+      longitude:
+        listing.longitude === null || listing.longitude === undefined
+          ? ''
+          : String(listing.longitude),
     };
   }
 
@@ -30,7 +43,22 @@ function buildFormData(listing, currentUser) {
     hostName: currentUser?.isAuthenticated ? currentUser.fullName : '',
     description: '',
     features: '',
+    restrictions: '',
+    security: '',
+    imageUrl: '',
+    latitude: '',
+    longitude: '',
   };
+}
+
+function isValidLatitude(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= -90 && parsed <= 90;
+}
+
+function isValidLongitude(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= -180 && parsed <= 180;
 }
 
 function CreateListingPage({
@@ -100,6 +128,18 @@ function CreateListingPage({
 
     if (!formData.description.trim()) {
       nextErrors.description = 'Please enter a description.';
+    }
+
+    if (!formData.latitude.trim()) {
+      nextErrors.latitude = 'Please enter a latitude.';
+    } else if (!isValidLatitude(formData.latitude)) {
+      nextErrors.latitude = 'Latitude must be between -90 and 90.';
+    }
+
+    if (!formData.longitude.trim()) {
+      nextErrors.longitude = 'Please enter a longitude.';
+    } else if (!isValidLongitude(formData.longitude)) {
+      nextErrors.longitude = 'Longitude must be between -180 and 180.';
     }
 
     return nextErrors;
@@ -175,8 +215,8 @@ function CreateListingPage({
         <h1>{isEditing ? 'Edit Listing' : 'Create a Listing'}</h1>
         <p>
           {isEditing
-            ? 'Update your storage listing details, pause visibility, or remove the listing entirely.'
-            : 'Publish a new storage space. When you save it, it will immediately appear in Explore and in your Profile.'}
+            ? 'Update your listing details, map coordinates, and presentation.'
+            : 'Publish a new storage space with a real map location.'}
         </p>
 
         {isEditing && editingListing && (
@@ -239,6 +279,21 @@ function CreateListingPage({
           </div>
         </div>
 
+        <div className="filter-group">
+          <label htmlFor="imageUrl">Listing Photo URL</label>
+          <input
+            id="imageUrl"
+            name="imageUrl"
+            type="text"
+            value={formData.imageUrl}
+            onChange={handleChange}
+            placeholder="https://images.unsplash.com/..."
+          />
+          <span className="field-hint">
+            Optional. Paste a direct image URL to give your listing a visual preview.
+          </span>
+        </div>
+
         <div className="form-row">
           <div className="filter-group">
             <label htmlFor="location">Location</label>
@@ -267,6 +322,43 @@ function CreateListingPage({
             />
             {errors.price && <span className="form-error">{errors.price}</span>}
           </div>
+        </div>
+
+        <div className="form-row">
+          <div className="filter-group">
+            <label htmlFor="latitude">Latitude</label>
+            <input
+              id="latitude"
+              name="latitude"
+              type="text"
+              value={formData.latitude}
+              onChange={handleChange}
+              placeholder="39.9612"
+            />
+            {errors.latitude && (
+              <span className="form-error">{errors.latitude}</span>
+            )}
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="longitude">Longitude</label>
+            <input
+              id="longitude"
+              name="longitude"
+              type="text"
+              value={formData.longitude}
+              onChange={handleChange}
+              placeholder="-82.9988"
+            />
+            {errors.longitude && (
+              <span className="form-error">{errors.longitude}</span>
+            )}
+          </div>
+        </div>
+
+        <div className="field-hint coordinates-hint">
+          Until address geocoding is added, these coordinates control where the
+          listing appears on the live map.
         </div>
 
         <div className="form-row">
@@ -353,6 +445,33 @@ function CreateListingPage({
           </div>
         </div>
 
+        <div className="form-row">
+          <div className="filter-group">
+            <label htmlFor="security">Security Details</label>
+            <input
+              id="security"
+              name="security"
+              type="text"
+              value={formData.security}
+              onChange={handleChange}
+              placeholder="Camera coverage, locked entry, keypad access, etc."
+            />
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="restrictions">Restrictions / Rules</label>
+            <input
+              id="restrictions"
+              name="restrictions"
+              type="text"
+              value={formData.restrictions}
+              onChange={handleChange}
+              placeholder="No vehicle storage, no hazardous items, boxes only"
+            />
+            <span className="field-hint">Separate rules with commas.</span>
+          </div>
+        </div>
+
         <div className="filter-group">
           <label htmlFor="description">Description</label>
           <textarea
@@ -361,7 +480,7 @@ function CreateListingPage({
             rows="5"
             value={formData.description}
             onChange={handleChange}
-            placeholder="Describe the space, security, ideal use cases, and any restrictions."
+            placeholder="Describe the space, ideal storage use cases, security, and access details."
           />
           {errors.description && (
             <span className="form-error">{errors.description}</span>

@@ -80,6 +80,12 @@ function ListingDetailsPage({
           <p className="details-eyebrow">{listing.type} Listing</p>
           <h1>{listing.title}</h1>
           <p className="details-location">{listing.location}</p>
+
+          <div className="detail-chip-row">
+            <span className="detail-chip">{listing.size}</span>
+            <span className="detail-chip">{listing.duration}</span>
+            <span className="detail-chip">{listing.availability}</span>
+          </div>
         </div>
 
         <div className="details-price-box">
@@ -90,27 +96,39 @@ function ListingDetailsPage({
 
       <div className="listing-details-layout">
         <section className="listing-main-card">
-          <div className="listing-image-placeholder">
-            <span>Listing Photos Placeholder</span>
-          </div>
+          {listing.imageUrl ? (
+            <img
+              src={listing.imageUrl}
+              alt={listing.title}
+              className="listing-detail-image"
+            />
+          ) : (
+            <div className="listing-image-placeholder">
+              <span>Listing Photo Placeholder</span>
+            </div>
+          )}
 
           <div className="listing-info-grid">
             <div className="info-block">
-              <h3>Description</h3>
+              <h3>Overview</h3>
               <p>{listing.description}</p>
             </div>
 
-            <div className="info-block">
-              <h3>Storage Details</h3>
-              <p><strong>Size:</strong> {listing.size}</p>
-              <p><strong>Access:</strong> {listing.access}</p>
-              <p><strong>Host:</strong> {listing.hostName}</p>
-              {listing.status && (
+            <div className="listing-detail-subgrid">
+              <div className="info-block">
+                <h3>Storage Details</h3>
+                <p><strong>Size:</strong> {listing.size}</p>
+                <p><strong>Access:</strong> {listing.access}</p>
+                <p><strong>Host:</strong> {listing.hostName}</p>
+                <p><strong>Type:</strong> {listing.type}</p>
+              </div>
+
+              <div className="info-block">
+                <h3>Security</h3>
                 <p>
-                  <strong>Status:</strong>{' '}
-                  {listing.status === 'paused' ? 'Paused' : 'Active'}
+                  {listing.security || 'The host has not added extra security details yet.'}
                 </p>
-              )}
+              </div>
             </div>
 
             <div className="info-block">
@@ -120,6 +138,19 @@ function ListingDetailsPage({
                   <li key={feature}>{feature}</li>
                 ))}
               </ul>
+            </div>
+
+            <div className="info-block">
+              <h3>Restrictions</h3>
+              {listing.restrictions.length > 0 ? (
+                <ul className="listing-note-list">
+                  {listing.restrictions.map((restriction) => (
+                    <li key={restriction}>{restriction}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>No special restrictions were added for this listing.</p>
+              )}
             </div>
           </div>
         </section>
@@ -193,6 +224,7 @@ function ListingDetailsPage({
                 <p><strong>Type:</strong> {listing.type}</p>
                 <p><strong>Availability:</strong> {listing.availability}</p>
                 <p><strong>Price:</strong> {listing.price}</p>
+                <p><strong>Security:</strong> {listing.security || 'Not specified'}</p>
               </div>
 
               <Link to="/explore" className="text-button back-link">

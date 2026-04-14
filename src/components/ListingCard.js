@@ -9,6 +9,16 @@ function ListingCard({
 }) {
   return (
     <div className={`listing-card ${isSelected ? 'selected' : ''}`}>
+      <div className="listing-card-image">
+        {listing.imageUrl ? (
+          <img src={listing.imageUrl} alt={listing.title} />
+        ) : (
+          <div className="listing-image-fallback">
+            <span>No Photo Yet</span>
+          </div>
+        )}
+      </div>
+
       <div className="listing-card-top">
         <span className={`listing-badge ${listing.type.toLowerCase()}`}>
           {listing.type}

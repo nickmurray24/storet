@@ -44,10 +44,34 @@ function createRecordId(prefix) {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function parseCommaSeparatedList(value) {
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function parseCoordinate(value) {
+  if (value === '' || value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 function normalizeListing(listing) {
   return {
     ...listing,
     status: listing.status || 'active',
+    imageUrl: listing.imageUrl || '',
+    security: listing.security || '',
+    restrictions: Array.isArray(listing.restrictions)
+      ? listing.restrictions
+      : [],
+    createdAt: listing.createdAt || null,
+    latitude: parseCoordinate(listing.latitude),
+    longitude: parseCoordinate(listing.longitude),
   };
 }
 
@@ -227,10 +251,8 @@ function App() {
       ? `${formData.price.trim()}/mo`
       : `$${formData.price.trim()}/mo`;
 
-    const features = formData.features
-      .split(',')
-      .map((feature) => feature.trim())
-      .filter(Boolean);
+    const features = parseCommaSeparatedList(formData.features);
+    const restrictions = parseCommaSeparatedList(formData.restrictions);
 
     const newListing = {
       id: nextId,
@@ -245,6 +267,12 @@ function App() {
       availability: formData.availability,
       access: formData.access.trim(),
       features: features.length > 0 ? features : ['Flexible terms'],
+      restrictions,
+      security: formData.security.trim(),
+      imageUrl: formData.imageUrl.trim(),
+      latitude: parseCoordinate(formData.latitude),
+      longitude: parseCoordinate(formData.longitude),
+      createdAt: new Date().toISOString(),
       createdBy: 'user',
       createdByAccountEmail: currentUser.email,
       status: 'active',
@@ -269,10 +297,8 @@ function App() {
       ? `${formData.price.trim()}/mo`
       : `$${formData.price.trim()}/mo`;
 
-    const features = formData.features
-      .split(',')
-      .map((feature) => feature.trim())
-      .filter(Boolean);
+    const features = parseCommaSeparatedList(formData.features);
+    const restrictions = parseCommaSeparatedList(formData.restrictions);
 
     const updatedListing = {
       ...existingListing,
@@ -287,6 +313,11 @@ function App() {
       availability: formData.availability,
       access: formData.access.trim(),
       features: features.length > 0 ? features : ['Flexible terms'],
+      restrictions,
+      security: formData.security.trim(),
+      imageUrl: formData.imageUrl.trim(),
+      latitude: parseCoordinate(formData.latitude),
+      longitude: parseCoordinate(formData.longitude),
       status: existingListing.status || 'active',
     };
 

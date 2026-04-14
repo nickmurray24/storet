@@ -26,29 +26,63 @@ function SelectedListingPanel({ listing, isSaved, onToggleSave }) {
 
       <div className="selected-listing-body">
         <div className="selected-listing-main">
-          <p className="selected-listing-description">{listing.description}</p>
-
-          <div className="selected-listing-meta">
-            <p>
-              <strong>Size:</strong> {listing.size}
-            </p>
-            <p>
-              <strong>Duration:</strong> {listing.duration}
-            </p>
-            <p>
-              <strong>Access:</strong> {listing.access}
-            </p>
-            <p>
-              <strong>Host:</strong> {listing.hostName}
-            </p>
+          <div className="selected-listing-visual">
+            {listing.imageUrl ? (
+              <img
+                src={listing.imageUrl}
+                alt={listing.title}
+                className="selected-listing-image"
+              />
+            ) : (
+              <div className="selected-listing-image-fallback">
+                <span>No listing photo yet</span>
+              </div>
+            )}
           </div>
 
-          <div className="selected-listing-features">
-            {listing.features.map((feature) => (
-              <span key={feature} className="feature-pill">
-                {feature}
-              </span>
-            ))}
+          <p className="selected-listing-description">{listing.description}</p>
+
+          <div className="selected-listing-detail-grid">
+            <div className="selected-listing-subsection">
+              <h3>Storage Details</h3>
+              <div className="selected-listing-meta">
+                <p><strong>Size:</strong> {listing.size}</p>
+                <p><strong>Duration:</strong> {listing.duration}</p>
+                <p><strong>Access:</strong> {listing.access}</p>
+                <p><strong>Host:</strong> {listing.hostName}</p>
+              </div>
+            </div>
+
+            <div className="selected-listing-subsection">
+              <h3>Security</h3>
+              <p className="results-subtext">
+                {listing.security || 'No extra security details were added.'}
+              </p>
+            </div>
+          </div>
+
+          {listing.restrictions.length > 0 && (
+            <div className="selected-listing-subsection">
+              <h3>Restrictions</h3>
+              <div className="selected-listing-features">
+                {listing.restrictions.map((restriction) => (
+                  <span key={restriction} className="feature-pill">
+                    {restriction}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="selected-listing-subsection">
+            <h3>Features</h3>
+            <div className="selected-listing-features">
+              {listing.features.map((feature) => (
+                <span key={feature} className="feature-pill">
+                  {feature}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
