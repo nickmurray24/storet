@@ -84,9 +84,14 @@ function CreateListingPage({
 
   const [formData, setFormData] = useState(buildFormData(editingListing, currentUser));
   const [errors, setErrors] = useState({});
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [geocodeError, setGeocodeError] = useState('');
+  const [geocodeSuccess, setGeocodeSuccess] = useState('');
 
   useEffect(() => {
     setFormData(buildFormData(editingListing, currentUser));
+    setGeocodeError('');
+    setGeocodeSuccess('');
   }, [editingListing, currentUser]);
 
   function handleChange(event) {
@@ -101,6 +106,73 @@ function CreateListingPage({
       ...prev,
       [name]: '',
     }));
+
+    if (name === 'location' || name === 'latitude' || name === 'longitude') {
+      setGeocodeError('');
+      setGeocodeSuccess('');
+    }
+  }
+
+  async function handleGeocodeLocation() {
+    const query = formData.location.trim();
+
+    if (!query) {
+      setErrors((prev) => ({
+        ...prev,
+        location: 'Enter a location or address first.',
+      }));
+      setGeocodeError('');
+      setGeocodeSuccess('');
+      return;
+    }
+
+    setIsGeocoding(true);
+    setGeocodeError('');
+    setGeocodeSuccess('');
+
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        format: 'jsonv2',
+        limit: '1',
+      });
+
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?${params.toString()}`
+      );
+
+      if (!response.ok) {
+        throw new Error('Geocoding request failed.');
+      }
+
+      const results = await response.json();
+
+      if (!Array.isArray(results) || results.length === 0) {
+        setGeocodeError('No matching map location was found. Try a fuller address.');
+        return;
+      }
+
+      const bestMatch = results[0];
+
+      setFormData((prev) => ({
+        ...prev,
+        latitude: bestMatch.lat,
+        longitude: bestMatch.lon,
+      }));
+
+      setErrors((prev) => ({
+        ...prev,
+        latitude: '',
+        longitude: '',
+        location: '',
+      }));
+
+      setGeocodeSuccess('Coordinates found and filled in for this listing.');
+    } catch (error) {
+      setGeocodeError('Unable to look up this address right now. Try again or enter coordinates manually.');
+    } finally {
+      setIsGeocoding(false);
+    }
   }
 
   function validateForm() {
@@ -131,13 +203,13 @@ function CreateListingPage({
     }
 
     if (!formData.latitude.trim()) {
-      nextErrors.latitude = 'Please enter a latitude.';
+      nextErrors.latitude = 'Please enter a latitude or use Find on Map.';
     } else if (!isValidLatitude(formData.latitude)) {
       nextErrors.latitude = 'Latitude must be between -90 and 90.';
     }
 
     if (!formData.longitude.trim()) {
-      nextErrors.longitude = 'Please enter a longitude.';
+      nextErrors.longitude = 'Please enter a longitude or use Find on Map.';
     } else if (!isValidLongitude(formData.longitude)) {
       nextErrors.longitude = 'Longitude must be between -180 and 180.';
     }
@@ -216,7 +288,7 @@ function CreateListingPage({
         <p>
           {isEditing
             ? 'Update your listing details, map coordinates, and presentation.'
-            : 'Publish a new storage space with a real map location.'}
+            : 'Publish a new storage space and use address lookup to place it on the live map.'}
         </p>
 
         {isEditing && editingListing && (
@@ -294,22 +366,46 @@ function CreateListingPage({
           </span>
         </div>
 
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="location">Location</label>
+        <div className="filter-group">
+          <label htmlFor="location">Location / Address</label>
+          <div className="location-geocode-row">
             <input
               id="location"
               name="location"
               type="text"
               value={formData.location}
               onChange={handleChange}
-              placeholder="Columbus, OH"
+              placeholder="123 Main St, Columbus, OH"
             />
-            {errors.location && (
-              <span className="form-error">{errors.location}</span>
-            )}
+
+            <button
+              type="button"
+              className="secondary-button geocode-button"
+              onClick={handleGeocodeLocation}
+              disabled={isGeocoding}
+            >
+              {isGeocoding ? 'Finding...' : 'Find on Map'}
+            </button>
           </div>
 
+          {errors.location && (
+            <span className="form-error">{errors.location}</span>
+          )}
+
+          {!errors.location && geocodeError && (
+            <span className="geocode-status error">{geocodeError}</span>
+          )}
+
+          {!errors.location && !geocodeError && geocodeSuccess && (
+            <span className="geocode-status success">{geocodeSuccess}</span>
+          )}
+
+          <span className="field-hint">
+            Use a fuller street address for the best geocoding result.
+          </span>
+        </div>
+
+        <div className="form-row">
           <div className="filter-group">
             <label htmlFor="price">Monthly Price</label>
             <input
@@ -321,6 +417,19 @@ function CreateListingPage({
               placeholder="75"
             />
             {errors.price && <span className="form-error">{errors.price}</span>}
+          </div>
+
+          <div className="filter-group">
+            <label htmlFor="size">Space Size</label>
+            <input
+              id="size"
+              name="size"
+              type="text"
+              value={formData.size}
+              onChange={handleChange}
+              placeholder="Small, medium, 5x10, etc."
+            />
+            {errors.size && <span className="form-error">{errors.size}</span>}
           </div>
         </div>
 
@@ -357,24 +466,10 @@ function CreateListingPage({
         </div>
 
         <div className="field-hint coordinates-hint">
-          Until address geocoding is added, these coordinates control where the
-          listing appears on the live map.
+          Find on Map fills these automatically, but you can still edit them manually.
         </div>
 
         <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="size">Space Size</label>
-            <input
-              id="size"
-              name="size"
-              type="text"
-              value={formData.size}
-              onChange={handleChange}
-              placeholder="Small, medium, 5x10, etc."
-            />
-            {errors.size && <span className="form-error">{errors.size}</span>}
-          </div>
-
           <div className="filter-group">
             <label htmlFor="duration">Rental Length</label>
             <select
@@ -387,9 +482,7 @@ function CreateListingPage({
               <option value="Long-term">Long-term</option>
             </select>
           </div>
-        </div>
 
-        <div className="form-row">
           <div className="filter-group">
             <label htmlFor="availability">Availability</label>
             <select
@@ -403,7 +496,9 @@ function CreateListingPage({
               <option value="Available next month">Available next month</option>
             </select>
           </div>
+        </div>
 
+        <div className="form-row">
           <div className="filter-group">
             <label htmlFor="access">Access Details</label>
             <input
@@ -416,9 +511,7 @@ function CreateListingPage({
             />
             {errors.access && <span className="form-error">{errors.access}</span>}
           </div>
-        </div>
 
-        <div className="form-row">
           <div className="filter-group">
             <label htmlFor="hostName">Host Display Name</label>
             <input
@@ -430,7 +523,9 @@ function CreateListingPage({
               placeholder="Your name or business name"
             />
           </div>
+        </div>
 
+        <div className="form-row">
           <div className="filter-group">
             <label htmlFor="features">Features</label>
             <input
@@ -443,9 +538,7 @@ function CreateListingPage({
             />
             <span className="field-hint">Separate features with commas.</span>
           </div>
-        </div>
 
-        <div className="form-row">
           <div className="filter-group">
             <label htmlFor="security">Security Details</label>
             <input
@@ -457,7 +550,9 @@ function CreateListingPage({
               placeholder="Camera coverage, locked entry, keypad access, etc."
             />
           </div>
+        </div>
 
+        <div className="form-row">
           <div className="filter-group">
             <label htmlFor="restrictions">Restrictions / Rules</label>
             <input
@@ -470,21 +565,21 @@ function CreateListingPage({
             />
             <span className="field-hint">Separate rules with commas.</span>
           </div>
-        </div>
 
-        <div className="filter-group">
-          <label htmlFor="description">Description</label>
-          <textarea
-            id="description"
-            name="description"
-            rows="5"
-            value={formData.description}
-            onChange={handleChange}
-            placeholder="Describe the space, ideal storage use cases, security, and access details."
-          />
-          {errors.description && (
-            <span className="form-error">{errors.description}</span>
-          )}
+          <div className="filter-group">
+            <label htmlFor="description">Description</label>
+            <textarea
+              id="description"
+              name="description"
+              rows="5"
+              value={formData.description}
+              onChange={handleChange}
+              placeholder="Describe the space, ideal storage use cases, security, and access details."
+            />
+            {errors.description && (
+              <span className="form-error">{errors.description}</span>
+            )}
+          </div>
         </div>
 
         <div className="management-actions">
