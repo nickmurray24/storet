@@ -10,6 +10,14 @@ function formatDateTime(dateValue) {
   });
 }
 
+function getStatusClass(status) {
+  return status.toLowerCase().replace(/\s+/g, '-');
+}
+
+function formatCurrency(value) {
+  return `$${value.toFixed(2)}`;
+}
+
 function ProfilePage({
   currentUser,
   savedListings,
@@ -18,12 +26,26 @@ function ProfilePage({
   onToggleSave,
   bookingRequests = [],
   hostMessages = [],
+  paymentRecords = [],
   onDeleteListing,
   onToggleListingStatus,
   onUpdateRole,
   onLogout,
 }) {
   const navigate = useNavigate();
+
+  const pendingCount = bookingRequests.filter(
+    (request) => request.status === 'Pending'
+  ).length;
+  const approvedCount = bookingRequests.filter(
+    (request) => request.status === 'Approved'
+  ).length;
+  const confirmedCount = bookingRequests.filter(
+    (request) => request.status === 'Confirmed'
+  ).length;
+  const unreadSentMessages = hostMessages.filter(
+    (message) => message.status === 'Unread'
+  ).length;
 
   function handleDelete(listing) {
     const shouldDelete = window.confirm(
@@ -59,11 +81,14 @@ function ProfilePage({
         </div>
 
         <div className="profile-card">
-          <h3>Quick Stats</h3>
+          <h3>Activity Snapshot</h3>
           <p>Saved Listings: {savedListings.length}</p>
           <p>My Listings: {myListings.length}</p>
-          <p>Requests Sent: {bookingRequests.length}</p>
-          <p>Messages Sent: {hostMessages.length}</p>
+          <p>Pending Requests: {pendingCount}</p>
+          <p>Approved Requests: {approvedCount}</p>
+          <p>Confirmed Bookings: {confirmedCount}</p>
+          <p>Unread Message Threads: {unreadSentMessages}</p>
+          <p>Payments Recorded: {paymentRecords.length}</p>
         </div>
       </div>
 
@@ -111,9 +136,11 @@ function ProfilePage({
           <div className="listings-grid">
             {bookingRequests.map((request) => (
               <div key={request.id} className="empty-state-card">
-                <div className="section-header">
+                <div className="activity-card-header">
                   <h3>{request.listingTitle}</h3>
-                  <span className="booking-success-tag">{request.status}</span>
+                  <span className={`activity-status ${getStatusClass(request.status)}`}>
+                    {request.status}
+                  </span>
                 </div>
 
                 <div className="booking-summary">
@@ -122,14 +149,31 @@ function ProfilePage({
                   <p><strong>Move-in date:</strong> {request.moveInDate}</p>
                   <p><strong>Duration:</strong> {request.duration}</p>
                   {request.notes && <p><strong>Notes:</strong> {request.notes}</p>}
+                  {request.reviewedAt && (
+                    <p><strong>Last updated:</strong> {formatDateTime(request.reviewedAt)}</p>
+                  )}
                 </div>
 
-                <Link
-                  to={`/listing/${request.listingId}`}
-                  className="secondary-button"
-                >
-                  View Listing
-                </Link>
+                <div className="activity-action-row">
+                  {request.status === 'Approved' && (
+                    <Link to={`/checkout/${request.id}`} className="primary-button">
+                      Complete Checkout
+                    </Link>
+                  )}
+
+                  {request.status === 'Confirmed' && (
+                    <span className="results-subtext">
+                      Booking paid and confirmed
+                    </span>
+                  )}
+
+                  <Link
+                    to={`/listing/${request.listingId}`}
+                    className="secondary-button"
+                  >
+                    View Listing
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
@@ -146,6 +190,51 @@ function ProfilePage({
 
       <section className="profile-section">
         <div className="section-header">
+          <h2>Payment History</h2>
+          <span>{paymentRecords.length}</span>
+        </div>
+
+        {paymentRecords.length > 0 ? (
+          <div className="listings-grid">
+            {paymentRecords.map((payment) => (
+              <div key={payment.id} className="empty-state-card">
+                <div className="activity-card-header">
+                  <h3>{payment.listingTitle}</h3>
+                  <span className="activity-status confirmed">Paid</span>
+                </div>
+
+                <div className="booking-summary">
+                  <p><strong>Receipt:</strong> {payment.receiptNumber}</p>
+                  <p><strong>Host:</strong> {payment.hostName}</p>
+                  <p><strong>Paid at:</strong> {formatDateTime(payment.paidAt)}</p>
+                  <p>
+                    <strong>Card:</strong> {payment.cardBrand} ending in {payment.last4}
+                  </p>
+                  <p><strong>Total:</strong> {formatCurrency(payment.amount)}</p>
+                </div>
+
+                <Link
+                  to={`/checkout/${payment.requestId}`}
+                  className="secondary-button"
+                >
+                  View Receipt
+                </Link>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state-card">
+            <h3>No payments yet</h3>
+            <p>
+              Once an approved request goes through checkout, the payment record
+              will show up here.
+            </p>
+          </div>
+        )}
+      </section>
+
+      <section className="profile-section">
+        <div className="section-header">
           <h2>Messages Sent</h2>
           <span>{hostMessages.length}</span>
         </div>
@@ -154,9 +243,11 @@ function ProfilePage({
           <div className="listings-grid">
             {hostMessages.map((message) => (
               <div key={message.id} className="empty-state-card">
-                <div className="section-header">
+                <div className="activity-card-header">
                   <h3>{message.listingTitle}</h3>
-                  <span className="user-role-pill">{message.status}</span>
+                  <span className={`activity-status ${getStatusClass(message.status)}`}>
+                    {message.status}
+                  </span>
                 </div>
 
                 <div className="booking-summary">
@@ -164,6 +255,9 @@ function ProfilePage({
                   <p><strong>Host:</strong> {message.hostName}</p>
                   <p><strong>Email used:</strong> {message.senderEmail}</p>
                   <p>{message.message}</p>
+                  {message.readAt && (
+                    <p><strong>Marked read:</strong> {formatDateTime(message.readAt)}</p>
+                  )}
                 </div>
 
                 <Link

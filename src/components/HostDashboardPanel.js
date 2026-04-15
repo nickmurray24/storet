@@ -9,15 +9,30 @@ function formatDateTime(dateValue) {
   });
 }
 
+function getStatusClass(status) {
+  return status.toLowerCase().replace(/\s+/g, '-');
+}
+
 function HostDashboardPanel({
   myListings,
   bookingRequests = [],
   hostMessages = [],
   onDeleteListing,
   onToggleListingStatus,
+  onUpdateBookingRequestStatus,
+  onUpdateHostMessageStatus,
 }) {
   const activeCount = myListings.filter((listing) => listing.status !== 'paused').length;
   const pausedCount = myListings.filter((listing) => listing.status === 'paused').length;
+  const pendingRequestCount = bookingRequests.filter(
+    (request) => request.status === 'Pending'
+  ).length;
+  const unreadMessageCount = hostMessages.filter(
+    (message) => message.status === 'Unread'
+  ).length;
+  const confirmedCount = bookingRequests.filter(
+    (request) => request.status === 'Confirmed'
+  ).length;
 
   function handleDelete(listing) {
     const shouldDelete = window.confirm(
@@ -36,10 +51,10 @@ function HostDashboardPanel({
       <section className="host-hero-card">
         <div>
           <p className="host-eyebrow">Host Mode</p>
-          <h2>Turn unused space into income.</h2>
+          <h2>Manage requests, messages, and checkout-ready bookings.</h2>
           <p className="host-copy">
-            List your garage, basement, spare room, or commercial storage space
-            and connect with people looking for short-term or long-term storage.
+            Review renter activity, approve requests, and track which bookings
+            have been completed through checkout.
           </p>
         </div>
 
@@ -68,40 +83,115 @@ function HostDashboardPanel({
           <h3>{pausedCount}</h3>
           <p>Paused Listings</p>
         </div>
+
+        <div className="host-stat-card">
+          <h3>{pendingRequestCount}</h3>
+          <p>Pending Requests</p>
+        </div>
+
+        <div className="host-stat-card">
+          <h3>{confirmedCount}</h3>
+          <p>Confirmed Bookings</p>
+        </div>
+
+        <div className="host-stat-card">
+          <h3>{unreadMessageCount}</h3>
+          <p>Unread Messages</p>
+        </div>
       </section>
 
       <section className="host-section-card">
         <div className="section-header">
           <div>
-            <h2>Recent Reservation Requests</h2>
+            <h2>Reservation Requests</h2>
             <p className="results-subtext">
-              Requests sent for your hosted spaces.
+              Approve, decline, or track completed checkout activity.
             </p>
           </div>
         </div>
 
         {bookingRequests.length > 0 ? (
           <div className="host-listings-grid">
-            {bookingRequests.slice(0, 4).map((request) => (
+            {bookingRequests.map((request) => (
               <div key={request.id} className="host-listing-preview">
-                <div className="host-listing-top">
-                  <span className="booking-success-tag">{request.status}</span>
+                <div className="activity-card-header">
+                  <span className={`activity-status ${getStatusClass(request.status)}`}>
+                    {request.status}
+                  </span>
                   <span className="results-subtext">
                     {formatDateTime(request.submittedAt)}
                   </span>
                 </div>
 
                 <h3>{request.listingTitle}</h3>
-                <p><strong>From:</strong> {request.requesterName}</p>
-                <p><strong>Email:</strong> {request.requesterEmail}</p>
-                <p><strong>Move-in:</strong> {request.moveInDate}</p>
 
-                <Link
-                  to={`/listing/${request.listingId}`}
-                  className="secondary-button"
-                >
-                  View Listing
-                </Link>
+                <div className="activity-meta-grid">
+                  <p><strong>From:</strong> {request.requesterName}</p>
+                  <p><strong>Email:</strong> {request.requesterEmail}</p>
+                  <p><strong>Move-in:</strong> {request.moveInDate}</p>
+                  <p><strong>Duration:</strong> {request.duration}</p>
+                </div>
+
+                {request.notes && (
+                  <p className="activity-note">
+                    <strong>Notes:</strong> {request.notes}
+                  </p>
+                )}
+
+                {request.confirmedAt ? (
+                  <p className="results-subtext">
+                    Checkout completed: {formatDateTime(request.confirmedAt)}
+                  </p>
+                ) : request.reviewedAt ? (
+                  <p className="results-subtext">
+                    Last updated: {formatDateTime(request.reviewedAt)}
+                  </p>
+                ) : null}
+
+                <div className="activity-action-row">
+                  {request.status !== 'Confirmed' && request.status !== 'Approved' && (
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() =>
+                        onUpdateBookingRequestStatus(request.id, 'Approved')
+                      }
+                    >
+                      Approve
+                    </button>
+                  )}
+
+                  {request.status !== 'Confirmed' && request.status !== 'Declined' && (
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() =>
+                        onUpdateBookingRequestStatus(request.id, 'Declined')
+                      }
+                    >
+                      Decline
+                    </button>
+                  )}
+
+                  {request.status !== 'Confirmed' && request.status !== 'Pending' && (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() =>
+                        onUpdateBookingRequestStatus(request.id, 'Pending')
+                      }
+                    >
+                      Mark Pending
+                    </button>
+                  )}
+
+                  <Link
+                    to={`/listing/${request.listingId}`}
+                    className="secondary-button"
+                  >
+                    View Listing
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
@@ -118,33 +208,69 @@ function HostDashboardPanel({
           <div>
             <h2>Message Inbox</h2>
             <p className="results-subtext">
-              Recent messages sent by renters.
+              Mark messages read or unread as you work through renter questions.
             </p>
           </div>
         </div>
 
         {hostMessages.length > 0 ? (
           <div className="host-listings-grid">
-            {hostMessages.slice(0, 4).map((message) => (
+            {hostMessages.map((message) => (
               <div key={message.id} className="host-listing-preview">
-                <div className="host-listing-top">
-                  <span className="user-role-pill">{message.status}</span>
+                <div className="activity-card-header">
+                  <span className={`activity-status ${getStatusClass(message.status)}`}>
+                    {message.status}
+                  </span>
                   <span className="results-subtext">
                     {formatDateTime(message.submittedAt)}
                   </span>
                 </div>
 
                 <h3>{message.listingTitle}</h3>
-                <p><strong>From:</strong> {message.senderName}</p>
-                <p><strong>Email:</strong> {message.senderEmail}</p>
-                <p>{message.message}</p>
 
-                <Link
-                  to={`/listing/${message.listingId}`}
-                  className="secondary-button"
-                >
-                  Open Listing
-                </Link>
+                <div className="activity-meta-grid">
+                  <p><strong>From:</strong> {message.senderName}</p>
+                  <p><strong>Email:</strong> {message.senderEmail}</p>
+                </div>
+
+                <p className="activity-note">{message.message}</p>
+
+                {message.readAt && (
+                  <p className="results-subtext">
+                    Marked read: {formatDateTime(message.readAt)}
+                  </p>
+                )}
+
+                <div className="activity-action-row">
+                  {message.status !== 'Read' ? (
+                    <button
+                      type="button"
+                      className="primary-button"
+                      onClick={() =>
+                        onUpdateHostMessageStatus(message.id, 'Read')
+                      }
+                    >
+                      Mark Read
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={() =>
+                        onUpdateHostMessageStatus(message.id, 'Unread')
+                      }
+                    >
+                      Mark Unread
+                    </button>
+                  )}
+
+                  <Link
+                    to={`/listing/${message.listingId}`}
+                    className="secondary-button"
+                  >
+                    Open Listing
+                  </Link>
+                </div>
               </div>
             ))}
           </div>
@@ -233,43 +359,6 @@ function HostDashboardPanel({
             </Link>
           </div>
         )}
-      </section>
-
-      <section className="host-section-card">
-        <div className="section-header">
-          <div>
-            <h2>Hosting Tips</h2>
-            <p className="results-subtext">
-              A few things that make listings more trustworthy and useful.
-            </p>
-          </div>
-        </div>
-
-        <div className="host-tips-grid">
-          <div className="host-tip-card">
-            <h3>Be specific</h3>
-            <p>
-              Mention exact size, storage type, access hours, and what the space
-              is best suited for.
-            </p>
-          </div>
-
-          <div className="host-tip-card">
-            <h3>Build trust</h3>
-            <p>
-              Add security details like locks, cameras, gated access, or climate
-              control when available.
-            </p>
-          </div>
-
-          <div className="host-tip-card">
-            <h3>Set expectations</h3>
-            <p>
-              Make restrictions clear, such as no furniture, no vehicle storage,
-              or scheduled access only.
-            </p>
-          </div>
-        </div>
       </section>
     </div>
   );
