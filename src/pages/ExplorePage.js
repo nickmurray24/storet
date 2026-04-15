@@ -120,6 +120,8 @@ function ExplorePage({
   hostMessages,
   onDeleteListing,
   onToggleListingStatus,
+  onUpdateBookingRequestStatus,
+  onUpdateHostMessageStatus,
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -691,6 +693,8 @@ function ExplorePage({
           hostMessages={hostMessages}
           onDeleteListing={onDeleteListing}
           onToggleListingStatus={onToggleListingStatus}
+          onUpdateBookingRequestStatus={onUpdateBookingRequestStatus}
+          onUpdateHostMessageStatus={onUpdateHostMessageStatus}
         />
       )}
     </div>

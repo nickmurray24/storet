@@ -7,6 +7,7 @@ import ExplorePage from './pages/ExplorePage';
 import CreateListingPage from './pages/CreateListingPage';
 import ProfilePage from './pages/ProfilePage';
 import ListingDetailsPage from './pages/ListingDetailsPage';
+import CheckoutPage from './pages/CheckoutPage';
 import mockListings from './data/mockListings';
 import './App.css';
 
@@ -16,6 +17,7 @@ const STORAGE_KEYS = {
   CURRENT_USER: 'storet_current_user',
   BOOKING_REQUESTS: 'storet_booking_requests',
   HOST_MESSAGES: 'storet_host_messages',
+  PAYMENT_RECORDS: 'storet_payment_records',
 };
 
 const defaultCurrentUser = {
@@ -170,6 +172,14 @@ function App() {
     }
 
     return readStoredValue(STORAGE_KEYS.HOST_MESSAGES, []);
+  });
+
+  const [paymentRecords, setPaymentRecords] = useState(() => {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    return readStoredValue(STORAGE_KEYS.PAYMENT_RECORDS, []);
   });
 
   useEffect(() => {
@@ -357,6 +367,7 @@ function App() {
 
     setBookingRequests((prev) => prev.filter((request) => request.listingId !== listingId));
     setHostMessages((prev) => prev.filter((message) => message.listingId !== listingId));
+    setPaymentRecords((prev) => prev.filter((payment) => payment.listingId !== listingId));
   }
 
   function handleToggleListingStatus(listingId) {
@@ -420,6 +431,9 @@ function App() {
       notes: formData.notes.trim(),
       status: 'Pending',
       submittedAt: new Date().toISOString(),
+      reviewedAt: null,
+      confirmedAt: null,
+      paymentId: null,
       submittedByAccountEmail: currentUser.email,
     };
 
@@ -439,11 +453,127 @@ function App() {
       message: formData.message.trim(),
       status: 'Unread',
       submittedAt: new Date().toISOString(),
+      readAt: null,
       submittedByAccountEmail: currentUser.email,
     };
 
     setHostMessages((prev) => [newMessage, ...prev]);
     return newMessage;
+  }
+
+  function handleUpdateBookingRequestStatus(requestId, nextStatus) {
+    const targetRequest = bookingRequests.find((request) => request.id === requestId);
+
+    if (!targetRequest) {
+      return;
+    }
+
+    const ownsListing = userListings.some(
+      (listing) =>
+        listing.id === targetRequest.listingId &&
+        listing.createdByAccountEmail === currentUser.email
+    );
+
+    if (!ownsListing) {
+      return;
+    }
+
+    setBookingRequests((prev) =>
+      prev.map((request) =>
+        request.id === requestId
+          ? {
+              ...request,
+              status: nextStatus,
+              reviewedAt: new Date().toISOString(),
+            }
+          : request
+      )
+    );
+  }
+
+  function handleUpdateHostMessageStatus(messageId, nextStatus) {
+    const targetMessage = hostMessages.find((message) => message.id === messageId);
+
+    if (!targetMessage) {
+      return;
+    }
+
+    const ownsListing = userListings.some(
+      (listing) =>
+        listing.id === targetMessage.listingId &&
+        listing.createdByAccountEmail === currentUser.email
+    );
+
+    if (!ownsListing) {
+      return;
+    }
+
+    setHostMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId
+          ? {
+              ...message,
+              status: nextStatus,
+              readAt:
+                nextStatus === 'Read'
+                  ? message.readAt || new Date().toISOString()
+                  : null,
+            }
+          : message
+      )
+    );
+  }
+
+  function handleCompleteCheckout(requestId, paymentData) {
+    const targetRequest = bookingRequests.find((request) => request.id === requestId);
+
+    if (!targetRequest) {
+      return null;
+    }
+
+    if (targetRequest.submittedByAccountEmail !== currentUser.email) {
+      return null;
+    }
+
+    if (targetRequest.status !== 'Approved') {
+      return null;
+    }
+
+    const newPayment = {
+      id: createRecordId('payment'),
+      requestId: targetRequest.id,
+      listingId: targetRequest.listingId,
+      listingTitle: targetRequest.listingTitle,
+      hostName: targetRequest.hostName,
+      amount: paymentData.totalAmount,
+      storageCharge: paymentData.storageCharge,
+      serviceFee: paymentData.serviceFee,
+      cardBrand: paymentData.cardBrand,
+      last4: paymentData.last4,
+      cardholderName: paymentData.cardholderName.trim(),
+      billingZip: paymentData.billingZip.trim(),
+      paidAt: new Date().toISOString(),
+      paidByAccountEmail: currentUser.email,
+      receiptNumber: `STR-${Date.now()}`,
+    };
+
+    setPaymentRecords((prev) => [newPayment, ...prev]);
+
+    setBookingRequests((prev) =>
+      prev.map((request) =>
+        request.id === requestId
+          ? {
+              ...request,
+              status: 'Confirmed',
+              reviewedAt: new Date().toISOString(),
+              confirmedAt: new Date().toISOString(),
+              paymentId: newPayment.id,
+            }
+          : request
+      )
+    );
+
+    return newPayment;
   }
 
   const savedListings = allListings.filter((listing) =>
@@ -456,6 +586,10 @@ function App() {
 
   const myHostMessages = hostMessages.filter(
     (message) => message.submittedByAccountEmail === currentUser.email
+  );
+
+  const myPaymentRecords = paymentRecords.filter(
+    (payment) => payment.paidByAccountEmail === currentUser.email
   );
 
   const myListingIds = new Set(myListings.map((listing) => listing.id));
@@ -503,6 +637,13 @@ function App() {
     );
   }, [hostMessages]);
 
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.PAYMENT_RECORDS,
+      JSON.stringify(paymentRecords)
+    );
+  }, [paymentRecords]);
+
   return (
     <div className="app-shell">
       <Navbar currentUser={currentUser} onLogout={handleLogout} />
@@ -534,6 +675,8 @@ function App() {
                 hostMessages={incomingHostMessages}
                 onDeleteListing={handleDeleteListing}
                 onToggleListingStatus={handleToggleListingStatus}
+                onUpdateBookingRequestStatus={handleUpdateBookingRequestStatus}
+                onUpdateHostMessageStatus={handleUpdateHostMessageStatus}
               />
             }
           />
@@ -582,10 +725,25 @@ function App() {
                   onToggleSave={handleToggleSave}
                   bookingRequests={myBookingRequests}
                   hostMessages={myHostMessages}
+                  paymentRecords={myPaymentRecords}
                   onDeleteListing={handleDeleteListing}
                   onToggleListingStatus={handleToggleListingStatus}
                   onUpdateRole={handleUpdateRole}
                   onLogout={handleLogout}
+                />
+              </RequireSignedIn>
+            }
+          />
+
+          <Route
+            path="/checkout/:requestId"
+            element={
+              <RequireSignedIn currentUser={currentUser}>
+                <CheckoutPage
+                  currentUser={currentUser}
+                  bookingRequests={myBookingRequests}
+                  paymentRecords={myPaymentRecords}
+                  onCompleteCheckout={handleCompleteCheckout}
                 />
               </RequireSignedIn>
             }
