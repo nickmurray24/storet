@@ -23,6 +23,8 @@ function buildFormData(listing, currentUser) {
             .map((range) => `${range.startDate} to ${range.endDate}`)
             .join('\n')
         : '',
+      bookingMode: listing.bookingMode || 'request',
+      allowWaitlist: Boolean(listing.allowWaitlist),
       security: listing.security || '',
       imageUrl: listing.imageUrl || '',
       latitude:
@@ -50,6 +52,8 @@ function buildFormData(listing, currentUser) {
     features: '',
     restrictions: '',
     blackoutRanges: '',
+    bookingMode: 'request',
+    allowWaitlist: false,
     security: '',
     imageUrl: '',
     latitude: '',
@@ -101,11 +105,11 @@ function CreateListingPage({
   }, [editingListing, currentUser]);
 
   function handleChange(event) {
-    const { name, value } = event.target;
+    const { name, value, type, checked } = event.target;
 
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === 'checkbox' ? checked : value,
     }));
 
     setErrors((prev) => ({
@@ -293,8 +297,8 @@ function CreateListingPage({
         <h1>{isEditing ? 'Edit Listing' : 'Create a Listing'}</h1>
         <p>
           {isEditing
-            ? 'Update your listing details, map coordinates, and scheduling rules.'
-            : 'Publish a new storage space and define blackout dates for scheduling.'}
+            ? 'Update your listing details, booking logic, and scheduling rules.'
+            : 'Publish a new storage space with request approval, instant booking, or waitlist support.'}
         </p>
 
         {isEditing && editingListing && (
@@ -473,6 +477,36 @@ function CreateListingPage({
 
         <div className="field-hint coordinates-hint">
           Find on Map fills these automatically, but you can still edit them manually.
+        </div>
+
+        <div className="form-row">
+          <div className="filter-group">
+            <label htmlFor="bookingMode">Booking Mode</label>
+            <select
+              id="bookingMode"
+              name="bookingMode"
+              value={formData.bookingMode}
+              onChange={handleChange}
+            >
+              <option value="request">Request Approval</option>
+              <option value="instant">Instant Book</option>
+            </select>
+          </div>
+
+          <div className="filter-group checkbox-setting-group">
+            <label className="checkbox-inline-label">
+              <input
+                name="allowWaitlist"
+                type="checkbox"
+                checked={formData.allowWaitlist}
+                onChange={handleChange}
+              />
+              Allow waitlist when dates conflict
+            </label>
+            <span className="field-hint">
+              If enabled, unavailable date requests will be added as waitlisted instead of rejected.
+            </span>
+          </div>
         </div>
 
         <div className="form-row">

@@ -101,6 +101,8 @@ function normalizeListing(listing) {
     blackoutRanges: Array.isArray(listing.blackoutRanges)
       ? listing.blackoutRanges
       : [],
+    bookingMode: listing.bookingMode || 'request',
+    allowWaitlist: Boolean(listing.allowWaitlist),
     createdAt: listing.createdAt || null,
     latitude: parseCoordinate(listing.latitude),
     longitude: parseCoordinate(listing.longitude),
@@ -358,6 +360,8 @@ function App() {
       features: features.length > 0 ? features : ['Flexible terms'],
       restrictions,
       blackoutRanges,
+      bookingMode: formData.bookingMode,
+      allowWaitlist: formData.allowWaitlist,
       security: formData.security.trim(),
       imageUrl: formData.imageUrl.trim(),
       latitude: parseCoordinate(formData.latitude),
@@ -406,6 +410,8 @@ function App() {
       features: features.length > 0 ? features : ['Flexible terms'],
       restrictions,
       blackoutRanges,
+      bookingMode: formData.bookingMode,
+      allowWaitlist: formData.allowWaitlist,
       security: formData.security.trim(),
       imageUrl: formData.imageUrl.trim(),
       latitude: parseCoordinate(formData.latitude),
@@ -522,13 +528,6 @@ function App() {
       )
     );
 
-    if (blackoutConflict) {
-      return {
-        ok: false,
-        error: 'Those dates overlap with a host blackout range.',
-      };
-    }
-
     const bookingConflict = bookingRequests.some(
       (request) =>
         request.listingId === listing.id &&
@@ -541,12 +540,20 @@ function App() {
         )
     );
 
-    if (bookingConflict) {
+    const hasConflict = blackoutConflict || bookingConflict;
+    const now = new Date().toISOString();
+
+    if (hasConflict && !listing.allowWaitlist) {
       return {
         ok: false,
-        error: 'Those dates overlap with an existing booking window.',
+        error: blackoutConflict
+          ? 'Those dates overlap with a host blackout range.'
+          : 'Those dates overlap with an existing booking window.',
       };
     }
+
+    const shouldWaitlist = hasConflict && listing.allowWaitlist;
+    const isInstantBook = listing.bookingMode === 'instant' && !shouldWaitlist;
 
     const newRequest = {
       id: createRecordId('booking'),
@@ -562,13 +569,23 @@ function App() {
       moveOutDate: formData.moveOutDate,
       duration: formData.duration,
       notes: formData.notes.trim(),
-      status: 'Pending',
-      submittedAt: new Date().toISOString(),
-      reviewedAt: null,
+      status: shouldWaitlist
+        ? 'Waitlisted'
+        : isInstantBook
+        ? 'Approved'
+        : 'Pending',
+      submittedAt: now,
+      reviewedAt: isInstantBook ? now : null,
+      waitlistedAt: shouldWaitlist ? now : null,
       confirmedAt: null,
       activatedAt: null,
       completedAt: null,
       cancelledAt: null,
+      waitlistReason: shouldWaitlist
+        ? blackoutConflict
+          ? 'Host blackout dates'
+          : 'Conflicting booking dates'
+        : null,
       paymentId: null,
       submittedByAccountEmail: currentUser.email,
     };
@@ -618,11 +635,15 @@ function App() {
       return;
     }
 
-    if (!['Pending', 'Approved', 'Declined'].includes(nextStatus)) {
+    if (!['Pending', 'Approved', 'Declined', 'Waitlisted'].includes(nextStatus)) {
       return;
     }
 
-    if (!['Pending', 'Approved', 'Declined'].includes(targetRequest.status)) {
+    if (
+      !['Pending', 'Approved', 'Declined', 'Waitlisted'].includes(
+        targetRequest.status
+      )
+    ) {
       return;
     }
 
@@ -633,6 +654,10 @@ function App() {
               ...request,
               status: nextStatus,
               reviewedAt: new Date().toISOString(),
+              waitlistedAt:
+                nextStatus === 'Waitlisted'
+                  ? request.waitlistedAt || new Date().toISOString()
+                  : request.waitlistedAt,
             }
           : request
       )
@@ -660,7 +685,7 @@ function App() {
     const canCancel =
       nextStatus === 'Cancelled' &&
       (ownsListing || isRequester) &&
-      ['Approved', 'Confirmed', 'Active'].includes(targetRequest.status);
+      ['Approved', 'Confirmed', 'Active', 'Waitlisted'].includes(targetRequest.status);
 
     const canActivate =
       nextStatus === 'Active' &&

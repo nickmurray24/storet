@@ -5,6 +5,8 @@ function SelectedListingPanel({
   isSaved,
   onToggleSave,
   distanceMiles,
+  isCompared,
+  onToggleCompare,
 }) {
   if (!listing) {
     return null;
@@ -23,7 +25,8 @@ function SelectedListingPanel({
           <div className="rating-row">
             {listing.reviewCount > 0 ? (
               <span className="rating-summary">
-                ⭐ {listing.averageRating.toFixed(1)} ({listing.reviewCount} review{listing.reviewCount !== 1 ? 's' : ''})
+                ⭐ {listing.averageRating.toFixed(1)} ({listing.reviewCount} review
+                {listing.reviewCount !== 1 ? 's' : ''})
               </span>
             ) : (
               <span className="rating-summary empty">No reviews yet</span>
@@ -112,12 +115,15 @@ function SelectedListingPanel({
             View Details
           </Link>
 
-          <Link
-            to={`/listing/${listing.id}`}
-            className="secondary-button full-width"
+          <button
+            type="button"
+            className={`secondary-button full-width compare-button ${
+              isCompared ? 'active' : ''
+            }`}
+            onClick={() => onToggleCompare(listing.id)}
           >
-            Reserve or Contact
-          </Link>
+            {isCompared ? 'Added to Compare' : 'Compare Listing'}
+          </button>
 
           <button
             type="button"

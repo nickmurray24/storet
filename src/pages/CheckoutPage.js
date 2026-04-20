@@ -160,6 +160,22 @@ function CheckoutPage({
     );
   }
 
+  if (request.status === 'Waitlisted') {
+    return (
+      <div className="checkout-page">
+        <div className="page-header-block">
+          <h1>You’re currently waitlisted</h1>
+          <p>
+            This booking is on the waitlist, so checkout is not available yet.
+          </p>
+          <Link to="/profile" className="primary-button">
+            Back to Profile
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   if (request.status === 'Declined') {
     return (
       <div className="checkout-page">
@@ -434,6 +450,11 @@ function CheckoutPage({
             <div className="checkout-summary-row">
               <span>Move-in date</span>
               <strong>{request.moveInDate}</strong>
+            </div>
+
+            <div className="checkout-summary-row">
+              <span>Move-out date</span>
+              <strong>{request.moveOutDate}</strong>
             </div>
 
             <div className="checkout-summary-row">

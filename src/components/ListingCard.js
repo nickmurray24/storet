@@ -7,6 +7,8 @@ function ListingCard({
   isSelected,
   onSelectListing,
   distanceMiles,
+  isCompared,
+  onToggleCompare,
 }) {
   return (
     <div className={`listing-card ${isSelected ? 'selected' : ''}`}>
@@ -61,6 +63,14 @@ function ListingCard({
         <Link to={`/listing/${listing.id}`} className="secondary-button details-link">
           View Details
         </Link>
+
+        <button
+          type="button"
+          className={`secondary-button compare-button ${isCompared ? 'active' : ''}`}
+          onClick={() => onToggleCompare(listing.id)}
+        >
+          {isCompared ? 'Compared' : 'Compare'}
+        </button>
 
         <button
           type="button"
