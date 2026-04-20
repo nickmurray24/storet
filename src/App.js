@@ -8,6 +8,7 @@ import CreateListingPage from './pages/CreateListingPage';
 import ProfilePage from './pages/ProfilePage';
 import ListingDetailsPage from './pages/ListingDetailsPage';
 import CheckoutPage from './pages/CheckoutPage';
+import NotificationsPage from './pages/NotificationsPage';
 import mockListings from './data/mockListings';
 import './App.css';
 
@@ -19,6 +20,7 @@ const STORAGE_KEYS = {
   HOST_MESSAGES: 'storet_host_messages',
   PAYMENT_RECORDS: 'storet_payment_records',
   REVIEWS: 'storet_reviews',
+  NOTIFICATIONS: 'storet_notifications',
 };
 
 const defaultCurrentUser = {
@@ -226,6 +228,14 @@ function App() {
     return readStoredValue(STORAGE_KEYS.REVIEWS, []);
   });
 
+  const [notifications, setNotifications] = useState(() => {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    return readStoredValue(STORAGE_KEYS.NOTIFICATIONS, []);
+  });
+
   useEffect(() => {
     if (Array.isArray(savedListingIdsStore) && currentUser.isAuthenticated) {
       setSavedListingIdsStore({
@@ -300,6 +310,20 @@ function App() {
     return savedListingIdsStore[currentUser.email] || [];
   }, [savedListingIdsStore, currentUser]);
 
+  const myNotifications = useMemo(() => {
+    if (!currentUser.isAuthenticated) {
+      return [];
+    }
+
+    return notifications
+      .filter((notification) => notification.recipientEmail === currentUser.email)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [notifications, currentUser]);
+
+  const unreadNotificationsCount = myNotifications.filter(
+    (notification) => !notification.isRead
+  ).length;
+
   function updateSavedIdsForCurrentUser(updater) {
     if (!currentUser.isAuthenticated) {
       return;
@@ -317,6 +341,56 @@ function App() {
         [currentUser.email]: updater(currentIds),
       };
     });
+  }
+
+  function createNotification(
+    recipientEmail,
+    title,
+    body,
+    actionPath = '/profile',
+    category = 'general'
+  ) {
+    if (!recipientEmail) {
+      return;
+    }
+
+    setNotifications((prev) => [
+      {
+        id: createRecordId('notification'),
+        recipientEmail,
+        title,
+        body,
+        actionPath,
+        category,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      },
+      ...prev,
+    ]);
+  }
+
+  function handleMarkNotificationRead(notificationId) {
+    setNotifications((prev) =>
+      prev.map((notification) =>
+        notification.id === notificationId
+          ? { ...notification, isRead: true }
+          : notification
+      )
+    );
+  }
+
+  function handleMarkAllNotificationsRead() {
+    if (!currentUser.isAuthenticated) {
+      return;
+    }
+
+    setNotifications((prev) =>
+      prev.map((notification) =>
+        notification.recipientEmail === currentUser.email
+          ? { ...notification, isRead: true }
+          : notification
+      )
+    );
   }
 
   function handleToggleSave(listingId) {
@@ -592,6 +666,58 @@ function App() {
 
     setBookingRequests((prev) => [newRequest, ...prev]);
 
+    const hostRecipientEmail = listing.createdByAccountEmail || null;
+
+    if (shouldWaitlist) {
+      createNotification(
+        currentUser.email,
+        'Added to waitlist',
+        `Your requested dates for ${listing.title} were added to the waitlist.`,
+        '/profile',
+        'booking'
+      );
+
+      createNotification(
+        hostRecipientEmail,
+        'New waitlisted request',
+        `${formData.fullName.trim()} was waitlisted for ${listing.title}.`,
+        '/notifications',
+        'booking'
+      );
+    } else if (isInstantBook) {
+      createNotification(
+        currentUser.email,
+        'Instant booking approved',
+        `Your request for ${listing.title} was instantly approved. Complete checkout to confirm it.`,
+        '/profile',
+        'booking'
+      );
+
+      createNotification(
+        hostRecipientEmail,
+        'New instant booking',
+        `${formData.fullName.trim()} instantly booked ${listing.title}.`,
+        '/notifications',
+        'booking'
+      );
+    } else {
+      createNotification(
+        currentUser.email,
+        'Booking request submitted',
+        `Your request for ${listing.title} was sent to the host.`,
+        '/profile',
+        'booking'
+      );
+
+      createNotification(
+        hostRecipientEmail,
+        'New booking request',
+        `${formData.fullName.trim()} requested ${listing.title}.`,
+        '/notifications',
+        'booking'
+      );
+    }
+
     return {
       ok: true,
       request: newRequest,
@@ -615,6 +741,23 @@ function App() {
     };
 
     setHostMessages((prev) => [newMessage, ...prev]);
+
+    createNotification(
+      currentUser.email,
+      'Message sent',
+      `Your message about ${listing.title} was sent to the host.`,
+      '/profile',
+      'message'
+    );
+
+    createNotification(
+      listing.createdByAccountEmail || null,
+      'New renter message',
+      `${formData.fullName.trim()} sent a message about ${listing.title}.`,
+      '/notifications',
+      'message'
+    );
+
     return newMessage;
   }
 
@@ -662,6 +805,36 @@ function App() {
           : request
       )
     );
+
+    if (nextStatus === 'Approved') {
+      createNotification(
+        targetRequest.submittedByAccountEmail,
+        'Booking request approved',
+        `Your request for ${targetRequest.listingTitle} was approved. You can now complete checkout.`,
+        '/profile',
+        'booking'
+      );
+    }
+
+    if (nextStatus === 'Declined') {
+      createNotification(
+        targetRequest.submittedByAccountEmail,
+        'Booking request declined',
+        `Your request for ${targetRequest.listingTitle} was declined.`,
+        '/profile',
+        'booking'
+      );
+    }
+
+    if (nextStatus === 'Waitlisted') {
+      createNotification(
+        targetRequest.submittedByAccountEmail,
+        'Booking moved to waitlist',
+        `Your request for ${targetRequest.listingTitle} is currently waitlisted.`,
+        '/profile',
+        'booking'
+      );
+    }
   }
 
   function handleUpdateBookingLifecycle(requestId, nextStatus) {
@@ -734,6 +907,36 @@ function App() {
         return request;
       })
     );
+
+    if (nextStatus === 'Cancelled') {
+      createNotification(
+        targetRequest.submittedByAccountEmail,
+        'Booking cancelled',
+        `Your booking for ${targetRequest.listingTitle} was cancelled.`,
+        '/profile',
+        'booking'
+      );
+    }
+
+    if (nextStatus === 'Active') {
+      createNotification(
+        targetRequest.submittedByAccountEmail,
+        'Rental is now active',
+        `Your rental for ${targetRequest.listingTitle} is now active.`,
+        '/profile',
+        'booking'
+      );
+    }
+
+    if (nextStatus === 'Completed') {
+      createNotification(
+        targetRequest.submittedByAccountEmail,
+        'Rental completed',
+        `Your rental for ${targetRequest.listingTitle} was marked completed. You can now leave a review.`,
+        `/listing/${targetRequest.listingId}`,
+        'booking'
+      );
+    }
   }
 
   function handleUpdateHostMessageStatus(messageId, nextStatus) {
@@ -767,6 +970,16 @@ function App() {
           : message
       )
     );
+
+    if (nextStatus === 'Read') {
+      createNotification(
+        targetMessage.submittedByAccountEmail,
+        'Host read your message',
+        `${targetMessage.hostName} marked your message about ${targetMessage.listingTitle} as read.`,
+        `/listing/${targetMessage.listingId}`,
+        'message'
+      );
+    }
   }
 
   function handleCompleteCheckout(requestId, paymentData) {
@@ -816,6 +1029,26 @@ function App() {
             }
           : request
       )
+    );
+
+    const hostRecipientEmail =
+      userListings.find((listing) => listing.id === targetRequest.listingId)
+        ?.createdByAccountEmail || null;
+
+    createNotification(
+      currentUser.email,
+      'Payment received',
+      `Your booking for ${targetRequest.listingTitle} is now confirmed.`,
+      `/checkout/${targetRequest.id}`,
+      'payment'
+    );
+
+    createNotification(
+      hostRecipientEmail,
+      'Booking paid',
+      `${targetRequest.requesterName} completed checkout for ${targetRequest.listingTitle}.`,
+      '/notifications',
+      'payment'
     );
 
     return newPayment;
@@ -869,6 +1102,18 @@ function App() {
     };
 
     setReviews((prev) => [newReview, ...prev]);
+
+    const hostRecipientEmail =
+      userListings.find((listing) => listing.id === targetRequest.listingId)
+        ?.createdByAccountEmail || null;
+
+    createNotification(
+      hostRecipientEmail,
+      'New review received',
+      `${currentUser.fullName} left a ${reviewData.rating}-star review for ${targetRequest.listingTitle}.`,
+      `/listing/${targetRequest.listingId}`,
+      'review'
+    );
 
     return {
       ok: true,
@@ -955,9 +1200,20 @@ function App() {
     );
   }, [reviews]);
 
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.NOTIFICATIONS,
+      JSON.stringify(notifications)
+    );
+  }, [notifications]);
+
   return (
     <div className="app-shell">
-      <Navbar currentUser={currentUser} onLogout={handleLogout} />
+      <Navbar
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        unreadNotificationsCount={unreadNotificationsCount}
+      />
 
       <main className="page-content">
         <Routes>
@@ -1044,6 +1300,20 @@ function App() {
                   onUpdateBookingLifecycle={handleUpdateBookingLifecycle}
                   onUpdateRole={handleUpdateRole}
                   onLogout={handleLogout}
+                />
+              </RequireSignedIn>
+            }
+          />
+
+          <Route
+            path="/notifications"
+            element={
+              <RequireSignedIn currentUser={currentUser}>
+                <NotificationsPage
+                  notifications={myNotifications}
+                  unreadCount={unreadNotificationsCount}
+                  onMarkNotificationRead={handleMarkNotificationRead}
+                  onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
                 />
               </RequireSignedIn>
             }
