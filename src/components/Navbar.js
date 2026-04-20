@@ -1,63 +1,66 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 
-function isHostRole(role) {
-  return role === 'Host' || role === 'Both';
-}
-
-function Navbar({ currentUser, onLogout }) {
-  const navigate = useNavigate();
-  const canHost = currentUser.isAuthenticated && isHostRole(currentUser.role);
-
-  function handleLogoutClick() {
-    onLogout();
-    navigate('/');
-  }
-
+function Navbar({
+  currentUser,
+  onLogout,
+  unreadNotificationsCount = 0,
+}) {
   return (
     <header className="navbar">
-      <div className="navbar-brand">
-        <NavLink to="/" className="brand-link">
+      <div className="navbar-inner">
+        <Link to="/" className="navbar-brand">
           Storet
-        </NavLink>
+        </Link>
+
+        <nav className="navbar-links">
+          <NavLink to="/" end className="navbar-link">
+            Home
+          </NavLink>
+
+          <NavLink to="/explore" className="navbar-link">
+            Explore
+          </NavLink>
+
+          {currentUser.isAuthenticated && (
+            <>
+              <NavLink to="/notifications" className="navbar-link notifications-link">
+                Notifications
+                {unreadNotificationsCount > 0 && (
+                  <span className="notifications-badge">
+                    {unreadNotificationsCount}
+                  </span>
+                )}
+              </NavLink>
+
+              <NavLink to="/profile" className="navbar-link">
+                Profile
+              </NavLink>
+            </>
+          )}
+        </nav>
+
+        <div className="navbar-actions">
+          {currentUser.isAuthenticated ? (
+            <>
+              <span className="nav-user-chip">
+                {currentUser.fullName} • {currentUser.role}
+              </span>
+
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={onLogout}
+              >
+                Log Out
+              </button>
+            </>
+          ) : (
+            <Link to="/auth" className="primary-button">
+              Log In / Sign Up
+            </Link>
+          )}
+        </div>
       </div>
-
-      <nav className="navbar-links">
-        <NavLink to="/explore" className="nav-link">
-          Explore
-        </NavLink>
-
-        {canHost && (
-          <NavLink to="/create-listing" className="nav-link">
-            Create Listing
-          </NavLink>
-        )}
-
-        {currentUser.isAuthenticated && (
-          <NavLink to="/profile" className="nav-link">
-            Profile
-          </NavLink>
-        )}
-
-        {currentUser.isAuthenticated ? (
-          <>
-            <NavLink to="/profile" className="nav-link nav-button">
-              {currentUser.fullName.split(' ')[0]}
-            </NavLink>
-
-            <button
-              type="button"
-              className="nav-link nav-logout-button"
-              onClick={handleLogoutClick}
-            >
-              Log Out
-            </button>
-          </>
-        ) : (
-          <NavLink to="/auth" className="nav-link nav-button">
-            Log In
-          </NavLink>
-        )}
-      </nav>
     </header>
   );
 }
