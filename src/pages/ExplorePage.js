@@ -121,6 +121,7 @@ function ExplorePage({
   onDeleteListing,
   onToggleListingStatus,
   onUpdateBookingRequestStatus,
+  onUpdateBookingLifecycle,
   onUpdateHostMessageStatus,
 }) {
   const navigate = useNavigate();
@@ -694,6 +695,7 @@ function ExplorePage({
           onDeleteListing={onDeleteListing}
           onToggleListingStatus={onToggleListingStatus}
           onUpdateBookingRequestStatus={onUpdateBookingRequestStatus}
+          onUpdateBookingLifecycle={onUpdateBookingLifecycle}
           onUpdateHostMessageStatus={onUpdateHostMessageStatus}
         />
       )}

@@ -5,11 +5,13 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
     fullName: currentUser?.isAuthenticated ? currentUser.fullName : '',
     email: currentUser?.isAuthenticated ? currentUser.email : '',
     moveInDate: '',
+    moveOutDate: '',
     duration: '',
     notes: '',
   });
 
   const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   function handleChange(event) {
@@ -24,6 +26,8 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
       ...prev,
       [name]: '',
     }));
+
+    setSubmitError('');
   }
 
   function validateForm() {
@@ -39,6 +43,12 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
 
     if (!formData.moveInDate) {
       nextErrors.moveInDate = 'Please choose a move-in date.';
+    }
+
+    if (!formData.moveOutDate) {
+      nextErrors.moveOutDate = 'Please choose a move-out date.';
+    } else if (formData.moveInDate && formData.moveOutDate < formData.moveInDate) {
+      nextErrors.moveOutDate = 'Move-out date must be on or after the move-in date.';
     }
 
     if (!formData.duration.trim()) {
@@ -58,13 +68,19 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
       return;
     }
 
-    onSubmitRequest({
+    const result = onSubmitRequest({
       fullName: formData.fullName,
       email: formData.email,
       moveInDate: formData.moveInDate,
+      moveOutDate: formData.moveOutDate,
       duration: formData.duration,
       notes: formData.notes,
     });
+
+    if (result?.ok === false) {
+      setSubmitError(result.error || 'We could not submit this booking request.');
+      return;
+    }
 
     setIsSubmitted(true);
   }
@@ -89,6 +105,9 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
           </p>
           <p>
             <strong>Move-in date:</strong> {formData.moveInDate}
+          </p>
+          <p>
+            <strong>Move-out date:</strong> {formData.moveOutDate}
           </p>
           <p>
             <strong>Duration:</strong> {formData.duration}
@@ -154,23 +173,37 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
         </div>
 
         <div className="filter-group">
-          <label htmlFor="duration">Rental Length</label>
-          <select
-            id="duration"
-            name="duration"
-            value={formData.duration}
+          <label htmlFor="moveOutDate">Move-out Date</label>
+          <input
+            id="moveOutDate"
+            name="moveOutDate"
+            type="date"
+            value={formData.moveOutDate}
             onChange={handleChange}
-          >
-            <option value="">Select one</option>
-            <option value="Less than 1 month">Less than 1 month</option>
-            <option value="1-3 months">1-3 months</option>
-            <option value="3-6 months">3-6 months</option>
-            <option value="6+ months">6+ months</option>
-          </select>
-          {errors.duration && (
-            <span className="form-error">{errors.duration}</span>
+          />
+          {errors.moveOutDate && (
+            <span className="form-error">{errors.moveOutDate}</span>
           )}
         </div>
+      </div>
+
+      <div className="filter-group">
+        <label htmlFor="duration">Rental Length</label>
+        <select
+          id="duration"
+          name="duration"
+          value={formData.duration}
+          onChange={handleChange}
+        >
+          <option value="">Select one</option>
+          <option value="Less than 1 month">Less than 1 month</option>
+          <option value="1-3 months">1-3 months</option>
+          <option value="3-6 months">3-6 months</option>
+          <option value="6+ months">6+ months</option>
+        </select>
+        {errors.duration && (
+          <span className="form-error">{errors.duration}</span>
+        )}
       </div>
 
       <div className="filter-group">
@@ -184,6 +217,8 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
           placeholder="What are you storing? Any timing details?"
         />
       </div>
+
+      {submitError && <div className="form-submit-error">{submitError}</div>}
 
       <button type="submit" className="primary-button full-width">
         Send Reservation Request

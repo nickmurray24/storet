@@ -18,6 +18,11 @@ function buildFormData(listing, currentUser) {
       restrictions: Array.isArray(listing.restrictions)
         ? listing.restrictions.join(', ')
         : '',
+      blackoutRanges: Array.isArray(listing.blackoutRanges)
+        ? listing.blackoutRanges
+            .map((range) => `${range.startDate} to ${range.endDate}`)
+            .join('\n')
+        : '',
       security: listing.security || '',
       imageUrl: listing.imageUrl || '',
       latitude:
@@ -44,6 +49,7 @@ function buildFormData(listing, currentUser) {
     description: '',
     features: '',
     restrictions: '',
+    blackoutRanges: '',
     security: '',
     imageUrl: '',
     latitude: '',
@@ -203,13 +209,13 @@ function CreateListingPage({
     }
 
     if (!formData.latitude.trim()) {
-      nextErrors.latitude = 'Please enter a latitude or use Find on Map.';
+      nextErrors.latitude = 'Please enter a latitude.';
     } else if (!isValidLatitude(formData.latitude)) {
       nextErrors.latitude = 'Latitude must be between -90 and 90.';
     }
 
     if (!formData.longitude.trim()) {
-      nextErrors.longitude = 'Please enter a longitude or use Find on Map.';
+      nextErrors.longitude = 'Please enter a longitude.';
     } else if (!isValidLongitude(formData.longitude)) {
       nextErrors.longitude = 'Longitude must be between -180 and 180.';
     }
@@ -287,8 +293,8 @@ function CreateListingPage({
         <h1>{isEditing ? 'Edit Listing' : 'Create a Listing'}</h1>
         <p>
           {isEditing
-            ? 'Update your listing details, map coordinates, and presentation.'
-            : 'Publish a new storage space and use address lookup to place it on the live map.'}
+            ? 'Update your listing details, map coordinates, and scheduling rules.'
+            : 'Publish a new storage space and define blackout dates for scheduling.'}
         </p>
 
         {isEditing && editingListing && (
@@ -567,19 +573,34 @@ function CreateListingPage({
           </div>
 
           <div className="filter-group">
-            <label htmlFor="description">Description</label>
+            <label htmlFor="blackoutRanges">Blackout Dates</label>
             <textarea
-              id="description"
-              name="description"
+              id="blackoutRanges"
+              name="blackoutRanges"
               rows="5"
-              value={formData.description}
+              value={formData.blackoutRanges}
               onChange={handleChange}
-              placeholder="Describe the space, ideal storage use cases, security, and access details."
+              placeholder={`2026-07-01 to 2026-07-05\n2026-08-14 to 2026-08-18`}
             />
-            {errors.description && (
-              <span className="form-error">{errors.description}</span>
-            )}
+            <span className="field-hint">
+              One range per line in YYYY-MM-DD to YYYY-MM-DD format.
+            </span>
           </div>
+        </div>
+
+        <div className="filter-group">
+          <label htmlFor="description">Description</label>
+          <textarea
+            id="description"
+            name="description"
+            rows="5"
+            value={formData.description}
+            onChange={handleChange}
+            placeholder="Describe the space, ideal storage use cases, security, and access details."
+          />
+          {errors.description && (
+            <span className="form-error">{errors.description}</span>
+          )}
         </div>
 
         <div className="management-actions">

@@ -26,6 +26,10 @@ function formatCurrency(value) {
   return `$${value.toFixed(2)}`;
 }
 
+function formatDateTime(value) {
+  return new Date(value).toLocaleString();
+}
+
 function CheckoutPage({
   currentUser,
   bookingRequests,
@@ -173,12 +177,72 @@ function CheckoutPage({
     );
   }
 
-  if (request.status === 'Confirmed' && existingPayment) {
+  if (request.status === 'Cancelled') {
     return (
       <div className="checkout-page">
         <div className="page-header-block">
-          <h1>Booking confirmed</h1>
-          <p>Your payment was recorded and this booking is now confirmed.</p>
+          <h1>Booking cancelled</h1>
+          <p>This booking was cancelled and is no longer active.</p>
+        </div>
+
+        <div className="checkout-layout">
+          <section className="checkout-card receipt-card">
+            <h2>Booking Summary</h2>
+
+            <div className="checkout-summary-group">
+              <div className="checkout-summary-row">
+                <span>Listing</span>
+                <strong>{request.listingTitle}</strong>
+              </div>
+
+              <div className="checkout-summary-row">
+                <span>Host</span>
+                <strong>{request.hostName}</strong>
+              </div>
+
+              {request.cancelledAt && (
+                <div className="checkout-summary-row">
+                  <span>Cancelled at</span>
+                  <strong>{formatDateTime(request.cancelledAt)}</strong>
+                </div>
+              )}
+
+              {existingPayment && (
+                <div className="checkout-summary-row">
+                  <span>Original payment</span>
+                  <strong>{formatCurrency(existingPayment.amount)}</strong>
+                </div>
+              )}
+            </div>
+
+            <div className="activity-action-row">
+              <Link to="/profile" className="primary-button">
+                Back to Profile
+              </Link>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    (request.status === 'Confirmed' ||
+      request.status === 'Active' ||
+      request.status === 'Completed') &&
+    existingPayment
+  ) {
+    return (
+      <div className="checkout-page">
+        <div className="page-header-block">
+          <h1>
+            {request.status === 'Completed'
+              ? 'Booking completed'
+              : request.status === 'Active'
+              ? 'Rental active'
+              : 'Booking confirmed'}
+          </h1>
+          <p>Your payment was recorded and this booking status has been updated.</p>
         </div>
 
         <div className="checkout-layout">
@@ -210,8 +274,22 @@ function CheckoutPage({
 
               <div className="checkout-summary-row">
                 <span>Paid at</span>
-                <strong>{new Date(existingPayment.paidAt).toLocaleString()}</strong>
+                <strong>{formatDateTime(existingPayment.paidAt)}</strong>
               </div>
+
+              {request.activatedAt && (
+                <div className="checkout-summary-row">
+                  <span>Rental active</span>
+                  <strong>{formatDateTime(request.activatedAt)}</strong>
+                </div>
+              )}
+
+              {request.completedAt && (
+                <div className="checkout-summary-row">
+                  <span>Completed at</span>
+                  <strong>{formatDateTime(request.completedAt)}</strong>
+                </div>
+              )}
 
               <div className="checkout-total-row">
                 <span>Total paid</span>

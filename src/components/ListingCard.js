@@ -29,9 +29,21 @@ function ListingCard({
 
       <h3>{listing.title}</h3>
       <p className="listing-location">{listing.location}</p>
+
+      <div className="rating-row">
+        {listing.reviewCount > 0 ? (
+          <span className="rating-summary">
+            ⭐ {listing.averageRating.toFixed(1)} ({listing.reviewCount})
+          </span>
+        ) : (
+          <span className="rating-summary empty">New listing</span>
+        )}
+      </div>
+
       {distanceMiles !== null && distanceMiles !== undefined && (
         <p className="listing-distance">{distanceMiles.toFixed(1)} miles away</p>
       )}
+
       <p className="listing-size">Size: {listing.size}</p>
       <p className="listing-description">{listing.description}</p>
 

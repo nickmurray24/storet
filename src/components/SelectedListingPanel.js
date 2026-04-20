@@ -19,6 +19,17 @@ function SelectedListingPanel({
           <p className="selected-listing-location">
             {listing.location} • {listing.type}
           </p>
+
+          <div className="rating-row">
+            {listing.reviewCount > 0 ? (
+              <span className="rating-summary">
+                ⭐ {listing.averageRating.toFixed(1)} ({listing.reviewCount} review{listing.reviewCount !== 1 ? 's' : ''})
+              </span>
+            ) : (
+              <span className="rating-summary empty">No reviews yet</span>
+            )}
+          </div>
+
           {distanceMiles !== null && distanceMiles !== undefined && (
             <p className="listing-distance selected-distance">
               {distanceMiles.toFixed(1)} miles from your searched area
