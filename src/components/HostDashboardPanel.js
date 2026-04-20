@@ -20,6 +20,7 @@ function HostDashboardPanel({
   onDeleteListing,
   onToggleListingStatus,
   onUpdateBookingRequestStatus,
+  onUpdateBookingLifecycle,
   onUpdateHostMessageStatus,
 }) {
   const activeCount = myListings.filter((listing) => listing.status !== 'paused').length;
@@ -32,6 +33,12 @@ function HostDashboardPanel({
   ).length;
   const confirmedCount = bookingRequests.filter(
     (request) => request.status === 'Confirmed'
+  ).length;
+  const activeBookingCount = bookingRequests.filter(
+    (request) => request.status === 'Active'
+  ).length;
+  const completedCount = bookingRequests.filter(
+    (request) => request.status === 'Completed'
   ).length;
 
   function handleDelete(listing) {
@@ -51,10 +58,10 @@ function HostDashboardPanel({
       <section className="host-hero-card">
         <div>
           <p className="host-eyebrow">Host Mode</p>
-          <h2>Manage requests, messages, and checkout-ready bookings.</h2>
+          <h2>Manage the full booking lifecycle.</h2>
           <p className="host-copy">
-            Review renter activity, approve requests, and track which bookings
-            have been completed through checkout.
+            Review incoming activity, approve requests, track paid bookings, and
+            move rentals through active and completed stages.
           </p>
         </div>
 
@@ -80,11 +87,6 @@ function HostDashboardPanel({
         </div>
 
         <div className="host-stat-card">
-          <h3>{pausedCount}</h3>
-          <p>Paused Listings</p>
-        </div>
-
-        <div className="host-stat-card">
           <h3>{pendingRequestCount}</h3>
           <p>Pending Requests</p>
         </div>
@@ -95,17 +97,32 @@ function HostDashboardPanel({
         </div>
 
         <div className="host-stat-card">
+          <h3>{activeBookingCount}</h3>
+          <p>Active Rentals</p>
+        </div>
+
+        <div className="host-stat-card">
+          <h3>{completedCount}</h3>
+          <p>Completed Rentals</p>
+        </div>
+
+        <div className="host-stat-card">
           <h3>{unreadMessageCount}</h3>
           <p>Unread Messages</p>
+        </div>
+
+        <div className="host-stat-card">
+          <h3>{pausedCount}</h3>
+          <p>Paused Listings</p>
         </div>
       </section>
 
       <section className="host-section-card">
         <div className="section-header">
           <div>
-            <h2>Reservation Requests</h2>
+            <h2>Reservation Requests & Bookings</h2>
             <p className="results-subtext">
-              Approve, decline, or track completed checkout activity.
+              Approve, decline, activate, complete, or cancel bookings.
             </p>
           </div>
         </div>
@@ -138,51 +155,125 @@ function HostDashboardPanel({
                   </p>
                 )}
 
-                {request.confirmedAt ? (
+                {request.confirmedAt && (
                   <p className="results-subtext">
-                    Checkout completed: {formatDateTime(request.confirmedAt)}
+                    Paid: {formatDateTime(request.confirmedAt)}
                   </p>
-                ) : request.reviewedAt ? (
+                )}
+
+                {request.activatedAt && (
                   <p className="results-subtext">
-                    Last updated: {formatDateTime(request.reviewedAt)}
+                    Activated: {formatDateTime(request.activatedAt)}
                   </p>
-                ) : null}
+                )}
+
+                {request.completedAt && (
+                  <p className="results-subtext">
+                    Completed: {formatDateTime(request.completedAt)}
+                  </p>
+                )}
+
+                {request.cancelledAt && (
+                  <p className="results-subtext">
+                    Cancelled: {formatDateTime(request.cancelledAt)}
+                  </p>
+                )}
 
                 <div className="activity-action-row">
-                  {request.status !== 'Confirmed' && request.status !== 'Approved' && (
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() =>
-                        onUpdateBookingRequestStatus(request.id, 'Approved')
-                      }
-                    >
-                      Approve
-                    </button>
+                  {request.status === 'Pending' && (
+                    <>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() =>
+                          onUpdateBookingRequestStatus(request.id, 'Approved')
+                        }
+                      >
+                        Approve
+                      </button>
+
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() =>
+                          onUpdateBookingRequestStatus(request.id, 'Declined')
+                        }
+                      >
+                        Decline
+                      </button>
+                    </>
                   )}
 
-                  {request.status !== 'Confirmed' && request.status !== 'Declined' && (
-                    <button
-                      type="button"
-                      className="danger-button"
-                      onClick={() =>
-                        onUpdateBookingRequestStatus(request.id, 'Declined')
-                      }
-                    >
-                      Decline
-                    </button>
+                  {request.status === 'Approved' && (
+                    <>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() =>
+                          onUpdateBookingRequestStatus(request.id, 'Pending')
+                        }
+                      >
+                        Mark Pending
+                      </button>
+
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() =>
+                          onUpdateBookingLifecycle(request.id, 'Cancelled')
+                        }
+                      >
+                        Cancel Booking
+                      </button>
+                    </>
                   )}
 
-                  {request.status !== 'Confirmed' && request.status !== 'Pending' && (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() =>
-                        onUpdateBookingRequestStatus(request.id, 'Pending')
-                      }
-                    >
-                      Mark Pending
-                    </button>
+                  {request.status === 'Confirmed' && (
+                    <>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() =>
+                          onUpdateBookingLifecycle(request.id, 'Active')
+                        }
+                      >
+                        Mark Active
+                      </button>
+
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() =>
+                          onUpdateBookingLifecycle(request.id, 'Cancelled')
+                        }
+                      >
+                        Cancel Booking
+                      </button>
+                    </>
+                  )}
+
+                  {request.status === 'Active' && (
+                    <>
+                      <button
+                        type="button"
+                        className="primary-button"
+                        onClick={() =>
+                          onUpdateBookingLifecycle(request.id, 'Completed')
+                        }
+                      >
+                        Mark Completed
+                      </button>
+
+                      <button
+                        type="button"
+                        className="danger-button"
+                        onClick={() =>
+                          onUpdateBookingLifecycle(request.id, 'Cancelled')
+                        }
+                      >
+                        Cancel Booking
+                      </button>
+                    </>
                   )}
 
                   <Link

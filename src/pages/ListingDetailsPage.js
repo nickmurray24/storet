@@ -1,15 +1,24 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import BookingRequestForm from '../components/BookingRequestForm';
 import ContactHostForm from '../components/ContactHostForm';
+import AvailabilityCalendar from '../components/AvailabilityCalendar';
+import ReviewForm from '../components/ReviewForm';
+
+function formatDateTime(value) {
+  return new Date(value).toLocaleDateString();
+}
 
 function ListingDetailsPage({
   listings,
+  bookingRequests,
+  reviews,
   savedListingIds,
   onToggleSave,
   currentUser,
   onSubmitBookingRequest,
   onSubmitHostMessage,
+  onSubmitReview,
 }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -17,6 +26,47 @@ function ListingDetailsPage({
   const [sidebarMode, setSidebarMode] = useState('default');
 
   const listing = listings.find((item) => item.id === Number(id));
+
+  const bookingRanges = useMemo(() => {
+    if (!listing) {
+      return [];
+    }
+
+    return bookingRequests
+      .filter(
+        (request) =>
+          request.listingId === listing.id &&
+          ['Approved', 'Confirmed', 'Active'].includes(request.status)
+      )
+      .map((request) => ({
+        startDate: request.moveInDate,
+        endDate: request.moveOutDate,
+      }));
+  }, [bookingRequests, listing]);
+
+  const listingReviews = useMemo(() => {
+    if (!listing) {
+      return [];
+    }
+
+    return reviews
+      .filter((review) => review.listingId === listing.id)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [reviews, listing]);
+
+  const eligibleReviewRequest = useMemo(() => {
+    if (!listing || !currentUser.isAuthenticated) {
+      return null;
+    }
+
+    return bookingRequests.find(
+      (request) =>
+        request.listingId === listing.id &&
+        request.submittedByAccountEmail === currentUser.email &&
+        request.status === 'Completed' &&
+        !reviews.some((review) => review.requestId === request.id)
+    );
+  }, [bookingRequests, reviews, listing, currentUser]);
 
   if (!listing) {
     return (
@@ -80,6 +130,17 @@ function ListingDetailsPage({
           <p className="details-eyebrow">{listing.type} Listing</p>
           <h1>{listing.title}</h1>
           <p className="details-location">{listing.location}</p>
+
+          <div className="rating-row detail-rating-row">
+            {listing.reviewCount > 0 ? (
+              <span className="rating-summary large">
+                ⭐ {listing.averageRating.toFixed(1)} ({listing.reviewCount} review
+                {listing.reviewCount !== 1 ? 's' : ''})
+              </span>
+            ) : (
+              <span className="rating-summary empty">No reviews yet</span>
+            )}
+          </div>
 
           <div className="detail-chip-row">
             <span className="detail-chip">{listing.size}</span>
@@ -150,6 +211,46 @@ function ListingDetailsPage({
                 </ul>
               ) : (
                 <p>No special restrictions were added for this listing.</p>
+              )}
+            </div>
+
+            <div className="info-block">
+              <h3>Availability Calendar</h3>
+              <AvailabilityCalendar
+                blackoutRanges={listing.blackoutRanges || []}
+                bookingRanges={bookingRanges}
+              />
+            </div>
+
+            <div className="info-block">
+              <h3>Guest Reviews</h3>
+
+              {eligibleReviewRequest && (
+                <div className="review-form-wrap">
+                  <ReviewForm
+                    eligibleRequest={eligibleReviewRequest}
+                    onSubmitReview={onSubmitReview}
+                  />
+                </div>
+              )}
+
+              {listingReviews.length > 0 ? (
+                <div className="review-list">
+                  {listingReviews.map((review) => (
+                    <div key={review.id} className="review-card">
+                      <div className="review-card-top">
+                        <strong>{review.reviewerName}</strong>
+                        <span className="rating-summary">⭐ {review.rating}.0</span>
+                      </div>
+                      <p className="results-subtext">
+                        Verified stay • {formatDateTime(review.createdAt)}
+                      </p>
+                      <p>{review.reviewText}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p>No reviews have been submitted for this listing yet.</p>
               )}
             </div>
           </div>

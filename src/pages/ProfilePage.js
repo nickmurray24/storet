@@ -27,8 +27,10 @@ function ProfilePage({
   bookingRequests = [],
   hostMessages = [],
   paymentRecords = [],
+  reviews = [],
   onDeleteListing,
   onToggleListingStatus,
+  onUpdateBookingLifecycle,
   onUpdateRole,
   onLogout,
 }) {
@@ -42,6 +44,12 @@ function ProfilePage({
   ).length;
   const confirmedCount = bookingRequests.filter(
     (request) => request.status === 'Confirmed'
+  ).length;
+  const activeRentalCount = bookingRequests.filter(
+    (request) => request.status === 'Active'
+  ).length;
+  const completedCount = bookingRequests.filter(
+    (request) => request.status === 'Completed'
   ).length;
   const unreadSentMessages = hostMessages.filter(
     (message) => message.status === 'Unread'
@@ -87,6 +95,9 @@ function ProfilePage({
           <p>Pending Requests: {pendingCount}</p>
           <p>Approved Requests: {approvedCount}</p>
           <p>Confirmed Bookings: {confirmedCount}</p>
+          <p>Active Rentals: {activeRentalCount}</p>
+          <p>Completed Rentals: {completedCount}</p>
+          <p>Reviews Written: {reviews.length}</p>
           <p>Unread Message Threads: {unreadSentMessages}</p>
           <p>Payments Recorded: {paymentRecords.length}</p>
         </div>
@@ -128,7 +139,7 @@ function ProfilePage({
 
       <section className="profile-section">
         <div className="section-header">
-          <h2>Reservation Requests</h2>
+          <h2>Reservation Requests & Bookings</h2>
           <span>{bookingRequests.length}</span>
         </div>
 
@@ -147,11 +158,9 @@ function ProfilePage({
                   <p><strong>Submitted:</strong> {formatDateTime(request.submittedAt)}</p>
                   <p><strong>Host:</strong> {request.hostName}</p>
                   <p><strong>Move-in date:</strong> {request.moveInDate}</p>
+                  <p><strong>Move-out date:</strong> {request.moveOutDate}</p>
                   <p><strong>Duration:</strong> {request.duration}</p>
                   {request.notes && <p><strong>Notes:</strong> {request.notes}</p>}
-                  {request.reviewedAt && (
-                    <p><strong>Last updated:</strong> {formatDateTime(request.reviewedAt)}</p>
-                  )}
                 </div>
 
                 <div className="activity-action-row">
@@ -161,10 +170,25 @@ function ProfilePage({
                     </Link>
                   )}
 
-                  {request.status === 'Confirmed' && (
-                    <span className="results-subtext">
-                      Booking paid and confirmed
-                    </span>
+                  {(request.status === 'Approved' || request.status === 'Confirmed') && (
+                    <button
+                      type="button"
+                      className="danger-button"
+                      onClick={() =>
+                        onUpdateBookingLifecycle(request.id, 'Cancelled')
+                      }
+                    >
+                      Cancel Booking
+                    </button>
+                  )}
+
+                  {(request.status === 'Confirmed' ||
+                    request.status === 'Active' ||
+                    request.status === 'Completed' ||
+                    request.status === 'Cancelled') && (
+                    <Link to={`/checkout/${request.id}`} className="secondary-button">
+                      View Receipt
+                    </Link>
                   )}
 
                   <Link
@@ -184,6 +208,44 @@ function ProfilePage({
             <Link to="/explore" className="secondary-button">
               Explore Listings
             </Link>
+          </div>
+        )}
+      </section>
+
+      <section className="profile-section">
+        <div className="section-header">
+          <h2>My Reviews</h2>
+          <span>{reviews.length}</span>
+        </div>
+
+        {reviews.length > 0 ? (
+          <div className="listings-grid">
+            {reviews.map((review) => (
+              <div key={review.id} className="empty-state-card">
+                <div className="activity-card-header">
+                  <h3>{review.listingTitle}</h3>
+                  <span className="rating-summary">⭐ {review.rating}.0</span>
+                </div>
+
+                <div className="booking-summary">
+                  <p><strong>Host:</strong> {review.hostName}</p>
+                  <p><strong>Submitted:</strong> {formatDateTime(review.createdAt)}</p>
+                  <p>{review.reviewText}</p>
+                </div>
+
+                <Link
+                  to={`/listing/${review.listingId}`}
+                  className="secondary-button"
+                >
+                  View Listing
+                </Link>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state-card">
+            <h3>No reviews yet</h3>
+            <p>Once you complete a rental, you can leave a verified review on that listing.</p>
           </div>
         )}
       </section>
@@ -324,6 +386,15 @@ function ProfilePage({
                   <div>
                     <h3>{listing.title}</h3>
                     <p className="listing-location">{listing.location}</p>
+                    <div className="rating-row">
+                      {listing.reviewCount > 0 ? (
+                        <span className="rating-summary">
+                          ⭐ {listing.averageRating.toFixed(1)} ({listing.reviewCount})
+                        </span>
+                      ) : (
+                        <span className="rating-summary empty">No reviews yet</span>
+                      )}
+                    </div>
                   </div>
 
                   <span

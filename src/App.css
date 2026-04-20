@@ -1817,4 +1817,192 @@ textarea {
       grid-template-columns: 1fr;
     }
   }
+
+  .activity-status.active {
+    background: #e0f2fe;
+    color: #0369a1;
+  }
+
+  .activity-status.completed {
+    background: #ede9fe;
+    color: #6d28d9;
+  }
+
+  .activity-status.cancelled {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+
+  .form-submit-error {
+    padding: 12px 14px;
+    border-radius: 14px;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #b91c1c;
+    font-weight: 600;
+  }
+
+  .availability-calendar {
+    display: grid;
+    gap: 12px;
+  }
+
+  .availability-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+
+  .legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #475569;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+  }
+
+  .legend-swatch.available {
+    background: #e2e8f0;
+  }
+
+  .legend-swatch.booked {
+    background: #fdba74;
+  }
+
+  .legend-swatch.blocked {
+    background: #fca5a5;
+  }
+
+  .calendar-weekdays,
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .calendar-weekday {
+    text-align: center;
+    font-size: 0.82rem;
+    font-weight: 800;
+    color: #64748b;
+  }
+
+  .calendar-day {
+    min-height: 44px;
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    background: #f8fafc;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+  }
+
+  .calendar-day.available {
+    background: #f8fafc;
+  }
+
+  .calendar-day.booked {
+    background: #ffedd5;
+    border-color: #fdba74;
+    color: #c2410c;
+  }
+
+  .calendar-day.blocked {
+    background: #fee2e2;
+    border-color: #fca5a5;
+    color: #b91c1c;
+  }
+
+  .calendar-day.outside-month {
+    opacity: 0.45;
+  }
+
+  @media (max-width: 640px) {
+    .calendar-day {
+      min-height: 38px;
+      font-size: 0.82rem;
+    }
+
+    .availability-legend {
+      gap: 10px;
+    }
+  }
+
+  .rating-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 10px;
+  }
+
+  .rating-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #b45309;
+    font-weight: 700;
+  }
+
+  .rating-summary.empty {
+    color: #64748b;
+  }
+
+  .rating-summary.large {
+    font-size: 1rem;
+  }
+
+  .detail-rating-row {
+    margin-top: 12px;
+  }
+
+  .review-form-wrap {
+    margin-bottom: 18px;
+  }
+
+  .review-form,
+  .review-success-card {
+    display: grid;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 18px;
+    background: #f8fbff;
+    border: 1px solid #dbeafe;
+  }
+
+  .review-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .review-card {
+    display: grid;
+    gap: 8px;
+    padding: 16px;
+    border-radius: 18px;
+    background: #ffffff;
+    border: 1px solid #e5eaf1;
+  }
+
+  .review-card-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+  }
+
+  @media (max-width: 640px) {
+    .review-card-top {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
 }

@@ -18,6 +18,7 @@ const STORAGE_KEYS = {
   BOOKING_REQUESTS: 'storet_booking_requests',
   HOST_MESSAGES: 'storet_host_messages',
   PAYMENT_RECORDS: 'storet_payment_records',
+  REVIEWS: 'storet_reviews',
 };
 
 const defaultCurrentUser = {
@@ -62,19 +63,52 @@ function parseCoordinate(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function parseBlackoutRanges(value) {
+  if (!value.trim()) {
+    return [];
+  }
+
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(
+        /^(\d{4}-\d{2}-\d{2})(?:\s*(?:to|-)\s*(\d{4}-\d{2}-\d{2}))?$/
+      );
+
+      if (!match) {
+        return null;
+      }
+
+      const startDate = match[1];
+      const endDate = match[2] || match[1];
+
+      return startDate <= endDate
+        ? { startDate, endDate }
+        : { startDate: endDate, endDate: startDate };
+    })
+    .filter(Boolean);
+}
+
 function normalizeListing(listing) {
   return {
     ...listing,
     status: listing.status || 'active',
     imageUrl: listing.imageUrl || '',
     security: listing.security || '',
-    restrictions: Array.isArray(listing.restrictions)
-      ? listing.restrictions
+    restrictions: Array.isArray(listing.restrictions) ? listing.restrictions : [],
+    blackoutRanges: Array.isArray(listing.blackoutRanges)
+      ? listing.blackoutRanges
       : [],
     createdAt: listing.createdAt || null,
     latitude: parseCoordinate(listing.latitude),
     longitude: parseCoordinate(listing.longitude),
   };
+}
+
+function rangesOverlap(startA, endA, startB, endB) {
+  return !(endA < startB || endB < startA);
 }
 
 function isHostRole(role) {
@@ -182,6 +216,14 @@ function App() {
     return readStoredValue(STORAGE_KEYS.PAYMENT_RECORDS, []);
   });
 
+  const [reviews, setReviews] = useState(() => {
+    if (typeof window === 'undefined') {
+      return [];
+    }
+
+    return readStoredValue(STORAGE_KEYS.REVIEWS, []);
+  });
+
   useEffect(() => {
     if (Array.isArray(savedListingIdsStore) && currentUser.isAuthenticated) {
       setSavedListingIdsStore({
@@ -190,9 +232,45 @@ function App() {
     }
   }, [savedListingIdsStore, currentUser]);
 
+  const reviewSummaryByListing = useMemo(() => {
+    const summaryMap = {};
+
+    reviews.forEach((review) => {
+      if (!summaryMap[review.listingId]) {
+        summaryMap[review.listingId] = {
+          total: 0,
+          count: 0,
+        };
+      }
+
+      summaryMap[review.listingId].total += Number(review.rating);
+      summaryMap[review.listingId].count += 1;
+    });
+
+    Object.keys(summaryMap).forEach((listingId) => {
+      const item = summaryMap[listingId];
+      item.averageRating = item.count > 0 ? item.total / item.count : 0;
+    });
+
+    return summaryMap;
+  }, [reviews]);
+
   const allListings = useMemo(() => {
-    return [...userListings.map(normalizeListing), ...mockListings.map(normalizeListing)];
-  }, [userListings]);
+    const baseListings = [
+      ...userListings.map(normalizeListing),
+      ...mockListings.map(normalizeListing),
+    ];
+
+    return baseListings.map((listing) => {
+      const reviewSummary = reviewSummaryByListing[listing.id];
+
+      return {
+        ...listing,
+        averageRating: reviewSummary?.averageRating || 0,
+        reviewCount: reviewSummary?.count || 0,
+      };
+    });
+  }, [userListings, reviewSummaryByListing]);
 
   const publicListings = useMemo(() => {
     return allListings.filter((listing) => listing.status !== 'paused');
@@ -203,10 +281,10 @@ function App() {
       return [];
     }
 
-    return userListings
-      .filter((listing) => listing.createdByAccountEmail === currentUser.email)
-      .map(normalizeListing);
-  }, [userListings, currentUser]);
+    return allListings.filter(
+      (listing) => listing.createdByAccountEmail === currentUser.email
+    );
+  }, [allListings, currentUser]);
 
   const savedListingIds = useMemo(() => {
     if (!currentUser.isAuthenticated) {
@@ -263,6 +341,7 @@ function App() {
 
     const features = parseCommaSeparatedList(formData.features);
     const restrictions = parseCommaSeparatedList(formData.restrictions);
+    const blackoutRanges = parseBlackoutRanges(formData.blackoutRanges);
 
     const newListing = {
       id: nextId,
@@ -278,6 +357,7 @@ function App() {
       access: formData.access.trim(),
       features: features.length > 0 ? features : ['Flexible terms'],
       restrictions,
+      blackoutRanges,
       security: formData.security.trim(),
       imageUrl: formData.imageUrl.trim(),
       latitude: parseCoordinate(formData.latitude),
@@ -309,6 +389,7 @@ function App() {
 
     const features = parseCommaSeparatedList(formData.features);
     const restrictions = parseCommaSeparatedList(formData.restrictions);
+    const blackoutRanges = parseBlackoutRanges(formData.blackoutRanges);
 
     const updatedListing = {
       ...existingListing,
@@ -324,6 +405,7 @@ function App() {
       access: formData.access.trim(),
       features: features.length > 0 ? features : ['Flexible terms'],
       restrictions,
+      blackoutRanges,
       security: formData.security.trim(),
       imageUrl: formData.imageUrl.trim(),
       latitude: parseCoordinate(formData.latitude),
@@ -368,6 +450,7 @@ function App() {
     setBookingRequests((prev) => prev.filter((request) => request.listingId !== listingId));
     setHostMessages((prev) => prev.filter((message) => message.listingId !== listingId));
     setPaymentRecords((prev) => prev.filter((payment) => payment.listingId !== listingId));
+    setReviews((prev) => prev.filter((review) => review.listingId !== listingId));
   }
 
   function handleToggleListingStatus(listingId) {
@@ -416,6 +499,55 @@ function App() {
   }
 
   function handleSubmitBookingRequest(listing, formData) {
+    if (!formData.moveOutDate) {
+      return {
+        ok: false,
+        error: 'Please choose a move-out date.',
+      };
+    }
+
+    if (formData.moveOutDate < formData.moveInDate) {
+      return {
+        ok: false,
+        error: 'Move-out date must be on or after the move-in date.',
+      };
+    }
+
+    const blackoutConflict = (listing.blackoutRanges || []).some((range) =>
+      rangesOverlap(
+        formData.moveInDate,
+        formData.moveOutDate,
+        range.startDate,
+        range.endDate
+      )
+    );
+
+    if (blackoutConflict) {
+      return {
+        ok: false,
+        error: 'Those dates overlap with a host blackout range.',
+      };
+    }
+
+    const bookingConflict = bookingRequests.some(
+      (request) =>
+        request.listingId === listing.id &&
+        ['Approved', 'Confirmed', 'Active'].includes(request.status) &&
+        rangesOverlap(
+          formData.moveInDate,
+          formData.moveOutDate,
+          request.moveInDate,
+          request.moveOutDate
+        )
+    );
+
+    if (bookingConflict) {
+      return {
+        ok: false,
+        error: 'Those dates overlap with an existing booking window.',
+      };
+    }
+
     const newRequest = {
       id: createRecordId('booking'),
       listingId: listing.id,
@@ -427,18 +559,26 @@ function App() {
       requesterName: formData.fullName.trim(),
       requesterEmail: formData.email.trim(),
       moveInDate: formData.moveInDate,
+      moveOutDate: formData.moveOutDate,
       duration: formData.duration,
       notes: formData.notes.trim(),
       status: 'Pending',
       submittedAt: new Date().toISOString(),
       reviewedAt: null,
       confirmedAt: null,
+      activatedAt: null,
+      completedAt: null,
+      cancelledAt: null,
       paymentId: null,
       submittedByAccountEmail: currentUser.email,
     };
 
     setBookingRequests((prev) => [newRequest, ...prev]);
-    return newRequest;
+
+    return {
+      ok: true,
+      request: newRequest,
+    };
   }
 
   function handleSubmitHostMessage(listing, formData) {
@@ -478,6 +618,14 @@ function App() {
       return;
     }
 
+    if (!['Pending', 'Approved', 'Declined'].includes(nextStatus)) {
+      return;
+    }
+
+    if (!['Pending', 'Approved', 'Declined'].includes(targetRequest.status)) {
+      return;
+    }
+
     setBookingRequests((prev) =>
       prev.map((request) =>
         request.id === requestId
@@ -488,6 +636,78 @@ function App() {
             }
           : request
       )
+    );
+  }
+
+  function handleUpdateBookingLifecycle(requestId, nextStatus) {
+    const targetRequest = bookingRequests.find((request) => request.id === requestId);
+
+    if (!targetRequest) {
+      return;
+    }
+
+    const ownsListing = userListings.some(
+      (listing) =>
+        listing.id === targetRequest.listingId &&
+        listing.createdByAccountEmail === currentUser.email
+    );
+
+    const isRequester =
+      targetRequest.submittedByAccountEmail === currentUser.email;
+
+    const now = new Date().toISOString();
+
+    const canCancel =
+      nextStatus === 'Cancelled' &&
+      (ownsListing || isRequester) &&
+      ['Approved', 'Confirmed', 'Active'].includes(targetRequest.status);
+
+    const canActivate =
+      nextStatus === 'Active' &&
+      ownsListing &&
+      targetRequest.status === 'Confirmed';
+
+    const canComplete =
+      nextStatus === 'Completed' &&
+      ownsListing &&
+      targetRequest.status === 'Active';
+
+    if (!canCancel && !canActivate && !canComplete) {
+      return;
+    }
+
+    setBookingRequests((prev) =>
+      prev.map((request) => {
+        if (request.id !== requestId) {
+          return request;
+        }
+
+        if (nextStatus === 'Cancelled') {
+          return {
+            ...request,
+            status: 'Cancelled',
+            cancelledAt: now,
+          };
+        }
+
+        if (nextStatus === 'Active') {
+          return {
+            ...request,
+            status: 'Active',
+            activatedAt: now,
+          };
+        }
+
+        if (nextStatus === 'Completed') {
+          return {
+            ...request,
+            status: 'Completed',
+            completedAt: now,
+          };
+        }
+
+        return request;
+      })
     );
   }
 
@@ -576,6 +796,61 @@ function App() {
     return newPayment;
   }
 
+  function handleSubmitReview(requestId, reviewData) {
+    const targetRequest = bookingRequests.find((request) => request.id === requestId);
+
+    if (!targetRequest) {
+      return {
+        ok: false,
+        error: 'We could not find that completed booking.',
+      };
+    }
+
+    if (targetRequest.submittedByAccountEmail !== currentUser.email) {
+      return {
+        ok: false,
+        error: 'You can only review your own completed booking.',
+      };
+    }
+
+    if (targetRequest.status !== 'Completed') {
+      return {
+        ok: false,
+        error: 'Reviews can only be submitted after a booking is completed.',
+      };
+    }
+
+    const alreadyReviewed = reviews.some((review) => review.requestId === requestId);
+
+    if (alreadyReviewed) {
+      return {
+        ok: false,
+        error: 'You already submitted a review for this booking.',
+      };
+    }
+
+    const newReview = {
+      id: createRecordId('review'),
+      requestId: targetRequest.id,
+      listingId: targetRequest.listingId,
+      listingTitle: targetRequest.listingTitle,
+      hostName: targetRequest.hostName,
+      rating: Number(reviewData.rating),
+      reviewText: reviewData.reviewText.trim(),
+      reviewerName: currentUser.fullName,
+      reviewerEmail: currentUser.email,
+      createdAt: new Date().toISOString(),
+      submittedByAccountEmail: currentUser.email,
+    };
+
+    setReviews((prev) => [newReview, ...prev]);
+
+    return {
+      ok: true,
+      review: newReview,
+    };
+  }
+
   const savedListings = allListings.filter((listing) =>
     savedListingIds.includes(listing.id)
   );
@@ -590,6 +865,10 @@ function App() {
 
   const myPaymentRecords = paymentRecords.filter(
     (payment) => payment.paidByAccountEmail === currentUser.email
+  );
+
+  const myReviews = reviews.filter(
+    (review) => review.submittedByAccountEmail === currentUser.email
   );
 
   const myListingIds = new Set(myListings.map((listing) => listing.id));
@@ -644,6 +923,13 @@ function App() {
     );
   }, [paymentRecords]);
 
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEYS.REVIEWS,
+      JSON.stringify(reviews)
+    );
+  }, [reviews]);
+
   return (
     <div className="app-shell">
       <Navbar currentUser={currentUser} onLogout={handleLogout} />
@@ -676,6 +962,7 @@ function App() {
                 onDeleteListing={handleDeleteListing}
                 onToggleListingStatus={handleToggleListingStatus}
                 onUpdateBookingRequestStatus={handleUpdateBookingRequestStatus}
+                onUpdateBookingLifecycle={handleUpdateBookingLifecycle}
                 onUpdateHostMessageStatus={handleUpdateHostMessageStatus}
               />
             }
@@ -726,8 +1013,10 @@ function App() {
                   bookingRequests={myBookingRequests}
                   hostMessages={myHostMessages}
                   paymentRecords={myPaymentRecords}
+                  reviews={myReviews}
                   onDeleteListing={handleDeleteListing}
                   onToggleListingStatus={handleToggleListingStatus}
+                  onUpdateBookingLifecycle={handleUpdateBookingLifecycle}
                   onUpdateRole={handleUpdateRole}
                   onLogout={handleLogout}
                 />
@@ -754,11 +1043,14 @@ function App() {
             element={
               <ListingDetailsPage
                 listings={allListings}
+                bookingRequests={bookingRequests}
+                reviews={reviews}
                 savedListingIds={savedListingIds}
                 onToggleSave={handleToggleSave}
                 currentUser={currentUser}
                 onSubmitBookingRequest={handleSubmitBookingRequest}
                 onSubmitHostMessage={handleSubmitHostMessage}
+                onSubmitReview={handleSubmitReview}
               />
             }
           />
