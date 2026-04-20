@@ -12,7 +12,7 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
 
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitState, setSubmitState] = useState(null);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -82,18 +82,37 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
       return;
     }
 
-    setIsSubmitted(true);
+    setSubmitState(result?.request?.status || 'Pending');
   }
 
-  if (isSubmitted) {
+  if (submitState) {
+    const isInstant = submitState === 'Approved';
+    const isWaitlist = submitState === 'Waitlisted';
+
     return (
       <div className="booking-success-card">
-        <p className="booking-success-tag">Request Sent</p>
-        <h3>Your reservation request is in.</h3>
+        <p className="booking-success-tag">
+          {isInstant
+            ? 'Instant Booking Ready'
+            : isWaitlist
+            ? 'Added to Waitlist'
+            : 'Request Sent'}
+        </p>
+
+        <h3>
+          {isInstant
+            ? 'This listing was instantly approved.'
+            : isWaitlist
+            ? 'Your dates are now waitlisted.'
+            : 'Your reservation request is in.'}
+        </h3>
+
         <p>
-          We saved your request for <strong>{listingTitle}</strong>. It will now
-          appear in your profile activity and in the host dashboard for that
-          listing.
+          {isInstant
+            ? `Your booking for ${listingTitle} was auto-approved. You can complete checkout from your profile.`
+            : isWaitlist
+            ? `Your requested dates for ${listingTitle} are currently unavailable, but you’ve been added to the waitlist.`
+            : `We saved your request for ${listingTitle}. It will now appear in your profile activity and in the host dashboard for that listing.`}
         </p>
 
         <div className="booking-summary">
@@ -126,7 +145,7 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
     <form className="booking-form" onSubmit={handleSubmit}>
       <h3>Reserve This Space</h3>
       <p className="booking-form-copy">
-        Send a reservation request for <strong>{listingTitle}</strong>.
+        Submit your booking details for <strong>{listingTitle}</strong>.
       </p>
 
       <div className="filter-group">
@@ -221,7 +240,7 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
       {submitError && <div className="form-submit-error">{submitError}</div>}
 
       <button type="submit" className="primary-button full-width">
-        Send Reservation Request
+        Submit Booking Request
       </button>
     </form>
   );

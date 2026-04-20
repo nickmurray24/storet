@@ -5,6 +5,7 @@ import MapPlaceholder from '../components/MapPlaceholder';
 import ListingCard from '../components/ListingCard';
 import SelectedListingPanel from '../components/SelectedListingPanel';
 import HostDashboardPanel from '../components/HostDashboardPanel';
+import CompareTray from '../components/CompareTray';
 
 const defaultFilters = {
   keyword: '',
@@ -138,6 +139,7 @@ function ExplorePage({
   const [isLocating, setIsLocating] = useState(false);
   const [geocodeError, setGeocodeError] = useState('');
   const [geocodeSuccess, setGeocodeSuccess] = useState('');
+  const [compareListingIds, setCompareListingIds] = useState([]);
   const [recentSearches, setRecentSearches] = useState(() => {
     if (typeof window === 'undefined') {
       return [];
@@ -414,6 +416,24 @@ function ExplorePage({
     }
   }
 
+  function handleToggleCompare(listingId) {
+    setCompareListingIds((prev) => {
+      if (prev.includes(listingId)) {
+        return prev.filter((id) => id !== listingId);
+      }
+
+      if (prev.length >= 3) {
+        return [...prev.slice(1), listingId];
+      }
+
+      return [...prev, listingId];
+    });
+  }
+
+  function handleClearCompare() {
+    setCompareListingIds([]);
+  }
+
   const filteredListings = useMemo(() => {
     const radiusMiles = Number(filters.radiusMiles);
 
@@ -505,6 +525,20 @@ function ExplorePage({
       );
     }
 
+    if (sortBy === 'top-rated') {
+      return results.sort((a, b) => {
+        if (b.averageRating !== a.averageRating) {
+          return b.averageRating - a.averageRating;
+        }
+
+        return b.reviewCount - a.reviewCount;
+      });
+    }
+
+    if (sortBy === 'most-reviewed') {
+      return results.sort((a, b) => b.reviewCount - a.reviewCount);
+    }
+
     return results;
   }, [filters, listings, searchCenter, sortBy]);
 
@@ -522,6 +556,10 @@ function ExplorePage({
       setSelectedListingId(filteredListings[0].id);
     }
   }, [filteredListings, selectedListingId]);
+
+  const compareListings = useMemo(() => {
+    return listings.filter((listing) => compareListingIds.includes(listing.id));
+  }, [listings, compareListingIds]);
 
   const activeFilterCount = [
     filters.keyword,
@@ -619,6 +657,12 @@ function ExplorePage({
               }
               onToggleSave={handleProtectedSave}
               distanceMiles={selectedListing?.distanceMiles ?? null}
+              isCompared={
+                selectedListing
+                  ? compareListingIds.includes(selectedListing.id)
+                  : false
+              }
+              onToggleCompare={handleToggleCompare}
             />
 
             <section className="listings-section">
@@ -646,6 +690,8 @@ function ExplorePage({
                   >
                     <option value="recommended">Recommended</option>
                     {searchCenter && <option value="distance">Distance</option>}
+                    <option value="top-rated">Top Rated</option>
+                    <option value="most-reviewed">Most Reviewed</option>
                     <option value="newest">Newest</option>
                     <option value="price-low-high">Price: Low to High</option>
                     <option value="price-high-low">Price: High to Low</option>
@@ -665,6 +711,8 @@ function ExplorePage({
                       isSelected={selectedListingId === listing.id}
                       onSelectListing={setSelectedListingId}
                       distanceMiles={listing.distanceMiles}
+                      isCompared={compareListingIds.includes(listing.id)}
+                      onToggleCompare={handleToggleCompare}
                     />
                   ))}
                 </div>
@@ -685,6 +733,14 @@ function ExplorePage({
                 </div>
               )}
             </section>
+
+            {compareListings.length > 0 && (
+              <CompareTray
+                listings={compareListings}
+                onToggleCompare={handleToggleCompare}
+                onClearCompare={handleClearCompare}
+              />
+            )}
           </div>
         </div>
       ) : (

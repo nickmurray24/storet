@@ -39,6 +39,9 @@ function ProfilePage({
   const pendingCount = bookingRequests.filter(
     (request) => request.status === 'Pending'
   ).length;
+  const waitlistedCount = bookingRequests.filter(
+    (request) => request.status === 'Waitlisted'
+  ).length;
   const approvedCount = bookingRequests.filter(
     (request) => request.status === 'Approved'
   ).length;
@@ -93,6 +96,7 @@ function ProfilePage({
           <p>Saved Listings: {savedListings.length}</p>
           <p>My Listings: {myListings.length}</p>
           <p>Pending Requests: {pendingCount}</p>
+          <p>Waitlisted: {waitlistedCount}</p>
           <p>Approved Requests: {approvedCount}</p>
           <p>Confirmed Bookings: {confirmedCount}</p>
           <p>Active Rentals: {activeRentalCount}</p>
@@ -160,6 +164,9 @@ function ProfilePage({
                   <p><strong>Move-in date:</strong> {request.moveInDate}</p>
                   <p><strong>Move-out date:</strong> {request.moveOutDate}</p>
                   <p><strong>Duration:</strong> {request.duration}</p>
+                  {request.waitlistReason && (
+                    <p><strong>Waitlist reason:</strong> {request.waitlistReason}</p>
+                  )}
                   {request.notes && <p><strong>Notes:</strong> {request.notes}</p>}
                 </div>
 
@@ -170,7 +177,9 @@ function ProfilePage({
                     </Link>
                   )}
 
-                  {(request.status === 'Approved' || request.status === 'Confirmed') && (
+                  {(request.status === 'Approved' ||
+                    request.status === 'Confirmed' ||
+                    request.status === 'Waitlisted') && (
                     <button
                       type="button"
                       className="danger-button"
@@ -178,8 +187,14 @@ function ProfilePage({
                         onUpdateBookingLifecycle(request.id, 'Cancelled')
                       }
                     >
-                      Cancel Booking
+                      Cancel
                     </button>
+                  )}
+
+                  {request.status === 'Waitlisted' && (
+                    <span className="results-subtext">
+                      Waiting for host availability
+                    </span>
                   )}
 
                   {(request.status === 'Confirmed' ||
@@ -358,6 +373,8 @@ function ProfilePage({
                 onToggleSave={onToggleSave}
                 isSelected={false}
                 onSelectListing={() => {}}
+                isCompared={false}
+                onToggleCompare={() => {}}
               />
             ))}
           </div>
@@ -408,6 +425,13 @@ function ProfilePage({
 
                 <p className="listing-size">Size: {listing.size}</p>
                 <p className="listing-description">{listing.description}</p>
+                <p>
+                  <strong>Booking:</strong>{' '}
+                  {listing.bookingMode === 'instant' ? 'Instant Book' : 'Request Approval'}
+                </p>
+                <p>
+                  <strong>Waitlist:</strong> {listing.allowWaitlist ? 'Enabled' : 'Disabled'}
+                </p>
 
                 <div className="management-actions">
                   <Link
