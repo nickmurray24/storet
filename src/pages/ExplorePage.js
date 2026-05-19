@@ -1,761 +1,828 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import SidebarFilters from '../components/SidebarFilters';
-import MapPlaceholder from '../components/MapPlaceholder';
-import ListingCard from '../components/ListingCard';
-import SelectedListingPanel from '../components/SelectedListingPanel';
-import HostDashboardPanel from '../components/HostDashboardPanel';
-import CompareTray from '../components/CompareTray';
+import React, { useMemo, useState } from "react";
+import { Link as RouterLink } from "react-router-dom";
+import {
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardActionArea,
+  CardActions,
+  CardContent,
+  Chip,
+  Container,
+  Divider,
+  FormControl,
+  InputAdornment,
+  InputLabel,
+  MenuItem,
+  Select,
+  Slider,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 
-const defaultFilters = {
-  keyword: '',
-  nearLocation: '',
-  radiusMiles: '10',
-  listingType: 'All',
-  duration: 'Any',
-  size: 'Any',
-  climateControlled: false,
-  alwaysAccess: false,
-  availableNowOnly: false,
-};
+import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
+import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
+import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
+import BusinessRoundedIcon from "@mui/icons-material/BusinessRounded";
+import FavoriteBorderRoundedIcon from "@mui/icons-material/FavoriteBorderRounded";
+import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
+import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
+import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
+import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-const RECENT_SEARCHES_KEY = 'storet_recent_location_searches';
+const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
+const SAVED_LISTINGS_KEY = "storet_saved_listing_ids";
+const CURRENT_USER_KEY = "storet_current_user";
 
-function getSizeCategory(sizeValue) {
-  const normalized = sizeValue.toLowerCase();
+const fallbackListings = [
+  {
+    id: "1",
+    title: "Oakley Garage Space",
+    location: "Oakley, Cincinnati, OH",
+    distance: "6 miles away",
+    price: 85,
+    sqft: 120,
+    storageType: "Garage",
+    listingType: "Private host",
+    access: "By appointment",
+    rating: 4.9,
+    reviews: 18,
+    instantBook: true,
+    waitlist: false,
+    host: "Maya",
+    description: "Clean indoor garage space for boxes, bikes, dorm items, and small furniture.",
+    tags: ["Indoor", "Private", "Instant book"],
+  },
+  {
+    id: "2",
+    title: "Clifton Basement Corner",
+    location: "Clifton, Cincinnati, OH",
+    distance: "2 miles away",
+    price: 55,
+    sqft: 75,
+    storageType: "Basement",
+    listingType: "Private host",
+    access: "Weekly access",
+    rating: 4.7,
+    reviews: 11,
+    instantBook: false,
+    waitlist: true,
+    host: "Evan",
+    description: "Affordable basement storage close to campus and apartment-heavy neighborhoods.",
+    tags: ["Budget", "Student friendly", "Waitlist"],
+  },
+  {
+    id: "3",
+    title: "Downtown Storage Locker",
+    location: "Downtown Cincinnati, OH",
+    distance: "4 miles away",
+    price: 110,
+    sqft: 100,
+    storageType: "Storage unit",
+    listingType: "Commercial",
+    access: "Daily access",
+    rating: 4.8,
+    reviews: 32,
+    instantBook: true,
+    waitlist: false,
+    host: "Storet Partner",
+    description: "Traditional storage-style locker with flexible monthly availability.",
+    tags: ["Commercial", "Daily access", "Secure"],
+  },
+  {
+    id: "4",
+    title: "Mason Spare Room Storage",
+    location: "Mason, OH",
+    distance: "18 miles away",
+    price: 70,
+    sqft: 90,
+    storageType: "Spare room",
+    listingType: "Private host",
+    access: "By appointment",
+    rating: 4.6,
+    reviews: 9,
+    instantBook: false,
+    waitlist: false,
+    host: "Jordan",
+    description: "Climate-friendly spare room space for bins, seasonal items, and dorm storage.",
+    tags: ["Climate friendly", "Residential", "Flexible"],
+  },
+];
 
-  if (normalized.includes('small')) {
-    return 'Small';
-  }
-
-  if (normalized.includes('10x10') || normalized.includes('large')) {
-    return 'Large';
-  }
-
-  if (
-    normalized.includes('medium') ||
-    normalized.includes('5x10') ||
-    normalized.includes('small-medium')
-  ) {
-    return 'Medium';
-  }
-
-  return 'Medium';
-}
-
-function getInitialModeFromRole(role) {
-  if (role === 'Host' || role === 'Both') {
-    return 'host';
-  }
-
-  return 'renter';
-}
-
-function isHostRole(role) {
-  return role === 'Host' || role === 'Both';
-}
-
-function getPriceValue(price) {
-  const numeric = Number(String(price).replace(/[^0-9.]/g, ''));
-  return Number.isNaN(numeric) ? 0 : numeric;
-}
-
-function getNewestValue(listing) {
-  if (listing.createdAt) {
-    return new Date(listing.createdAt).getTime();
-  }
-
-  return listing.id || 0;
-}
-
-function hasCoordinates(listing) {
-  return (
-    typeof listing.latitude === 'number' &&
-    Number.isFinite(listing.latitude) &&
-    typeof listing.longitude === 'number' &&
-    Number.isFinite(listing.longitude)
-  );
-}
-
-function haversineMiles(lat1, lon1, lat2, lon2) {
-  const toRadians = (value) => (value * Math.PI) / 180;
-  const earthRadiusMiles = 3958.8;
-
-  const dLat = toRadians(lat2 - lat1);
-  const dLon = toRadians(lon2 - lon1);
-
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(toRadians(lat1)) *
-      Math.cos(toRadians(lat2)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-  return earthRadiusMiles * c;
-}
-
-function readRecentSearches() {
+function safeReadJson(key, fallbackValue) {
   try {
-    const storedValue = window.localStorage.getItem(RECENT_SEARCHES_KEY);
-
-    if (!storedValue) {
-      return [];
-    }
-
-    const parsed = JSON.parse(storedValue);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    return [];
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallbackValue;
+  } catch {
+    return fallbackValue;
   }
+}
+
+function normalizeSavedIds(value) {
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+
+  if (value instanceof Set) {
+    return Array.from(value).map(String);
+  }
+
+  if (value && Array.isArray(value.ids)) {
+    return value.ids.map(String);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .filter(([, isSaved]) => Boolean(isSaved))
+      .map(([id]) => String(id));
+  }
+
+  return [];
+}
+
+function normalizeListing(listing, index) {
+  const price = Number(
+    listing.price ??
+      listing.monthlyPrice ??
+      listing.monthlyRate ??
+      listing.rate ??
+      75
+  );
+
+  const sqft = Number(
+    listing.sqft ??
+      listing.squareFeet ??
+      listing.sizeSqft ??
+      listing.size ??
+      100
+  );
+
+  const listingType =
+    listing.listingType ??
+    listing.hostType ??
+    (listing.isCommercial ? "Commercial" : "Private host");
+
+  return {
+    ...listing,
+    id: String(listing.id ?? `listing-${index + 1}`),
+    title: listing.title ?? listing.name ?? "Storage space",
+    location: listing.location ?? listing.address ?? "Cincinnati, OH",
+    distance: listing.distance ?? "Nearby",
+    price,
+    sqft,
+    storageType: listing.storageType ?? listing.type ?? "Storage space",
+    listingType,
+    access: listing.access ?? "Flexible access",
+    rating: Number(listing.rating ?? 4.8),
+    reviews: Number(listing.reviews ?? listing.reviewCount ?? 0),
+    instantBook:
+      listing.instantBook ??
+      listing.instantBooking ??
+      listing.bookingType === "instant" ??
+      false,
+    waitlist:
+      listing.waitlist ??
+      listing.hasWaitlist ??
+      listing.availability === "waitlist" ??
+      false,
+    host: listing.host ?? listing.hostName ?? "Storet Host",
+    description:
+      listing.description ??
+      "Flexible local storage space for short-term or long-term needs.",
+    tags: Array.isArray(listing.tags) ? listing.tags : [],
+  };
 }
 
 function ExplorePage({
   listings,
-  myListings,
+  currentUser,
   savedListingIds,
   onToggleSave,
-  currentUser,
-  bookingRequests,
-  hostMessages,
-  onDeleteListing,
-  onToggleListingStatus,
-  onUpdateBookingRequestStatus,
-  onUpdateBookingLifecycle,
-  onUpdateHostMessageStatus,
+  onSaveToggle,
 }) {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const [mode, setMode] = useState(getInitialModeFromRole(currentUser.role));
-  const [filters, setFilters] = useState(defaultFilters);
-  const [sortBy, setSortBy] = useState('recommended');
-  const [selectedListingId, setSelectedListingId] = useState(
-    listings.length > 0 ? listings[0].id : null
-  );
-  const [searchCenter, setSearchCenter] = useState(null);
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [isLocating, setIsLocating] = useState(false);
-  const [geocodeError, setGeocodeError] = useState('');
-  const [geocodeSuccess, setGeocodeSuccess] = useState('');
-  const [compareListingIds, setCompareListingIds] = useState([]);
-  const [recentSearches, setRecentSearches] = useState(() => {
-    if (typeof window === 'undefined') {
-      return [];
-    }
-
-    return readRecentSearches();
+  const storedUser = safeReadJson(CURRENT_USER_KEY, {
+    fullName: "Demo User",
+    role: "Renter",
   });
 
-  useEffect(() => {
-    setMode(getInitialModeFromRole(currentUser.role));
-  }, [currentUser.role]);
+  const activeUser = currentUser || storedUser;
+  const userListings = useMemo(() => safeReadJson(USER_LISTINGS_KEY, []), []);
 
-  useEffect(() => {
-    window.localStorage.setItem(
-      RECENT_SEARCHES_KEY,
-      JSON.stringify(recentSearches)
-    );
-  }, [recentSearches]);
+  const allListings = useMemo(() => {
+    const sourceListings =
+      Array.isArray(listings) && listings.length > 0
+        ? listings
+        : [...fallbackListings, ...userListings];
 
-  function redirectToAuth(message) {
-    navigate('/auth', {
-      state: {
-        redirectTo: location.pathname,
-        message,
-      },
+    const normalizedListings = sourceListings.map(normalizeListing);
+    const seenIds = new Set();
+
+    return normalizedListings.filter((listing) => {
+      if (seenIds.has(listing.id)) return false;
+      seenIds.add(listing.id);
+      return true;
     });
-  }
+  }, [listings, userListings]);
 
-  function handleModeChange(nextMode) {
-    if (nextMode === 'host' && !currentUser.isAuthenticated) {
-      redirectToAuth('Log in with a Host or Both account to access host tools.');
-      return;
-    }
+  const savedIdsFromProps = normalizeSavedIds(savedListingIds);
 
-    if (nextMode === 'host' && !isHostRole(currentUser.role)) {
-      navigate('/auth', {
-        state: {
-          redirectTo: '/explore',
-          message:
-            'Host tools require a Host or Both account. Update your role in Profile.',
-        },
-      });
-      return;
-    }
+  const [localSavedIds, setLocalSavedIds] = useState(() =>
+  normalizeSavedIds(safeReadJson(SAVED_LISTINGS_KEY, []))
+  );
 
-    setMode(nextMode);
-  }
+  const activeSavedIds =
+    savedIdsFromProps.length > 0 ? savedIdsFromProps : localSavedIds;
 
-  function handleProtectedSave(listingId) {
-    if (!currentUser.isAuthenticated) {
-      redirectToAuth('Log in to save listings to your profile.');
-      return;
-    }
+  const savedIdSet = useMemo(
+    () => new Set(activeSavedIds.map(String)),
+    [activeSavedIds]
+  );
 
-    onToggleSave(listingId);
-  }
+  const [searchQuery, setSearchQuery] = useState("");
+  const [storageType, setStorageType] = useState("All");
+  const [listingType, setListingType] = useState("All");
+  const [bookingType, setBookingType] = useState("All");
+  const [sortBy, setSortBy] = useState("recommended");
+  const [maxPrice, setMaxPrice] = useState(180);
 
-  function handleFilterChange(event) {
-    const { name, value, type, checked } = event.target;
-
-    setFilters((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
-    }));
-
-    if (name === 'nearLocation') {
-      setGeocodeError('');
-      setGeocodeSuccess('');
-    }
-  }
-
-  function handleResetFilters() {
-    setFilters(defaultFilters);
-    setSearchCenter(null);
-    setGeocodeError('');
-    setGeocodeSuccess('');
-    setSortBy('recommended');
-  }
-
-  function saveRecentSearch(search) {
-    setRecentSearches((prev) => {
-      const withoutDuplicate = prev.filter(
-        (item) =>
-          !(
-            item.label === search.label &&
-            item.latitude === search.latitude &&
-            item.longitude === search.longitude
-          )
-      );
-
-      return [
-        {
-          id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          ...search,
-        },
-        ...withoutDuplicate,
-      ].slice(0, 6);
-    });
-  }
-
-  function applySearchCenter(center, successMessage) {
-    setSearchCenter(center);
-    setFilters((prev) => ({
-      ...prev,
-      nearLocation: center.label || prev.nearLocation,
-    }));
-    setGeocodeError('');
-    setGeocodeSuccess(successMessage);
-
-    if (sortBy === 'recommended') {
-      setSortBy('distance');
-    }
-
-    saveRecentSearch(center);
-  }
-
-  async function handleFindNearLocation() {
-    const query = filters.nearLocation.trim();
-
-    if (!query) {
-      setGeocodeError('Enter a place or address first.');
-      setGeocodeSuccess('');
-      return;
-    }
-
-    setIsGeocoding(true);
-    setGeocodeError('');
-    setGeocodeSuccess('');
-
-    try {
-      const params = new URLSearchParams({
-        q: query,
-        format: 'jsonv2',
-        limit: '1',
-      });
-
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params.toString()}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Geocoding request failed.');
-      }
-
-      const results = await response.json();
-
-      if (!Array.isArray(results) || results.length === 0) {
-        setGeocodeError('No matching search point was found. Try a fuller address.');
-        return;
-      }
-
-      const bestMatch = results[0];
-
-      applySearchCenter(
-        {
-          label: bestMatch.display_name || query,
-          latitude: Number(bestMatch.lat),
-          longitude: Number(bestMatch.lon),
-        },
-        'Distance search point found.'
-      );
-    } catch (error) {
-      setGeocodeError(
-        'Unable to search this location right now. Try again in a moment.'
-      );
-    } finally {
-      setIsGeocoding(false);
-    }
-  }
-
-  async function reverseGeocode(latitude, longitude) {
-    const params = new URLSearchParams({
-      lat: String(latitude),
-      lon: String(longitude),
-      format: 'jsonv2',
-    });
-
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?${params.toString()}`
-    );
-
-    if (!response.ok) {
-      throw new Error('Reverse geocoding request failed.');
-    }
-
-    const result = await response.json();
-    return result.display_name || 'Current location';
-  }
-
-  function handleUseMyLocation() {
-    if (!navigator.geolocation) {
-      setGeocodeError('Your browser does not support location access.');
-      setGeocodeSuccess('');
-      return;
-    }
-
-    setIsLocating(true);
-    setGeocodeError('');
-    setGeocodeSuccess('');
-
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const latitude = position.coords.latitude;
-        const longitude = position.coords.longitude;
-
-        try {
-          const label = await reverseGeocode(latitude, longitude);
-
-          applySearchCenter(
-            {
-              label,
-              latitude,
-              longitude,
-            },
-            'Using your current location for distance search.'
-          );
-        } catch (error) {
-          applySearchCenter(
-            {
-              label: 'Current location',
-              latitude,
-              longitude,
-            },
-            'Using your current location for distance search.'
-          );
-        } finally {
-          setIsLocating(false);
-        }
-      },
-      (error) => {
-        if (error.code === 1) {
-          setGeocodeError('Location permission was denied.');
-        } else if (error.code === 2) {
-          setGeocodeError('Your location could not be determined.');
-        } else if (error.code === 3) {
-          setGeocodeError('Location request timed out.');
-        } else {
-          setGeocodeError('Unable to use your current location.');
-        }
-
-        setGeocodeSuccess('');
-        setIsLocating(false);
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 300000,
-      }
-    );
-  }
-
-  function handleChooseRecentSearch(search) {
-    applySearchCenter(
-      {
-        label: search.label,
-        latitude: search.latitude,
-        longitude: search.longitude,
-      },
-      'Recent search restored.'
-    );
-  }
-
-  function handleClearNearLocation() {
-    setSearchCenter(null);
-    setGeocodeError('');
-    setGeocodeSuccess('');
-    setFilters((prev) => ({
-      ...prev,
-      nearLocation: '',
-    }));
-
-    if (sortBy === 'distance') {
-      setSortBy('recommended');
-    }
-  }
-
-  function handleToggleCompare(listingId) {
-    setCompareListingIds((prev) => {
-      if (prev.includes(listingId)) {
-        return prev.filter((id) => id !== listingId);
-      }
-
-      if (prev.length >= 3) {
-        return [...prev.slice(1), listingId];
-      }
-
-      return [...prev, listingId];
-    });
-  }
-
-  function handleClearCompare() {
-    setCompareListingIds([]);
-  }
+  const storageTypes = useMemo(() => {
+    const uniqueTypes = new Set(allListings.map((listing) => listing.storageType));
+    return ["All", ...Array.from(uniqueTypes)];
+  }, [allListings]);
 
   const filteredListings = useMemo(() => {
-    const radiusMiles = Number(filters.radiusMiles);
+    const query = searchQuery.trim().toLowerCase();
 
-    const results = listings
-      .map((listing) => {
-        const distanceMiles =
-          searchCenter && hasCoordinates(listing)
-            ? haversineMiles(
-                searchCenter.latitude,
-                searchCenter.longitude,
-                listing.latitude,
-                listing.longitude
-              )
-            : null;
+    const filtered = allListings.filter((listing) => {
+      const searchableText = [
+        listing.title,
+        listing.location,
+        listing.storageType,
+        listing.listingType,
+        listing.description,
+        listing.host,
+        ...listing.tags,
+      ]
+        .join(" ")
+        .toLowerCase();
 
-        return {
-          ...listing,
-          distanceMiles,
-        };
-      })
-      .filter((listing) => {
-        const searchValue = filters.keyword.trim().toLowerCase();
+      const matchesSearch = !query || searchableText.includes(query);
+      const matchesStorageType =
+        storageType === "All" || listing.storageType === storageType;
+      const matchesListingType =
+        listingType === "All" || listing.listingType === listingType;
+      const matchesBookingType =
+        bookingType === "All" ||
+        (bookingType === "Instant" && listing.instantBook) ||
+        (bookingType === "Waitlist" && listing.waitlist);
+      const matchesPrice = listing.price <= maxPrice;
 
-        const matchesKeyword =
-          searchValue === '' ||
-          listing.title.toLowerCase().includes(searchValue) ||
-          listing.location.toLowerCase().includes(searchValue) ||
-          listing.description.toLowerCase().includes(searchValue) ||
-          listing.hostName.toLowerCase().includes(searchValue);
-
-        const matchesType =
-          filters.listingType === 'All' || listing.type === filters.listingType;
-
-        const matchesDuration =
-          filters.duration === 'Any' || listing.duration === filters.duration;
-
-        const listingSizeCategory = getSizeCategory(listing.size);
-        const matchesSize =
-          filters.size === 'Any' || listingSizeCategory === filters.size;
-
-        const matchesClimate =
-          !filters.climateControlled ||
-          listing.features.some((feature) =>
-            feature.toLowerCase().includes('climate')
-          );
-
-        const matchesAccess =
-          !filters.alwaysAccess ||
-          listing.access.toLowerCase().includes('24/7');
-
-        const matchesAvailability =
-          !filters.availableNowOnly || listing.availability === 'Available now';
-
-        const matchesDistance =
-          !searchCenter ||
-          (listing.distanceMiles !== null && listing.distanceMiles <= radiusMiles);
-
-        return (
-          matchesKeyword &&
-          matchesType &&
-          matchesDuration &&
-          matchesSize &&
-          matchesClimate &&
-          matchesAccess &&
-          matchesAvailability &&
-          matchesDistance
-        );
-      });
-
-    if (sortBy === 'price-low-high') {
-      return results.sort((a, b) => getPriceValue(a.price) - getPriceValue(b.price));
-    }
-
-    if (sortBy === 'price-high-low') {
-      return results.sort((a, b) => getPriceValue(b.price) - getPriceValue(a.price));
-    }
-
-    if (sortBy === 'newest') {
-      return results.sort((a, b) => getNewestValue(b) - getNewestValue(a));
-    }
-
-    if (sortBy === 'alphabetical') {
-      return results.sort((a, b) => a.title.localeCompare(b.title));
-    }
-
-    if (sortBy === 'distance') {
-      return results.sort(
-        (a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity)
+      return (
+        matchesSearch &&
+        matchesStorageType &&
+        matchesListingType &&
+        matchesBookingType &&
+        matchesPrice
       );
+    });
+
+    return filtered.sort((a, b) => {
+      if (sortBy === "priceLow") return a.price - b.price;
+      if (sortBy === "priceHigh") return b.price - a.price;
+      if (sortBy === "sqftHigh") return b.sqft - a.sqft;
+      if (sortBy === "ratingHigh") return b.rating - a.rating;
+
+      return Number(b.instantBook) - Number(a.instantBook) || b.rating - a.rating;
+    });
+  }, [
+    allListings,
+    bookingType,
+    listingType,
+    maxPrice,
+    searchQuery,
+    sortBy,
+    storageType,
+  ]);
+
+  const stats = useMemo(() => {
+    const instantCount = allListings.filter((listing) => listing.instantBook).length;
+    const privateCount = allListings.filter(
+      (listing) => listing.listingType === "Private host"
+    ).length;
+
+    return {
+      total: allListings.length,
+      instant: instantCount,
+      private: privateCount,
+    };
+  }, [allListings]);
+
+  function handleBookingTypeChange(event, nextValue) {
+    if (nextValue) {
+      setBookingType(nextValue);
     }
+  }
 
-    if (sortBy === 'top-rated') {
-      return results.sort((a, b) => {
-        if (b.averageRating !== a.averageRating) {
-          return b.averageRating - a.averageRating;
-        }
+  function handleSaveClick(event, listingId) {
+    event.preventDefault();
+    event.stopPropagation();
 
-        return b.reviewCount - a.reviewCount;
-      });
-    }
-
-    if (sortBy === 'most-reviewed') {
-      return results.sort((a, b) => b.reviewCount - a.reviewCount);
-    }
-
-    return results;
-  }, [filters, listings, searchCenter, sortBy]);
-
-  useEffect(() => {
-    if (filteredListings.length === 0) {
-      setSelectedListingId(null);
+    if (onToggleSave) {
+      onToggleSave(listingId);
       return;
     }
 
-    const selectedStillVisible = filteredListings.some(
-      (listing) => listing.id === selectedListingId
-    );
-
-    if (!selectedStillVisible) {
-      setSelectedListingId(filteredListings[0].id);
+    if (onSaveToggle) {
+      onSaveToggle(listingId);
+      return;
     }
-  }, [filteredListings, selectedListingId]);
 
-  const compareListings = useMemo(() => {
-    return listings.filter((listing) => compareListingIds.includes(listing.id));
-  }, [listings, compareListingIds]);
+    setLocalSavedIds((currentIds) => {
+      const normalizedId = String(listingId);
+      const nextIds = currentIds.includes(normalizedId)
+        ? currentIds.filter((id) => id !== normalizedId)
+        : [...currentIds, normalizedId];
 
-  const activeFilterCount = [
-    filters.keyword,
-    filters.listingType !== 'All',
-    filters.duration !== 'Any',
-    filters.size !== 'Any',
-    filters.climateControlled,
-    filters.alwaysAccess,
-    filters.availableNowOnly,
-    Boolean(searchCenter),
-  ].filter(Boolean).length;
-
-  const selectedListing =
-    filteredListings.find((listing) => listing.id === selectedListingId) || null;
+      localStorage.setItem(SAVED_LISTINGS_KEY, JSON.stringify(nextIds));
+      return nextIds;
+    });
+  }
 
   return (
-    <div className="explore-page">
-      <div className="explore-topbar">
-        <div>
-          <h1>{mode === 'renter' ? 'Explore Storage' : 'Host Dashboard'}</h1>
-          <p>
-            {mode === 'renter'
-              ? 'Find commercial units and local spaces available near you.'
-              : 'Manage the host side of Storet and create new storage listings.'}
-          </p>
-        </div>
-
-        <div className="mode-toggle">
-          <button
-            type="button"
-            className={`toggle-button ${mode === 'renter' ? 'active' : ''}`}
-            onClick={() => handleModeChange('renter')}
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <Box
+        sx={{
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: { xs: 4, md: 5 } }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={3}
+            alignItems={{ xs: "flex-start", md: "center" }}
+            justifyContent="space-between"
           >
-            I need storage
-          </button>
+            <Stack spacing={1.5}>
+              <Chip
+                icon={<WarehouseRoundedIcon />}
+                label={`${activeUser.role || "Renter"} mode`}
+                color="primary"
+                variant="outlined"
+                sx={{ width: "fit-content", fontWeight: 700 }}
+              />
 
-          <button
-            type="button"
-            className={`toggle-button ${mode === 'host' ? 'active' : ''}`}
-            onClick={() => handleModeChange('host')}
+              <Box>
+                <Typography
+                  variant="h2"
+                  sx={{
+                    fontSize: { xs: "2.25rem", md: "3.35rem" },
+                    lineHeight: 1,
+                  }}
+                >
+                  Explore storage spaces
+                </Typography>
+
+                <Typography
+                  color="text.secondary"
+                  sx={{ mt: 1, maxWidth: 680, fontSize: "1.05rem" }}
+                >
+                  Search flexible storage options from local hosts and commercial
+                  partners.
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Button
+              component={RouterLink}
+              to="/create-listing"
+              variant="contained"
+              size="large"
+              startIcon={<AddHomeWorkRoundedIcon />}
+            >
+              List your space
+            </Button>
+          </Stack>
+
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            sx={{ mt: 4 }}
           >
-            I have space
-          </button>
-        </div>
-      </div>
+            <Card sx={{ flex: 1 }}>
+              <CardContent sx={{ py: 2.5 }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Avatar sx={{ bgcolor: "primary.light", color: "primary.dark" }}>
+                    <Inventory2RoundedIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h5">{stats.total}</Typography>
+                    <Typography color="text.secondary">Available spaces</Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
 
-      <div className="user-role-banner">
-        <span className="user-role-pill">
-          {currentUser.isAuthenticated
-            ? `Signed in as ${currentUser.role}`
-            : 'Browsing as Guest'}
-        </span>
-        <p className="results-subtext">
-          {currentUser.role === 'Both'
-            ? 'You can switch between renter and host views anytime.'
-            : currentUser.role === 'Host'
-            ? 'Host mode is prioritized for your account, but you can still browse listings.'
-            : 'Renter mode is prioritized for your account.'}
-        </p>
-      </div>
+            <Card sx={{ flex: 1 }}>
+              <CardContent sx={{ py: 2.5 }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Avatar sx={{ bgcolor: "secondary.light", color: "secondary.dark" }}>
+                    <BoltRoundedIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h5">{stats.instant}</Typography>
+                    <Typography color="text.secondary">Instant booking</Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
 
-      {mode === 'renter' ? (
-        <div className="explore-layout">
-          <SidebarFilters
-            filters={filters}
-            onChange={handleFilterChange}
-            onReset={handleResetFilters}
-            onFindNearLocation={handleFindNearLocation}
-            onClearNearLocation={handleClearNearLocation}
-            onUseMyLocation={handleUseMyLocation}
-            onChooseRecentSearch={handleChooseRecentSearch}
-            recentSearches={recentSearches}
-            isGeocoding={isGeocoding}
-            isLocating={isLocating}
-            geocodeError={geocodeError}
-            geocodeSuccess={geocodeSuccess}
-            searchCenter={searchCenter}
-          />
+            <Card sx={{ flex: 1 }}>
+              <CardContent sx={{ py: 2.5 }}>
+                <Stack direction="row" spacing={1.5} alignItems="center">
+                  <Avatar sx={{ bgcolor: "background.default", color: "text.primary" }}>
+                    <PersonRoundedIcon />
+                  </Avatar>
+                  <Box>
+                    <Typography variant="h5">{stats.private}</Typography>
+                    <Typography color="text.secondary">Private hosts</Typography>
+                  </Box>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Stack>
+        </Container>
+      </Box>
 
-          <div className="explore-main">
-            <MapPlaceholder
-              listings={filteredListings}
-              selectedListingId={selectedListingId}
-              onSelectListing={setSelectedListingId}
-              searchCenter={searchCenter}
-              radiusMiles={Number(filters.radiusMiles)}
-            />
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
+        <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
+          <Card
+            sx={{
+              width: { xs: "100%", lg: 320 },
+              alignSelf: "flex-start",
+              position: { lg: "sticky" },
+              top: { lg: 96 },
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Stack spacing={2.5}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <TuneRoundedIcon color="primary" />
+                  <Typography variant="h6">Search filters</Typography>
+                </Stack>
 
-            <SelectedListingPanel
-              listing={selectedListing}
-              isSaved={
-                selectedListing
-                  ? savedListingIds.includes(selectedListing.id)
-                  : false
-              }
-              onToggleSave={handleProtectedSave}
-              distanceMiles={selectedListing?.distanceMiles ?? null}
-              isCompared={
-                selectedListing
-                  ? compareListingIds.includes(selectedListing.id)
-                  : false
-              }
-              onToggleCompare={handleToggleCompare}
-            />
+                <TextField
+                  label="Search by city, space, or keyword"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  fullWidth
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchRoundedIcon />
+                      </InputAdornment>
+                    ),
+                  }}
+                />
 
-            <section className="listings-section">
-              <div className="section-header results-toolbar">
-                <div>
-                  <h2>Available Listings</h2>
-                  <p className="results-subtext">
-                    {filteredListings.length} result
-                    {filteredListings.length !== 1 ? 's' : ''}
-                    {activeFilterCount > 0
-                      ? ` • ${activeFilterCount} filter${
-                          activeFilterCount !== 1 ? 's' : ''
-                        } active`
-                      : ''}
-                  </p>
-                </div>
+                <FormControl fullWidth>
+                  <InputLabel>Storage type</InputLabel>
+                  <Select
+                    value={storageType}
+                    label="Storage type"
+                    onChange={(event) => setStorageType(event.target.value)}
+                  >
+                    {storageTypes.map((type) => (
+                      <MenuItem key={type} value={type}>
+                        {type}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
 
-                <div className="sort-control">
-                  <label htmlFor="sortBy">Sort by</label>
-                  <select
-                    id="sortBy"
-                    className="sort-select"
+                <FormControl fullWidth>
+                  <InputLabel>Listing type</InputLabel>
+                  <Select
+                    value={listingType}
+                    label="Listing type"
+                    onChange={(event) => setListingType(event.target.value)}
+                  >
+                    <MenuItem value="All">All</MenuItem>
+                    <MenuItem value="Private host">Private host</MenuItem>
+                    <MenuItem value="Commercial">Commercial</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <Stack spacing={1}>
+                  <Typography fontWeight={700}>Booking type</Typography>
+                  <ToggleButtonGroup
+                    value={bookingType}
+                    exclusive
+                    onChange={handleBookingTypeChange}
+                    color="primary"
+                    fullWidth
+                    sx={{
+                      "& .MuiToggleButton-root": {
+                        textTransform: "none",
+                        fontWeight: 700,
+                      },
+                    }}
+                  >
+                    <ToggleButton value="All">All</ToggleButton>
+                    <ToggleButton value="Instant">Instant</ToggleButton>
+                    <ToggleButton value="Waitlist">Waitlist</ToggleButton>
+                  </ToggleButtonGroup>
+                </Stack>
+
+                <Stack spacing={1}>
+                  <Stack
+                    direction="row"
+                    justifyContent="space-between"
+                    alignItems="center"
+                  >
+                    <Typography fontWeight={700}>Max monthly price</Typography>
+                    <Chip label={`$${maxPrice}`} size="small" />
+                  </Stack>
+
+                  <Slider
+                    value={maxPrice}
+                    min={40}
+                    max={220}
+                    step={5}
+                    onChange={(event, value) => setMaxPrice(value)}
+                    valueLabelDisplay="auto"
+                  />
+                </Stack>
+
+                <FormControl fullWidth>
+                  <InputLabel>Sort by</InputLabel>
+                  <Select
                     value={sortBy}
+                    label="Sort by"
                     onChange={(event) => setSortBy(event.target.value)}
                   >
-                    <option value="recommended">Recommended</option>
-                    {searchCenter && <option value="distance">Distance</option>}
-                    <option value="top-rated">Top Rated</option>
-                    <option value="most-reviewed">Most Reviewed</option>
-                    <option value="newest">Newest</option>
-                    <option value="price-low-high">Price: Low to High</option>
-                    <option value="price-high-low">Price: High to Low</option>
-                    <option value="alphabetical">Alphabetical</option>
-                  </select>
-                </div>
-              </div>
+                    <MenuItem value="recommended">Recommended</MenuItem>
+                    <MenuItem value="priceLow">Price: low to high</MenuItem>
+                    <MenuItem value="priceHigh">Price: high to low</MenuItem>
+                    <MenuItem value="sqftHigh">Most space</MenuItem>
+                    <MenuItem value="ratingHigh">Highest rated</MenuItem>
+                  </Select>
+                </FormControl>
 
-              {filteredListings.length > 0 ? (
-                <div className="listings-grid">
-                  {filteredListings.map((listing) => (
-                    <ListingCard
-                      key={listing.id}
-                      listing={listing}
-                      isSaved={savedListingIds.includes(listing.id)}
-                      onToggleSave={handleProtectedSave}
-                      isSelected={selectedListingId === listing.id}
-                      onSelectListing={setSelectedListingId}
-                      distanceMiles={listing.distanceMiles}
-                      isCompared={compareListingIds.includes(listing.id)}
-                      onToggleCompare={handleToggleCompare}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state-card">
-                  <h3>No listings match these filters</h3>
-                  <p>
-                    Try changing the radius, clearing a few filters, or searching
-                    near a different address.
-                  </p>
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={handleResetFilters}
-                  >
-                    Reset Filters
-                  </button>
-                </div>
-              )}
-            </section>
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setStorageType("All");
+                    setListingType("All");
+                    setBookingType("All");
+                    setSortBy("recommended");
+                    setMaxPrice(180);
+                  }}
+                >
+                  Reset filters
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
 
-            {compareListings.length > 0 && (
-              <CompareTray
-                listings={compareListings}
-                onToggleCompare={handleToggleCompare}
-                onClearCompare={handleClearCompare}
-              />
+          <Box sx={{ flex: 1 }}>
+            <Stack
+              direction={{ xs: "column", sm: "row" }}
+              spacing={2}
+              alignItems={{ xs: "flex-start", sm: "center" }}
+              justifyContent="space-between"
+              sx={{ mb: 2 }}
+            >
+              <Box>
+                <Typography variant="h5">
+                  {filteredListings.length} matching spaces
+                </Typography>
+                <Typography color="text.secondary">
+                  Compare space, access, booking style, and monthly price.
+                </Typography>
+              </Box>
+            </Stack>
+
+            {filteredListings.length === 0 ? (
+              <Card>
+                <CardContent sx={{ p: 4, textAlign: "center" }}>
+                  <Stack spacing={1.5} alignItems="center">
+                    <Avatar sx={{ bgcolor: "primary.light", color: "primary.dark" }}>
+                      <SearchRoundedIcon />
+                    </Avatar>
+                    <Typography variant="h5">No spaces found</Typography>
+                    <Typography color="text.secondary" sx={{ maxWidth: 460 }}>
+                      Try adjusting your filters or increasing the monthly price
+                      range.
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ) : (
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: {
+                    xs: "1fr",
+                    md: "repeat(2, minmax(0, 1fr))",
+                  },
+                  gap: 2.5,
+                }}
+              >
+                {filteredListings.map((listing) => {
+                  const isSaved = savedIdSet.has(String(listing.id));
+                  const listingPath = `/listing/${listing.id}`;
+
+                  return (
+                    <Card key={listing.id} sx={{ overflow: "hidden" }}>
+                      <CardActionArea component={RouterLink} to={listingPath}>
+                        <Box
+                          sx={{
+                            height: 170,
+                            background:
+                              listing.listingType === "Commercial"
+                                ? "linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(37, 99, 235, 0.72))"
+                                : "linear-gradient(135deg, rgba(37, 99, 235, 0.9), rgba(20, 184, 166, 0.76))",
+                            color: "white",
+                            p: 2.5,
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Stack
+                            direction="row"
+                            justifyContent="space-between"
+                            alignItems="flex-start"
+                          >
+                            <Chip
+                              icon={
+                                listing.listingType === "Commercial" ? (
+                                  <BusinessRoundedIcon />
+                                ) : (
+                                  <PersonRoundedIcon />
+                                )
+                              }
+                              label={listing.listingType}
+                              size="small"
+                              sx={{
+                                bgcolor: "rgba(255,255,255,0.9)",
+                                color: "text.primary",
+                                fontWeight: 700,
+                              }}
+                            />
+
+                            {listing.instantBook && (
+                              <Chip
+                                icon={<BoltRoundedIcon />}
+                                label="Instant"
+                                size="small"
+                                sx={{
+                                  bgcolor: "rgba(255,255,255,0.9)",
+                                  color: "text.primary",
+                                  fontWeight: 700,
+                                }}
+                              />
+                            )}
+                          </Stack>
+
+                          <Box>
+                            <Typography variant="h5">{listing.title}</Typography>
+                            <Typography sx={{ opacity: 0.88 }}>
+                              Hosted by {listing.host}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        <CardContent sx={{ p: 2.5 }}>
+                          <Stack spacing={2}>
+                            <Stack spacing={0.75}>
+                              <Stack
+                                direction="row"
+                                spacing={1}
+                                alignItems="center"
+                              >
+                                <PlaceRoundedIcon
+                                  fontSize="small"
+                                  color="action"
+                                />
+                                <Typography color="text.secondary">
+                                  {listing.location} · {listing.distance}
+                                </Typography>
+                              </Stack>
+
+                              <Typography color="text.secondary" lineHeight={1.6}>
+                                {listing.description}
+                              </Typography>
+                            </Stack>
+
+                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                              <Chip
+                                icon={<WarehouseRoundedIcon />}
+                                label={listing.storageType}
+                                size="small"
+                              />
+                              <Chip
+                                icon={<StraightenRoundedIcon />}
+                                label={`${listing.sqft} sq ft`}
+                                size="small"
+                              />
+                              {listing.waitlist && (
+                                <Chip
+                                  label="Waitlist"
+                                  color="warning"
+                                  variant="outlined"
+                                  size="small"
+                                />
+                              )}
+                            </Stack>
+
+                            <Divider />
+
+                            <Stack
+                              direction="row"
+                              alignItems="center"
+                              justifyContent="space-between"
+                            >
+                              <Box>
+                                <Typography variant="h5">
+                                  ${listing.price}
+                                  <Typography
+                                    component="span"
+                                    color="text.secondary"
+                                    fontSize="0.95rem"
+                                  >
+                                    /mo
+                                  </Typography>
+                                </Typography>
+                                <Typography color="text.secondary">
+                                  {listing.access}
+                                </Typography>
+                              </Box>
+
+                              <Stack alignItems="flex-end" spacing={0.25}>
+                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                                  <StarRoundedIcon
+                                    fontSize="small"
+                                    sx={{ color: "warning.main" }}
+                                  />
+                                  <Typography fontWeight={800}>
+                                    {listing.rating.toFixed(1)}
+                                  </Typography>
+                                </Stack>
+                                <Typography color="text.secondary" variant="body2">
+                                  {listing.reviews} reviews
+                                </Typography>
+                              </Stack>
+                            </Stack>
+                          </Stack>
+                        </CardContent>
+                      </CardActionArea>
+
+                      <CardActions sx={{ px: 2.5, pb: 2.5, pt: 0 }}>
+                        <Button
+                          variant={isSaved ? "contained" : "outlined"}
+                          startIcon={
+                            isSaved ? (
+                              <FavoriteRoundedIcon />
+                            ) : (
+                              <FavoriteBorderRoundedIcon />
+                            )
+                          }
+                          onClick={(event) => handleSaveClick(event, listing.id)}
+                        >
+                          {isSaved ? "Saved" : "Save"}
+                        </Button>
+
+                        <Button
+                          component={RouterLink}
+                          to={listingPath}
+                          endIcon={<ArrowForwardRoundedIcon />}
+                          sx={{ ml: "auto" }}
+                        >
+                          View details
+                        </Button>
+                      </CardActions>
+                    </Card>
+                  );
+                })}
+              </Box>
             )}
-          </div>
-        </div>
-      ) : (
-        <HostDashboardPanel
-          myListings={myListings}
-          bookingRequests={bookingRequests}
-          hostMessages={hostMessages}
-          onDeleteListing={onDeleteListing}
-          onToggleListingStatus={onToggleListingStatus}
-          onUpdateBookingRequestStatus={onUpdateBookingRequestStatus}
-          onUpdateBookingLifecycle={onUpdateBookingLifecycle}
-          onUpdateHostMessageStatus={onUpdateHostMessageStatus}
-        />
-      )}
-    </div>
+          </Box>
+        </Stack>
+      </Container>
+    </Box>
   );
 }
 

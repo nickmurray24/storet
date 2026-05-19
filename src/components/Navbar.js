@@ -1,67 +1,154 @@
-import { Link, NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from "react-router-dom";
+import {
+  AppBar,
+  Avatar,
+  Box,
+  Button,
+  Chip,
+  Container,
+  Stack,
+  Toolbar,
+  Typography,
+} from "@mui/material";
 
-function Navbar({
-  currentUser,
-  onLogout,
-  unreadNotificationsCount = 0,
-}) {
+const navItems = [
+  { label: "Home", to: "/" },
+  { label: "Explore", to: "/explore" },
+  { label: "Notifications", to: "/notifications" },
+  { label: "Profile", to: "/profile" },
+];
+
+function Navbar({ currentUser, onLogout }) {
+  const location = useLocation();
+
+  const hideGlobalNav = location.pathname === "/" || location.pathname === "/auth";
+
+  if (hideGlobalNav) {
+    return null;
+  }
+
+  const isLoggedIn = currentUser?.isAuthenticated;
+  const userName = currentUser?.fullName || "Demo User";
+  const userRole = currentUser?.role || "Renter";
+
+  function isActiveRoute(to) {
+    if (to === "/") {
+      return location.pathname === "/";
+    }
+
+    return location.pathname === to || location.pathname.startsWith(`${to}/`);
+  }
+
   return (
-    <header className="navbar">
-      <div className="navbar-inner">
-        <Link to="/" className="navbar-brand">
-          Storet
-        </Link>
+    <AppBar
+      position="sticky"
+      elevation={0}
+      sx={{
+        bgcolor: "rgba(255,255,255,0.9)",
+        color: "text.primary",
+        borderBottom: "1px solid",
+        borderColor: "divider",
+        backdropFilter: "blur(16px)",
+      }}
+    >
+      <Container maxWidth="lg">
+        <Toolbar
+          disableGutters
+          sx={{
+            minHeight: 76,
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 2,
+          }}
+        >
+          <Box
+            component={NavLink}
+            to="/explore"
+            sx={{
+              color: "inherit",
+              textDecoration: "none",
+              minWidth: "fit-content",
+              display: "flex",
+              alignItems: "center",
+              gap: 1.25,
+            }}
+          >
+            <Avatar
+              sx={{
+                width: 38,
+                height: 38,
+                bgcolor: "primary.main",
+                fontWeight: 800,
+              }}
+            >
+              S
+            </Avatar>
 
-        <nav className="navbar-links">
-          <NavLink to="/" end className="navbar-link">
-            Home
-          </NavLink>
+            <Box>
+              <Typography variant="h6" sx={{ lineHeight: 1 }}>
+                Storet
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Storage, simplified
+              </Typography>
+            </Box>
+          </Box>
 
-          <NavLink to="/explore" className="navbar-link">
-            Explore
-          </NavLink>
+          <Stack
+            direction="row"
+            alignItems="center"
+            justifyContent="flex-end"
+            spacing={1}
+            sx={{
+              flexWrap: "wrap",
+            }}
+          >
+            {navItems.map((item) => {
+              const active = isActiveRoute(item.to);
 
-          {currentUser.isAuthenticated && (
-            <>
-              <NavLink to="/notifications" className="navbar-link notifications-link">
-                Notifications
-                {unreadNotificationsCount > 0 && (
-                  <span className="notifications-badge">
-                    {unreadNotificationsCount}
-                  </span>
+              return (
+                <Button
+                  key={item.to}
+                  component={NavLink}
+                  to={item.to}
+                  variant={active ? "contained" : "text"}
+                  color={active ? "primary" : "inherit"}
+                  sx={{
+                    borderRadius: 999,
+                    px: 2,
+                  }}
+                >
+                  {item.label}
+                </Button>
+              );
+            })}
+
+            {isLoggedIn ? (
+              <>
+                <Chip
+                  label={`${userName} • ${userRole}`}
+                  variant="outlined"
+                  sx={{
+                    fontWeight: 700,
+                    bgcolor: "background.paper",
+                  }}
+                />
+
+                {onLogout && (
+                  <Button variant="outlined" color="primary" onClick={onLogout}>
+                    Log Out
+                  </Button>
                 )}
-              </NavLink>
-
-              <NavLink to="/profile" className="navbar-link">
-                Profile
-              </NavLink>
-            </>
-          )}
-        </nav>
-
-        <div className="navbar-actions">
-          {currentUser.isAuthenticated ? (
-            <>
-              <span className="nav-user-chip">
-                {currentUser.fullName} • {currentUser.role}
-              </span>
-
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={onLogout}
-              >
-                Log Out
-              </button>
-            </>
-          ) : (
-            <Link to="/auth" className="primary-button">
-              Log In / Sign Up
-            </Link>
-          )}
-        </div>
-      </div>
-    </header>
+              </>
+            ) : (
+              <Button component={NavLink} to="/auth" variant="contained">
+                Log In
+              </Button>
+            )}
+          </Stack>
+        </Toolbar>
+      </Container>
+    </AppBar>
   );
 }
 

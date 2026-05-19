@@ -138,12 +138,8 @@ textarea {
 }
 
 .hero-copy,
-.hero-card,
-.feature-card,
 .filters-panel,
 .map-placeholder,
-.listing-card,
-.auth-card,
 .listing-form-card,
 .profile-card {
   background: white;
@@ -152,11 +148,7 @@ textarea {
 }
 
 .hero-copy,
-.hero-card,
-.feature-card,
 .filters-panel,
-.listing-card,
-.auth-card,
 .listing-form-card,
 .profile-card {
   padding: 24px;
@@ -193,41 +185,20 @@ textarea {
   flex-wrap: wrap;
 }
 
-.hero-card h3,
-.feature-card h3,
 .profile-card h3 {
   margin-top: 0;
-}
-
-.hero-card ul {
-  padding-left: 20px;
-  margin-bottom: 0;
-  color: #475569;
 }
 
 .feature-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.feature-card p,
 .profile-card p,
 .page-header-block p,
-.auth-card p,
 .listing-description,
 .listing-location,
 .listing-size {
   color: #64748b;
-}
-
-.auth-page {
-  display: flex;
-  justify-content: center;
-  padding: 32px 0;
-}
-
-.auth-card {
-  width: 100%;
-  max-width: 480px;
 }
 
 .auth-tabs {
@@ -250,13 +221,6 @@ textarea {
   color: white;
 }
 
-.auth-form {
-  display: grid;
-  gap: 12px;
-  margin-top: 20px;
-}
-
-.auth-form input,
 .filter-group input,
 .filter-group select,
 .filter-group textarea {
@@ -384,19 +348,6 @@ textarea {
   margin-bottom: 18px;
 }
 
-.listings-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18px;
-}
-
-.listing-card-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
 .listing-badge {
   padding: 6px 10px;
   border-radius: 999px;
@@ -425,9 +376,7 @@ textarea {
 }
 
 .form-page,
-.profile-page,
-.landing-page,
-.explore-page {
+.profile-page {
   display: grid;
   gap: 24px;
 }
@@ -448,8 +397,7 @@ textarea {
   .explore-layout,
   .feature-grid,
   .form-row,
-  .profile-grid,
-  .listings-grid {
+  .profile-grid{
     grid-template-columns: 1fr;
   }
 
@@ -482,10 +430,6 @@ textarea {
   .hero-actions a,
   .mode-toggle button {
     width: 100%;
-  }
-
-  .listing-card-actions {
-    margin-top: 18px;
   }
   
   .details-link {
@@ -554,19 +498,6 @@ textarea {
     border-radius: 22px;
     padding: 24px;
     box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
-  }
-  
-  .listing-image-placeholder {
-    min-height: 280px;
-    border-radius: 18px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background:
-      linear-gradient(135deg, #dbeafe, #eff6ff 40%, #e2f5ea 100%);
-    color: #1d4ed8;
-    font-weight: 700;
-    margin-bottom: 24px;
   }
   
   .listing-info-grid {
@@ -680,37 +611,10 @@ textarea {
       grid-template-columns: 1fr;
     }
   }
-
-  .listing-card-actions {
-    display: flex;
-    gap: 12px;
-    margin-top: 18px;
-  }
   
   .details-link {
     flex: 1;
     text-align: center;
-  }
-  
-  .save-button {
-    border: 1px solid #cdd8ea;
-    background: #f8fbff;
-    color: #2563eb;
-    border-radius: 12px;
-    padding: 12px 16px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: 0.2s ease;
-  }
-  
-  .save-button:hover {
-    background: #eef5ff;
-  }
-  
-  .save-button.active {
-    background: #2563eb;
-    color: white;
-    border-color: #2563eb;
   }
   
   .detail-save-button {
@@ -745,12 +649,6 @@ textarea {
     color: #64748b;
     font-size: 0.9rem;
   }
-  
-  @media (max-width: 640px) {
-    .listing-card-actions {
-      flex-direction: column;
-    }
-  }
 
   .results-subtext {
     margin: 6px 0 0;
@@ -782,11 +680,6 @@ textarea {
     background: #0f172a;
     transform: scale(1.08);
     box-shadow: 0 14px 28px rgba(15, 23, 42, 0.3);
-  }
-  
-  .listing-card.selected {
-    border: 2px solid #2563eb;
-    box-shadow: 0 16px 36px rgba(37, 99, 235, 0.12);
   }
   
   .card-select-button {
@@ -1342,23 +1235,6 @@ textarea {
     background: white;
   }
 
-  .listing-card-image {
-    width: 100%;
-    height: 180px;
-    border-radius: 18px;
-    overflow: hidden;
-    margin-bottom: 18px;
-    background: linear-gradient(135deg, #dbeafe, #eff6ff 45%, #e2f5ea 100%);
-  }
-
-  .listing-card-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: block;
-  }
-
-  .listing-image-fallback,
   .selected-listing-image-fallback {
     width: 100%;
     height: 100%;
@@ -1452,8 +1328,7 @@ textarea {
     }
 
     .selected-listing-visual,
-    .listing-detail-image,
-    .listing-card-image {
+    .listing-detail-image {
       height: 220px;
     }
   }
@@ -2349,4 +2224,5 @@ textarea {
       align-items: flex-start;
     }
   }
+
 }
