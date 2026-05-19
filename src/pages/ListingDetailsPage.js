@@ -1,382 +1,764 @@
-import { useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import BookingRequestForm from '../components/BookingRequestForm';
-import ContactHostForm from '../components/ContactHostForm';
-import AvailabilityCalendar from '../components/AvailabilityCalendar';
-import ReviewForm from '../components/ReviewForm';
+import React, { useMemo, useState } from "react";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Container,
+  Divider,
+  LinearProgress,
+  Stack,
+  Typography,
+} from "@mui/material";
 
-function formatDateTime(value) {
-  return new Date(value).toLocaleDateString();
+import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
+import FavoriteBorderRoundedIcon from "@mui/icons-material/FavoriteBorderRounded";
+import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
+import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
+import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
+import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
+import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
+
+const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
+const SAVED_LISTINGS_KEY = "storet_saved_listing_ids";
+const CURRENT_USER_KEY = "storet_current_user";
+
+const fallbackListings = [
+  {
+    id: "1",
+    title: "Oakley Garage Space",
+    location: "Oakley, Cincinnati, OH",
+    distance: "6 miles away",
+    price: 85,
+    sqft: 120,
+    storageType: "Garage",
+    listingType: "Private host",
+    access: "By appointment",
+    rating: 4.9,
+    reviews: 18,
+    instantBook: true,
+    waitlist: false,
+    host: "Maya",
+    description:
+      "Clean indoor garage space for boxes, bikes, dorm items, seasonal storage, and small furniture.",
+    tags: ["Indoor", "Private", "Instant book"],
+    amenities: ["Indoor space", "Private access", "Flexible monthly rental"],
+  },
+  {
+    id: "2",
+    title: "Clifton Basement Corner",
+    location: "Clifton, Cincinnati, OH",
+    distance: "2 miles away",
+    price: 55,
+    sqft: 75,
+    storageType: "Basement",
+    listingType: "Private host",
+    access: "Weekly access",
+    rating: 4.7,
+    reviews: 11,
+    instantBook: false,
+    waitlist: true,
+    host: "Evan",
+    description:
+      "Affordable basement storage close to campus and apartment-heavy neighborhoods.",
+    tags: ["Budget", "Student friendly", "Waitlist"],
+    amenities: ["Student friendly", "Budget pricing", "Short-term friendly"],
+  },
+  {
+    id: "3",
+    title: "Downtown Storage Locker",
+    location: "Downtown Cincinnati, OH",
+    distance: "4 miles away",
+    price: 110,
+    sqft: 100,
+    storageType: "Storage unit",
+    listingType: "Commercial",
+    access: "Daily access",
+    rating: 4.8,
+    reviews: 32,
+    instantBook: true,
+    waitlist: false,
+    host: "Storet Partner",
+    description:
+      "Traditional storage-style locker with flexible monthly availability.",
+    tags: ["Commercial", "Daily access", "Secure"],
+    amenities: ["Daily access", "Secure facility", "Commercial partner"],
+  },
+  {
+    id: "4",
+    title: "Mason Spare Room Storage",
+    location: "Mason, OH",
+    distance: "18 miles away",
+    price: 70,
+    sqft: 90,
+    storageType: "Spare room",
+    listingType: "Private host",
+    access: "By appointment",
+    rating: 4.6,
+    reviews: 9,
+    instantBook: false,
+    waitlist: false,
+    host: "Jordan",
+    description:
+      "Climate-friendly spare room space for bins, seasonal items, and dorm storage.",
+    tags: ["Climate friendly", "Residential", "Flexible"],
+    amenities: ["Residential space", "Flexible access", "Good for bins"],
+  },
+];
+
+function safeReadJson(key, fallbackValue) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallbackValue;
+  } catch {
+    return fallbackValue;
+  }
+}
+
+function normalizeSavedIds(value) {
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+
+  if (value instanceof Set) {
+    return Array.from(value).map(String);
+  }
+
+  if (value && Array.isArray(value.ids)) {
+    return value.ids.map(String);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .filter(([, isSaved]) => Boolean(isSaved))
+      .map(([id]) => String(id));
+  }
+
+  return [];
+}
+
+function normalizeListing(listing, index) {
+  const price = Number(
+    listing.price ??
+      listing.monthlyPrice ??
+      listing.monthlyRate ??
+      listing.rate ??
+      75
+  );
+
+  const sqft = Number(
+    listing.sqft ??
+      listing.squareFeet ??
+      listing.sizeSqft ??
+      listing.size ??
+      100
+  );
+
+  const listingType =
+    listing.listingType ??
+    listing.hostType ??
+    (listing.isCommercial ? "Commercial" : "Private host");
+
+  const instantBook = Boolean(
+    listing.instantBook ??
+      listing.instantBooking ??
+      (listing.bookingType === "instant") ??
+      false
+  );
+
+  const waitlist = Boolean(
+    listing.waitlist ??
+      listing.hasWaitlist ??
+      (listing.availability === "waitlist") ??
+      false
+  );
+
+  return {
+    ...listing,
+    id: String(listing.id ?? `listing-${index + 1}`),
+    title: listing.title ?? listing.name ?? "Storage space",
+    location: listing.location ?? listing.address ?? "Cincinnati, OH",
+    distance: listing.distance ?? "Nearby",
+    price,
+    sqft,
+    storageType: listing.storageType ?? listing.type ?? "Storage space",
+    listingType,
+    access: listing.access ?? "Flexible access",
+    rating: Number(listing.rating ?? 4.8),
+    reviews: Number(listing.reviews ?? listing.reviewCount ?? 0),
+    instantBook,
+    waitlist,
+    host: listing.host ?? listing.hostName ?? "Storet Host",
+    description:
+      listing.description ??
+      "Flexible local storage space for short-term or long-term needs.",
+    tags: Array.isArray(listing.tags) ? listing.tags : [],
+    amenities: Array.isArray(listing.amenities)
+      ? listing.amenities
+      : ["Flexible rental", "Local storage", "Host managed"],
+  };
 }
 
 function ListingDetailsPage({
   listings,
-  bookingRequests,
-  reviews,
   savedListingIds,
   onToggleSave,
-  currentUser,
-  onSubmitBookingRequest,
-  onSubmitHostMessage,
-  onSubmitReview,
+  onSaveToggle,
 }) {
-  const { id } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [sidebarMode, setSidebarMode] = useState('default');
+  const params = useParams();
+  const routeListingId = String(params.id || params.listingId || "");
 
-  const listing = listings.find((item) => item.id === Number(id));
+  const storedUser = safeReadJson(CURRENT_USER_KEY, {
+    fullName: "Demo User",
+    role: "Renter",
+  });
 
-  const bookingRanges = useMemo(() => {
-    if (!listing) {
-      return [];
+  const userListings = useMemo(() => {
+    const storedListings = safeReadJson(USER_LISTINGS_KEY, []);
+    return Array.isArray(storedListings) ? storedListings : [];
+  }, []);
+
+  const allListings = useMemo(() => {
+    const sourceListings =
+      Array.isArray(listings) && listings.length > 0
+        ? listings
+        : [...fallbackListings, ...userListings];
+
+    const normalizedListings = sourceListings.map(normalizeListing);
+    const seenIds = new Set();
+
+    return normalizedListings.filter((listing) => {
+      if (seenIds.has(listing.id)) return false;
+      seenIds.add(listing.id);
+      return true;
+    });
+  }, [listings, userListings]);
+
+  const listing = useMemo(() => {
+    return allListings.find((item) => String(item.id) === routeListingId);
+  }, [allListings, routeListingId]);
+
+  const savedIdsFromProps = normalizeSavedIds(savedListingIds);
+
+  const [localSavedIds, setLocalSavedIds] = useState(() =>
+    normalizeSavedIds(safeReadJson(SAVED_LISTINGS_KEY, []))
+  );
+
+  const activeSavedIds =
+    savedIdsFromProps.length > 0 ? savedIdsFromProps : localSavedIds;
+
+  const isSaved = listing
+    ? activeSavedIds.includes(String(listing.id))
+    : false;
+
+  const [bookingStatus, setBookingStatus] = useState("");
+
+  function handleSaveClick() {
+    if (!listing) return;
+
+    if (onToggleSave) {
+      onToggleSave(listing.id);
+      return;
     }
 
-    return bookingRequests
-      .filter(
-        (request) =>
-          request.listingId === listing.id &&
-          ['Approved', 'Confirmed', 'Active'].includes(request.status)
-      )
-      .map((request) => ({
-        startDate: request.moveInDate,
-        endDate: request.moveOutDate,
-      }));
-  }, [bookingRequests, listing]);
-
-  const listingReviews = useMemo(() => {
-    if (!listing) {
-      return [];
+    if (onSaveToggle) {
+      onSaveToggle(listing.id);
+      return;
     }
 
-    return reviews
-      .filter((review) => review.listingId === listing.id)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [reviews, listing]);
+    setLocalSavedIds((currentIds) => {
+      const normalizedId = String(listing.id);
+      const nextIds = currentIds.includes(normalizedId)
+        ? currentIds.filter((id) => id !== normalizedId)
+        : [...currentIds, normalizedId];
 
-  const eligibleReviewRequest = useMemo(() => {
-    if (!listing || !currentUser.isAuthenticated) {
-      return null;
-    }
-
-    return bookingRequests.find(
-      (request) =>
-        request.listingId === listing.id &&
-        request.submittedByAccountEmail === currentUser.email &&
-        request.status === 'Completed' &&
-        !reviews.some((review) => review.requestId === request.id)
-    );
-  }, [bookingRequests, reviews, listing, currentUser]);
-
-  if (!listing) {
-    return (
-      <div className="listing-details-page">
-        <div className="page-header-block">
-          <h1>Listing not found</h1>
-          <p>We couldn’t find that storage listing.</p>
-          <Link to="/explore" className="primary-button">
-            Back to Explore
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const isSaved = savedListingIds.includes(listing.id);
-  const isOwner =
-    currentUser.isAuthenticated &&
-    listing.createdByAccountEmail === currentUser.email;
-
-  function redirectToAuth(message) {
-    navigate('/auth', {
-      state: {
-        redirectTo: location.pathname,
-        message,
-      },
+      localStorage.setItem(SAVED_LISTINGS_KEY, JSON.stringify(nextIds));
+      return nextIds;
     });
   }
 
-  function handleReserveClick() {
-    if (!currentUser.isAuthenticated) {
-      redirectToAuth('Log in to send a reservation request.');
+  function handleBookingAction() {
+    if (!listing) return;
+
+    if (listing.waitlist && !listing.instantBook) {
+      setBookingStatus("waitlist");
       return;
     }
 
-    setSidebarMode('booking');
+    setBookingStatus("reserved");
   }
 
-  function handleContactClick() {
-    if (!currentUser.isAuthenticated) {
-      redirectToAuth('Log in to contact the host.');
-      return;
-    }
+  if (!listing) {
+    return (
+      <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+        <Container maxWidth="md" sx={{ py: 8 }}>
+          <Card>
+            <CardContent sx={{ p: 5, textAlign: "center" }}>
+              <Stack spacing={2} alignItems="center">
+                <Avatar sx={{ bgcolor: "primary.light", color: "primary.dark" }}>
+                  <WarehouseRoundedIcon />
+                </Avatar>
 
-    setSidebarMode('contact');
+                <Typography variant="h4">Listing not found</Typography>
+
+                <Typography color="text.secondary">
+                  This storage space may have been removed or is no longer
+                  available.
+                </Typography>
+
+                <Button
+                  variant="contained"
+                  component={RouterLink}
+                  to="/explore"
+                  startIcon={<ArrowBackRoundedIcon />}
+                >
+                  Back to Explore
+                </Button>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Container>
+      </Box>
+    );
   }
 
-  function handleSaveClick() {
-    if (!currentUser.isAuthenticated) {
-      redirectToAuth('Log in to save listings to your profile.');
-      return;
-    }
-
-    onToggleSave(listing.id);
-  }
+  const primaryActionLabel =
+    listing.waitlist && !listing.instantBook
+      ? "Join waitlist"
+      : listing.instantBook
+      ? "Reserve instantly"
+      : "Request reservation";
 
   return (
-    <div className="listing-details-page">
-      <div className="listing-details-header">
-        <div>
-          <p className="details-eyebrow">{listing.type} Listing</p>
-          <h1>{listing.title}</h1>
-          <p className="details-location">{listing.location}</p>
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <Box
+        sx={{
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
+          <Stack spacing={3}>
+            <Button
+              onClick={() => navigate("/explore")}
+              startIcon={<ArrowBackRoundedIcon />}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              Back to Explore
+            </Button>
 
-          <div className="rating-row detail-rating-row">
-            {listing.reviewCount > 0 ? (
-              <span className="rating-summary large">
-                ⭐ {listing.averageRating.toFixed(1)} ({listing.reviewCount} review
-                {listing.reviewCount !== 1 ? 's' : ''})
-              </span>
-            ) : (
-              <span className="rating-summary empty">No reviews yet</span>
-            )}
-          </div>
-
-          <div className="detail-chip-row">
-            <span className="detail-chip">{listing.size}</span>
-            <span className="detail-chip">{listing.duration}</span>
-            <span className="detail-chip">{listing.availability}</span>
-          </div>
-        </div>
-
-        <div className="details-price-box">
-          <span className="details-price">{listing.price}</span>
-          <span className="details-availability">{listing.availability}</span>
-        </div>
-      </div>
-
-      <div className="listing-details-layout">
-        <section className="listing-main-card">
-          {listing.imageUrl ? (
-            <img
-              src={listing.imageUrl}
-              alt={listing.title}
-              className="listing-detail-image"
-            />
-          ) : (
-            <div className="listing-image-placeholder">
-              <span>Listing Photo Placeholder</span>
-            </div>
-          )}
-
-          <div className="listing-info-grid">
-            <div className="info-block">
-              <h3>Overview</h3>
-              <p>{listing.description}</p>
-            </div>
-
-            <div className="listing-detail-subgrid">
-              <div className="info-block">
-                <h3>Storage Details</h3>
-                <p><strong>Size:</strong> {listing.size}</p>
-                <p><strong>Access:</strong> {listing.access}</p>
-                <p><strong>Host:</strong> {listing.hostName}</p>
-                <p><strong>Type:</strong> {listing.type}</p>
-              </div>
-
-              <div className="info-block">
-                <h3>Security</h3>
-                <p>
-                  {listing.security || 'The host has not added extra security details yet.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="info-block">
-              <h3>Features</h3>
-              <ul className="features-list">
-                {listing.features.map((feature) => (
-                  <li key={feature}>{feature}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="info-block">
-              <h3>Restrictions</h3>
-              {listing.restrictions.length > 0 ? (
-                <ul className="listing-note-list">
-                  {listing.restrictions.map((restriction) => (
-                    <li key={restriction}>{restriction}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p>No special restrictions were added for this listing.</p>
-              )}
-            </div>
-
-            <div className="info-block">
-              <h3>Availability Calendar</h3>
-              <AvailabilityCalendar
-                blackoutRanges={listing.blackoutRanges || []}
-                bookingRanges={bookingRanges}
-              />
-            </div>
-
-            <div className="info-block">
-              <h3>Guest Reviews</h3>
-
-              {eligibleReviewRequest && (
-                <div className="review-form-wrap">
-                  <ReviewForm
-                    eligibleRequest={eligibleReviewRequest}
-                    onSubmitReview={onSubmitReview}
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={3}
+              alignItems={{ xs: "flex-start", md: "flex-end" }}
+              justifyContent="space-between"
+            >
+              <Stack spacing={1.5}>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  <Chip
+                    icon={<WarehouseRoundedIcon />}
+                    label={listing.storageType}
+                    color="primary"
+                    variant="outlined"
+                    sx={{ fontWeight: 700 }}
                   />
-                </div>
-              )}
 
-              {listingReviews.length > 0 ? (
-                <div className="review-list">
-                  {listingReviews.map((review) => (
-                    <div key={review.id} className="review-card">
-                      <div className="review-card-top">
-                        <strong>{review.reviewerName}</strong>
-                        <span className="rating-summary">⭐ {review.rating}.0</span>
-                      </div>
-                      <p className="results-subtext">
-                        Verified stay • {formatDateTime(review.createdAt)}
-                      </p>
-                      <p>{review.reviewText}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p>No reviews have been submitted for this listing yet.</p>
-              )}
-            </div>
-          </div>
-        </section>
+                  <Chip
+                    icon={
+                      listing.instantBook ? (
+                        <BoltRoundedIcon />
+                      ) : (
+                        <EventAvailableRoundedIcon />
+                      )
+                    }
+                    label={listing.instantBook ? "Instant booking" : "Request-based"}
+                    color={listing.instantBook ? "success" : "default"}
+                    variant={listing.instantBook ? "filled" : "outlined"}
+                    sx={{ fontWeight: 700 }}
+                  />
 
-        <aside className="listing-sidebar-card">
-          {sidebarMode === 'default' && (
-            <>
-              {isOwner ? (
-                <>
-                  <h3>Manage Your Listing</h3>
-                  <p>
-                    You created this listing, so you’re seeing owner controls
-                    instead of renter actions.
-                  </p>
+                  {listing.waitlist && (
+                    <Chip
+                      label="Waitlist available"
+                      color="warning"
+                      variant="outlined"
+                      sx={{ fontWeight: 700 }}
+                    />
+                  )}
+                </Stack>
 
-                  <div className="listing-sidebar-actions">
-                    <Link
-                      to={`/edit-listing/${listing.id}`}
-                      className="primary-button full-width"
-                    >
-                      Edit Listing
-                    </Link>
+                <Typography
+                  variant="h2"
+                  sx={{
+                    fontSize: { xs: "2.25rem", md: "3.5rem" },
+                    lineHeight: 1,
+                  }}
+                >
+                  {listing.title}
+                </Typography>
 
-                    <Link
-                      to="/profile"
-                      className="secondary-button full-width"
-                    >
-                      View My Listings
-                    </Link>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <h3>Reserve, Contact, or Save</h3>
-                  <p>
-                    Choose the next step for this space. Signing in is required for
-                    reservation requests, host messages, and saved listings.
-                  </p>
+                <Stack
+                  direction={{ xs: "column", sm: "row" }}
+                  spacing={{ xs: 1, sm: 2 }}
+                  color="text.secondary"
+                >
+                  <Stack direction="row" spacing={0.75} alignItems="center">
+                    <PlaceRoundedIcon fontSize="small" />
+                    <Typography>{listing.location}</Typography>
+                  </Stack>
 
-                  <div className="listing-sidebar-actions">
-                    <button
-                      type="button"
-                      className="primary-button full-width"
-                      onClick={handleReserveClick}
-                    >
-                      Reserve Space
-                    </button>
+                  <Stack direction="row" spacing={0.75} alignItems="center">
+                    <StarRoundedIcon fontSize="small" sx={{ color: "warning.main" }} />
+                    <Typography>
+                      {listing.rating.toFixed(1)} · {listing.reviews} reviews
+                    </Typography>
+                  </Stack>
+                </Stack>
+              </Stack>
 
-                    <button
-                      type="button"
-                      className="secondary-button full-width"
-                      onClick={handleContactClick}
-                    >
-                      Contact Host
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`save-button full-width detail-save-button ${
-                        isSaved ? 'active' : ''
-                      }`}
-                      onClick={handleSaveClick}
-                    >
-                      {isSaved ? 'Saved to Profile' : 'Save Listing'}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              <div className="sidebar-meta">
-                <p><strong>Type:</strong> {listing.type}</p>
-                <p><strong>Availability:</strong> {listing.availability}</p>
-                <p><strong>Price:</strong> {listing.price}</p>
-                <p><strong>Security:</strong> {listing.security || 'Not specified'}</p>
-              </div>
-
-              <Link to="/explore" className="text-button back-link">
-                ← Back to Explore
-              </Link>
-            </>
-          )}
-
-          {!isOwner && sidebarMode === 'booking' && (
-            <>
-              <BookingRequestForm
-                listingTitle={listing.title}
-                currentUser={currentUser}
-                onSubmitRequest={(formData) =>
-                  onSubmitBookingRequest(listing, formData)
+              <Button
+                variant={isSaved ? "contained" : "outlined"}
+                startIcon={
+                  isSaved ? <FavoriteRoundedIcon /> : <FavoriteBorderRoundedIcon />
                 }
-              />
-
-              <button
-                type="button"
-                className="text-button back-link"
-                onClick={() => setSidebarMode('default')}
+                onClick={handleSaveClick}
+                sx={{ bgcolor: isSaved ? undefined : "background.paper" }}
               >
-                ← Back to actions
-              </button>
-            </>
-          )}
+                {isSaved ? "Saved" : "Save listing"}
+              </Button>
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
 
-          {!isOwner && sidebarMode === 'contact' && (
-            <>
-              <ContactHostForm
-                hostName={listing.hostName}
-                listingTitle={listing.title}
-                currentUser={currentUser}
-                onSubmitMessage={(formData) =>
-                  onSubmitHostMessage(listing, formData)
-                }
-              />
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
+        <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
+          <Box sx={{ flex: 1 }}>
+            <Stack spacing={3}>
+              <Card sx={{ overflow: "hidden" }}>
+                <Box
+                  sx={{
+                    minHeight: { xs: 260, md: 390 },
+                    background:
+                      listing.listingType === "Commercial"
+                        ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.74))"
+                        : "linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(20, 184, 166, 0.78))",
+                    color: "white",
+                    p: { xs: 3, md: 4 },
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <Stack direction="row" justifyContent="space-between">
+                    <Chip
+                      label={listing.listingType}
+                      sx={{
+                        bgcolor: "rgba(255,255,255,0.9)",
+                        color: "text.primary",
+                        fontWeight: 700,
+                      }}
+                    />
 
-              <button
-                type="button"
-                className="text-button back-link"
-                onClick={() => setSidebarMode('default')}
-              >
-                ← Back to actions
-              </button>
-            </>
-          )}
-        </aside>
-      </div>
-    </div>
+                    <Chip
+                      label={listing.distance}
+                      sx={{
+                        bgcolor: "rgba(255,255,255,0.9)",
+                        color: "text.primary",
+                        fontWeight: 700,
+                      }}
+                    />
+                  </Stack>
+
+                  <Box>
+                    <Typography variant="h4" sx={{ mb: 1 }}>
+                      {listing.sqft} sq ft of flexible storage
+                    </Typography>
+                    <Typography sx={{ opacity: 0.9, maxWidth: 620 }}>
+                      Hosted by {listing.host} · {listing.access}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                  <Stack spacing={3}>
+                    <Box>
+                      <Typography variant="h5" gutterBottom>
+                        About this space
+                      </Typography>
+                      <Typography color="text.secondary" lineHeight={1.8}>
+                        {listing.description}
+                      </Typography>
+                    </Box>
+
+                    <Divider />
+
+                    <Box>
+                      <Typography variant="h5" gutterBottom>
+                        Space details
+                      </Typography>
+
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "1fr",
+                            sm: "repeat(2, minmax(0, 1fr))",
+                          },
+                          gap: 2,
+                        }}
+                      >
+                        <DetailItem
+                          icon={<StraightenRoundedIcon />}
+                          label="Size"
+                          value={`${listing.sqft} sq ft`}
+                        />
+                        <DetailItem
+                          icon={<WarehouseRoundedIcon />}
+                          label="Storage type"
+                          value={listing.storageType}
+                        />
+                        <DetailItem
+                          icon={<AccessTimeRoundedIcon />}
+                          label="Access"
+                          value={listing.access}
+                        />
+                        <DetailItem
+                          icon={<PaymentsRoundedIcon />}
+                          label="Monthly price"
+                          value={`$${listing.price}/mo`}
+                        />
+                      </Box>
+                    </Box>
+
+                    <Divider />
+
+                    <Box>
+                      <Typography variant="h5" gutterBottom>
+                        Good for
+                      </Typography>
+
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        {listing.tags.length > 0 ? (
+                          listing.tags.map((tag) => <Chip key={tag} label={tag} />)
+                        ) : (
+                          <>
+                            <Chip label="Boxes" />
+                            <Chip label="Dorm items" />
+                            <Chip label="Seasonal storage" />
+                          </>
+                        )}
+                      </Stack>
+                    </Box>
+
+                    <Divider />
+
+                    <Box>
+                      <Typography variant="h5" gutterBottom>
+                        Amenities
+                      </Typography>
+
+                      <Stack spacing={1.25}>
+                        {listing.amenities.map((amenity) => (
+                          <Stack
+                            key={amenity}
+                            direction="row"
+                            spacing={1}
+                            alignItems="center"
+                          >
+                            <CheckCircleRoundedIcon color="success" fontSize="small" />
+                            <Typography>{amenity}</Typography>
+                          </Stack>
+                        ))}
+                      </Stack>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                  <Stack spacing={2}>
+                    <Typography variant="h5">Host information</Typography>
+
+                    <Stack direction="row" spacing={2} alignItems="center">
+                      <Avatar
+                        sx={{
+                          width: 64,
+                          height: 64,
+                          bgcolor: "secondary.main",
+                          fontWeight: 800,
+                          fontSize: "1.4rem",
+                        }}
+                      >
+                        {listing.host.charAt(0).toUpperCase()}
+                      </Avatar>
+
+                      <Box>
+                        <Typography variant="h6">{listing.host}</Typography>
+                        <Typography color="text.secondary">
+                          {listing.listingType} · Storet host
+                        </Typography>
+                      </Box>
+                    </Stack>
+
+                    <Stack spacing={1}>
+                      <Stack
+                        direction="row"
+                        justifyContent="space-between"
+                        alignItems="center"
+                      >
+                        <Typography color="text.secondary">Host rating</Typography>
+                        <Typography fontWeight={800}>
+                          {listing.rating.toFixed(1)} / 5
+                        </Typography>
+                      </Stack>
+
+                      <LinearProgress
+                        variant="determinate"
+                        value={Math.min((listing.rating / 5) * 100, 100)}
+                        sx={{ height: 8, borderRadius: 999 }}
+                      />
+                    </Stack>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Stack>
+          </Box>
+
+          <Box sx={{ width: { xs: "100%", lg: 360 } }}>
+            <Card
+              sx={{
+                position: { lg: "sticky" },
+                top: { lg: 96 },
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Stack spacing={2.5}>
+                  <Box>
+                    <Typography variant="h4">
+                      ${listing.price}
+                      <Typography
+                        component="span"
+                        color="text.secondary"
+                        fontSize="1rem"
+                      >
+                        /mo
+                      </Typography>
+                    </Typography>
+                    <Typography color="text.secondary">
+                      {listing.sqft} sq ft · {listing.access}
+                    </Typography>
+                  </Box>
+
+                  <Divider />
+
+                  {bookingStatus === "reserved" && (
+                    <Alert severity="success">
+                      Reservation started. This can later connect to your full
+                      booking flow.
+                    </Alert>
+                  )}
+
+                  {bookingStatus === "waitlist" && (
+                    <Alert severity="warning">
+                      You joined the waitlist for this space.
+                    </Alert>
+                  )}
+
+                  <Stack spacing={1.25}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <ShieldRoundedIcon color="primary" />
+                      <Typography>Review listing details before reserving.</Typography>
+                    </Stack>
+
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Inventory2RoundedIcon color="primary" />
+                      <Typography>Best fit: flexible household storage.</Typography>
+                    </Stack>
+
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <PersonRoundedIcon color="primary" />
+                      <Typography>Hosted by {listing.host}.</Typography>
+                    </Stack>
+                  </Stack>
+
+                  <Button
+                    size="large"
+                    variant="contained"
+                    startIcon={
+                      listing.instantBook ? (
+                        <BoltRoundedIcon />
+                      ) : (
+                        <EventAvailableRoundedIcon />
+                      )
+                    }
+                    onClick={handleBookingAction}
+                  >
+                    {primaryActionLabel}
+                  </Button>
+
+                  <Button
+                    variant="outlined"
+                    startIcon={
+                      isSaved ? <FavoriteRoundedIcon /> : <FavoriteBorderRoundedIcon />
+                    }
+                    onClick={handleSaveClick}
+                  >
+                    {isSaved ? "Saved" : "Save for later"}
+                  </Button>
+
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    textAlign="center"
+                  >
+                    You are browsing as {storedUser.fullName || "Demo User"}.
+                  </Typography>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Box>
+        </Stack>
+      </Container>
+    </Box>
+  );
+}
+
+function DetailItem({ icon, label, value }) {
+  return (
+    <Card variant="outlined" sx={{ boxShadow: "none" }}>
+      <CardContent sx={{ p: 2.25 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Avatar sx={{ bgcolor: "primary.light", color: "primary.dark" }}>
+            {icon}
+          </Avatar>
+
+          <Box>
+            <Typography color="text.secondary" variant="body2">
+              {label}
+            </Typography>
+            <Typography fontWeight={800}>{value}</Typography>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
   );
 }
 

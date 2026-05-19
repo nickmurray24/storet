@@ -149,21 +149,40 @@ function normalizeSavedIds(value) {
   return [];
 }
 
+function parseNumber(value, fallbackValue) {
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const cleanedValue = value.replace(/[^0-9.]/g, "");
+    const parsedValue = Number(cleanedValue);
+
+    if (!Number.isNaN(parsedValue) && parsedValue > 0) {
+      return parsedValue;
+    }
+  }
+
+  return fallbackValue;
+}
+
 function normalizeListing(listing, index) {
-  const price = Number(
+  const price = parseNumber(
     listing.price ??
       listing.monthlyPrice ??
       listing.monthlyRate ??
-      listing.rate ??
-      75
+      listing.pricePerMonth ??
+      listing.rate,
+    75
   );
-
-  const sqft = Number(
+  
+  const sqft = parseNumber(
     listing.sqft ??
       listing.squareFeet ??
       listing.sizeSqft ??
-      listing.size ??
-      100
+      listing.squareFootage ??
+      listing.size,
+    100
   );
 
   const listingType =
@@ -284,7 +303,10 @@ function ExplorePage({
         bookingType === "All" ||
         (bookingType === "Instant" && listing.instantBook) ||
         (bookingType === "Waitlist" && listing.waitlist);
-      const matchesPrice = listing.price <= maxPrice;
+        const matchesPrice =
+          typeof listing.price === "number" &&
+          !Number.isNaN(listing.price) &&
+          listing.price <= maxPrice;
 
       return (
         matchesSearch &&
