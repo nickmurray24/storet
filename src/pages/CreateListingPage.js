@@ -1,653 +1,740 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import React, { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Checkbox,
+  Chip,
+  Container,
+  Divider,
+  FormControl,
+  FormControlLabel,
+  InputAdornment,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
+  Typography,
+} from "@mui/material";
 
-function buildFormData(listing, currentUser) {
-  if (listing) {
-    return {
-      title: listing.title || '',
-      type: listing.type || 'Private',
-      location: listing.location || '',
-      price: listing.price ? listing.price.replace('/mo', '').replace('$', '') : '',
-      size: listing.size || '',
-      duration: listing.duration || 'Short-term',
-      availability: listing.availability || 'Available now',
-      access: listing.access || '',
-      hostName: listing.hostName || '',
-      description: listing.description || '',
-      features: Array.isArray(listing.features) ? listing.features.join(', ') : '',
-      restrictions: Array.isArray(listing.restrictions)
-        ? listing.restrictions.join(', ')
-        : '',
-      blackoutRanges: Array.isArray(listing.blackoutRanges)
-        ? listing.blackoutRanges
-            .map((range) => `${range.startDate} to ${range.endDate}`)
-            .join('\n')
-        : '',
-      bookingMode: listing.bookingMode || 'request',
-      allowWaitlist: Boolean(listing.allowWaitlist),
-      security: listing.security || '',
-      imageUrl: listing.imageUrl || '',
-      latitude:
-        listing.latitude === null || listing.latitude === undefined
-          ? ''
-          : String(listing.latitude),
-      longitude:
-        listing.longitude === null || listing.longitude === undefined
-          ? ''
-          : String(listing.longitude),
-    };
+import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
+import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
+import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
+import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
+import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
+
+const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
+const CURRENT_USER_KEY = "storet_current_user";
+
+const storageTypes = [
+  "Garage",
+  "Basement",
+  "Spare room",
+  "Storage unit",
+  "Shed",
+  "Warehouse",
+  "Other",
+];
+
+const accessOptions = [
+  "By appointment",
+  "Weekly access",
+  "Daily access",
+  "Limited access",
+  "Flexible access",
+];
+
+const amenityOptions = [
+  "Indoor space",
+  "Climate friendly",
+  "Private access",
+  "Residential space",
+  "Commercial partner",
+  "Good for boxes",
+  "Good for furniture",
+  "Student friendly",
+  "Short-term friendly",
+  "Long-term friendly",
+];
+
+function safeReadJson(key, fallbackValue) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallbackValue;
+  } catch {
+    return fallbackValue;
+  }
+}
+
+function parseNumber(value, fallbackValue) {
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value;
   }
 
-  return {
-    title: '',
-    type: 'Private',
-    location: '',
-    price: '',
-    size: '',
-    duration: 'Short-term',
-    availability: 'Available now',
-    access: '',
-    hostName: currentUser?.isAuthenticated ? currentUser.fullName : '',
-    description: '',
-    features: '',
-    restrictions: '',
-    blackoutRanges: '',
-    bookingMode: 'request',
-    allowWaitlist: false,
-    security: '',
-    imageUrl: '',
-    latitude: '',
-    longitude: '',
-  };
+  if (typeof value === "string") {
+    const cleanedValue = value.replace(/[^0-9.]/g, "");
+    const parsedValue = Number(cleanedValue);
+
+    if (!Number.isNaN(parsedValue) && parsedValue > 0) {
+      return parsedValue;
+    }
+  }
+
+  return fallbackValue;
 }
 
-function isValidLatitude(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= -90 && parsed <= 90;
-}
-
-function isValidLongitude(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= -180 && parsed <= 180;
-}
-
-function CreateListingPage({
-  listings,
-  currentUser,
-  onCreateListing,
-  onUpdateListing,
-  onDeleteListing,
-  onToggleListingStatus,
-}) {
+function CreateListingPage({ currentUser, onAddListing }) {
   const navigate = useNavigate();
-  const { id } = useParams();
 
-  const isEditing = Boolean(id);
+  const storedUser = useMemo(
+    () =>
+      safeReadJson(CURRENT_USER_KEY, {
+        fullName: "Demo Host",
+        role: "Host",
+      }),
+    []
+  );
 
-  const editingListing = useMemo(() => {
-    if (!isEditing) {
-      return null;
-    }
+  const activeUser = currentUser || storedUser;
 
-    return listings.find((listing) => listing.id === Number(id)) || null;
-  }, [id, isEditing, listings]);
+  const [formData, setFormData] = useState({
+    title: "",
+    location: "",
+    storageType: "Garage",
+    listingType: "Private host",
+    price: "",
+    sqft: "",
+    access: "By appointment",
+    bookingType: "instant",
+    description: "",
+    customTags: "",
+  });
 
-  const [formData, setFormData] = useState(buildFormData(editingListing, currentUser));
-  const [errors, setErrors] = useState({});
-  const [isGeocoding, setIsGeocoding] = useState(false);
-  const [geocodeError, setGeocodeError] = useState('');
-  const [geocodeSuccess, setGeocodeSuccess] = useState('');
+  const [selectedAmenities, setSelectedAmenities] = useState([
+    "Indoor space",
+    "Private access",
+    "Good for boxes",
+  ]);
 
-  useEffect(() => {
-    setFormData(buildFormData(editingListing, currentUser));
-    setGeocodeError('');
-    setGeocodeSuccess('');
-  }, [editingListing, currentUser]);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
-  function handleChange(event) {
-    const { name, value, type, checked } = event.target;
+  const previewListing = useMemo(() => {
+    const price = parseNumber(formData.price, 85);
+    const sqft = parseNumber(formData.sqft, 100);
 
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+    return {
+      title: formData.title.trim() || "Your storage space",
+      location: formData.location.trim() || "Cincinnati, OH",
+      storageType: formData.storageType,
+      listingType: formData.listingType,
+      price,
+      sqft,
+      access: formData.access,
+      instantBook: formData.bookingType === "instant",
+      waitlist: formData.bookingType === "waitlist",
+      description:
+        formData.description.trim() ||
+        "A flexible local storage option for renters looking for extra space.",
+    };
+  }, [formData]);
+
+  function handleInputChange(event) {
+    const { name, value } = event.target;
+
+    setFormData((currentData) => ({
+      ...currentData,
+      [name]: value,
     }));
+  }
 
-    setErrors((prev) => ({
-      ...prev,
-      [name]: '',
-    }));
-
-    if (name === 'location' || name === 'latitude' || name === 'longitude') {
-      setGeocodeError('');
-      setGeocodeSuccess('');
+  function handleBookingTypeChange(event, nextValue) {
+    if (nextValue) {
+      setFormData((currentData) => ({
+        ...currentData,
+        bookingType: nextValue,
+      }));
     }
   }
 
-  async function handleGeocodeLocation() {
-    const query = formData.location.trim();
-
-    if (!query) {
-      setErrors((prev) => ({
-        ...prev,
-        location: 'Enter a location or address first.',
-      }));
-      setGeocodeError('');
-      setGeocodeSuccess('');
-      return;
-    }
-
-    setIsGeocoding(true);
-    setGeocodeError('');
-    setGeocodeSuccess('');
-
-    try {
-      const params = new URLSearchParams({
-        q: query,
-        format: 'jsonv2',
-        limit: '1',
-      });
-
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params.toString()}`
-      );
-
-      if (!response.ok) {
-        throw new Error('Geocoding request failed.');
+  function handleAmenityToggle(amenity) {
+    setSelectedAmenities((currentAmenities) => {
+      if (currentAmenities.includes(amenity)) {
+        return currentAmenities.filter((item) => item !== amenity);
       }
 
-      const results = await response.json();
-
-      if (!Array.isArray(results) || results.length === 0) {
-        setGeocodeError('No matching map location was found. Try a fuller address.');
-        return;
-      }
-
-      const bestMatch = results[0];
-
-      setFormData((prev) => ({
-        ...prev,
-        latitude: bestMatch.lat,
-        longitude: bestMatch.lon,
-      }));
-
-      setErrors((prev) => ({
-        ...prev,
-        latitude: '',
-        longitude: '',
-        location: '',
-      }));
-
-      setGeocodeSuccess('Coordinates found and filled in for this listing.');
-    } catch (error) {
-      setGeocodeError('Unable to look up this address right now. Try again or enter coordinates manually.');
-    } finally {
-      setIsGeocoding(false);
-    }
+      return [...currentAmenities, amenity];
+    });
   }
 
-  function validateForm() {
-    const nextErrors = {};
+  function buildTags() {
+    const customTags = formData.customTags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
 
-    if (!formData.title.trim()) {
-      nextErrors.title = 'Please enter a listing title.';
-    }
+    const automaticTags = [
+      formData.storageType,
+      formData.listingType,
+      formData.bookingType === "instant"
+        ? "Instant book"
+        : formData.bookingType === "waitlist"
+        ? "Waitlist"
+        : "Request-based",
+    ];
 
-    if (!formData.location.trim()) {
-      nextErrors.location = 'Please enter a location.';
-    }
-
-    if (!formData.price.trim()) {
-      nextErrors.price = 'Please enter a monthly price.';
-    }
-
-    if (!formData.size.trim()) {
-      nextErrors.size = 'Please enter the storage size.';
-    }
-
-    if (!formData.access.trim()) {
-      nextErrors.access = 'Please describe access details.';
-    }
-
-    if (!formData.description.trim()) {
-      nextErrors.description = 'Please enter a description.';
-    }
-
-    if (!formData.latitude.trim()) {
-      nextErrors.latitude = 'Please enter a latitude.';
-    } else if (!isValidLatitude(formData.latitude)) {
-      nextErrors.latitude = 'Latitude must be between -90 and 90.';
-    }
-
-    if (!formData.longitude.trim()) {
-      nextErrors.longitude = 'Please enter a longitude.';
-    } else if (!isValidLongitude(formData.longitude)) {
-      nextErrors.longitude = 'Longitude must be between -180 and 180.';
-    }
-
-    return nextErrors;
+    return Array.from(new Set([...automaticTags, ...customTags]));
   }
 
   function handleSubmit(event) {
     event.preventDefault();
+    setError("");
+    setSuccessMessage("");
 
-    const nextErrors = validateForm();
+    const title = formData.title.trim();
+    const location = formData.location.trim();
+    const description = formData.description.trim();
+    const price = parseNumber(formData.price, null);
+    const sqft = parseNumber(formData.sqft, null);
 
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
+    if (!title) {
+      setError("Please enter a listing title.");
       return;
     }
 
-    if (isEditing) {
-      const updatedListing = onUpdateListing(editingListing.id, formData);
-
-      if (updatedListing) {
-        navigate(`/listing/${updatedListing.id}`);
-      }
-
+    if (!location) {
+      setError("Please enter a location.");
       return;
     }
 
-    const createdListing = onCreateListing(formData);
-    navigate(`/listing/${createdListing.id}`);
-  }
-
-  function handleDelete() {
-    if (!editingListing) {
+    if (!price) {
+      setError("Please enter a valid monthly price.");
       return;
     }
 
-    const shouldDelete = window.confirm(
-      `Delete "${editingListing.title}"? This will remove it from your listings.`
-    );
-
-    if (!shouldDelete) {
+    if (!sqft) {
+      setError("Please enter a valid square footage.");
       return;
     }
 
-    onDeleteListing(editingListing.id);
-    navigate('/profile');
-  }
-
-  function handleToggleStatus() {
-    if (!editingListing) {
+    if (!description) {
+      setError("Please add a short description for the space.");
       return;
     }
 
-    onToggleListingStatus(editingListing.id);
-    navigate('/profile');
-  }
+    const newListing = {
+      id: `user-${Date.now()}`,
+      title,
+      location,
+      distance: "New listing",
+      price,
+      sqft,
+      storageType: formData.storageType,
+      listingType: formData.listingType,
+      access: formData.access,
+      rating: 4.8,
+      reviews: 0,
+      instantBook: formData.bookingType === "instant",
+      waitlist: formData.bookingType === "waitlist",
+      host: activeUser?.fullName || "Storet Host",
+      description,
+      tags: buildTags(),
+      amenities:
+        selectedAmenities.length > 0
+          ? selectedAmenities
+          : ["Flexible rental", "Local storage", "Host managed"],
+      createdAt: new Date().toISOString(),
+    };
 
-  if (isEditing && !editingListing) {
-    return (
-      <div className="form-page">
-        <div className="page-header-block">
-          <h1>Listing not found</h1>
-          <p>We couldn’t find that listing in your host inventory.</p>
-          <Link to="/profile" className="primary-button">
-            Back to Profile
-          </Link>
-        </div>
-      </div>
-    );
+    const existingListings = safeReadJson(USER_LISTINGS_KEY, []);
+    const safeExistingListings = Array.isArray(existingListings)
+      ? existingListings
+      : [];
+
+    const updatedListings = [newListing, ...safeExistingListings];
+
+    localStorage.setItem(USER_LISTINGS_KEY, JSON.stringify(updatedListings));
+
+    if (onAddListing) {
+      onAddListing(newListing);
+    }
+
+    setSuccessMessage("Listing created successfully!");
+
+    setTimeout(() => {
+      navigate(`/listing/${newListing.id}`);
+    }, 650);
   }
 
   return (
-    <div className="form-page">
-      <div className="page-header-block">
-        <h1>{isEditing ? 'Edit Listing' : 'Create a Listing'}</h1>
-        <p>
-          {isEditing
-            ? 'Update your listing details, booking logic, and scheduling rules.'
-            : 'Publish a new storage space with request approval, instant booking, or waitlist support.'}
-        </p>
-
-        {isEditing && editingListing && (
-          <div className="management-actions">
-            <span
-              className={`status-pill ${
-                editingListing.status === 'paused' ? 'paused' : 'active'
-              }`}
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <Box
+        sx={{
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
+          <Stack spacing={3}>
+            <Button
+              onClick={() => navigate("/explore")}
+              startIcon={<ArrowBackRoundedIcon />}
+              sx={{ alignSelf: "flex-start" }}
             >
-              {editingListing.status === 'paused' ? 'Paused' : 'Active'}
-            </span>
+              Back to Explore
+            </Button>
 
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={handleToggleStatus}
+            <Stack
+              direction={{ xs: "column", md: "row" }}
+              spacing={3}
+              alignItems={{ xs: "flex-start", md: "center" }}
+              justifyContent="space-between"
             >
-              {editingListing.status === 'paused'
-                ? 'Resume Listing'
-                : 'Pause Listing'}
-            </button>
+              <Stack spacing={1.5}>
+                <Chip
+                  icon={<AddHomeWorkRoundedIcon />}
+                  label="Host setup"
+                  color="primary"
+                  variant="outlined"
+                  sx={{ width: "fit-content", fontWeight: 700 }}
+                />
 
-            <button
-              type="button"
-              className="danger-button"
-              onClick={handleDelete}
+                <Box>
+                  <Typography
+                    variant="h2"
+                    sx={{
+                      fontSize: { xs: "2.25rem", md: "3.35rem" },
+                      lineHeight: 1,
+                    }}
+                  >
+                    List your storage space
+                  </Typography>
+
+                  <Typography
+                    color="text.secondary"
+                    sx={{ mt: 1, maxWidth: 680, fontSize: "1.05rem" }}
+                  >
+                    Add the basic details renters need to understand your space,
+                    pricing, access, and booking style.
+                  </Typography>
+                </Box>
+              </Stack>
+
+              <Card sx={{ minWidth: { xs: "100%", md: 260 } }}>
+                <CardContent sx={{ py: 2.5 }}>
+                  <Stack direction="row" spacing={1.5} alignItems="center">
+                    <Avatar sx={{ bgcolor: "secondary.light", color: "secondary.dark" }}>
+                      <HomeWorkRoundedIcon />
+                    </Avatar>
+                    <Box>
+                      <Typography fontWeight={800}>
+                        {activeUser?.fullName || "Demo Host"}
+                      </Typography>
+                      <Typography color="text.secondary">Listing as host</Typography>
+                    </Box>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
+
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
+        <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
+          <Box sx={{ flex: 1 }}>
+            <Card>
+              <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                <Box component="form" onSubmit={handleSubmit}>
+                  <Stack spacing={3}>
+                    <Stack spacing={1}>
+                      <Typography variant="h5">Listing basics</Typography>
+                      <Typography color="text.secondary">
+                        Start with a clear title, location, and storage type.
+                      </Typography>
+                    </Stack>
+
+                    {error && <Alert severity="error">{error}</Alert>}
+                    {successMessage && (
+                      <Alert severity="success">{successMessage}</Alert>
+                    )}
+
+                    <TextField
+                      label="Listing title"
+                      name="title"
+                      value={formData.title}
+                      onChange={handleInputChange}
+                      placeholder="Example: Oakley Garage Space"
+                      fullWidth
+                    />
+
+                    <TextField
+                      label="Location"
+                      name="location"
+                      value={formData.location}
+                      onChange={handleInputChange}
+                      placeholder="Example: Oakley, Cincinnati, OH"
+                      fullWidth
+                      InputProps={{
+                        startAdornment: (
+                          <InputAdornment position="start">
+                            <PlaceRoundedIcon />
+                          </InputAdornment>
+                        ),
+                      }}
+                    />
+
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                      <FormControl fullWidth>
+                        <InputLabel>Storage type</InputLabel>
+                        <Select
+                          name="storageType"
+                          value={formData.storageType}
+                          label="Storage type"
+                          onChange={handleInputChange}
+                        >
+                          {storageTypes.map((type) => (
+                            <MenuItem key={type} value={type}>
+                              {type}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                      </FormControl>
+
+                      <FormControl fullWidth>
+                        <InputLabel>Listing type</InputLabel>
+                        <Select
+                          name="listingType"
+                          value={formData.listingType}
+                          label="Listing type"
+                          onChange={handleInputChange}
+                        >
+                          <MenuItem value="Private host">Private host</MenuItem>
+                          <MenuItem value="Commercial">Commercial</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Stack>
+
+                    <Divider />
+
+                    <Stack spacing={1}>
+                      <Typography variant="h5">Pricing and size</Typography>
+                      <Typography color="text.secondary">
+                        Keep the monthly rate and square footage easy to compare.
+                      </Typography>
+                    </Stack>
+
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                      <TextField
+                        label="Monthly price"
+                        name="price"
+                        value={formData.price}
+                        onChange={handleInputChange}
+                        placeholder="85"
+                        fullWidth
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">$</InputAdornment>
+                          ),
+                        }}
+                      />
+
+                      <TextField
+                        label="Square footage"
+                        name="sqft"
+                        value={formData.sqft}
+                        onChange={handleInputChange}
+                        placeholder="120"
+                        fullWidth
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">
+                              <StraightenRoundedIcon />
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Stack>
+
+                    <FormControl fullWidth>
+                      <InputLabel>Access style</InputLabel>
+                      <Select
+                        name="access"
+                        value={formData.access}
+                        label="Access style"
+                        onChange={handleInputChange}
+                      >
+                        {accessOptions.map((option) => (
+                          <MenuItem key={option} value={option}>
+                            {option}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+
+                    <Divider />
+
+                    <Stack spacing={1}>
+                      <Typography variant="h5">Booking style</Typography>
+                      <Typography color="text.secondary">
+                        Choose how renters should reserve or request the space.
+                      </Typography>
+                    </Stack>
+
+                    <ToggleButtonGroup
+                      value={formData.bookingType}
+                      exclusive
+                      onChange={handleBookingTypeChange}
+                      color="primary"
+                      fullWidth
+                      sx={{
+                        "& .MuiToggleButton-root": {
+                          py: 1.25,
+                          fontWeight: 700,
+                          textTransform: "none",
+                        },
+                      }}
+                    >
+                      <ToggleButton value="instant">Instant book</ToggleButton>
+                      <ToggleButton value="request">Request</ToggleButton>
+                      <ToggleButton value="waitlist">Waitlist</ToggleButton>
+                    </ToggleButtonGroup>
+
+                    <Divider />
+
+                    <Stack spacing={1}>
+                      <Typography variant="h5">Description and amenities</Typography>
+                      <Typography color="text.secondary">
+                        Help renters understand what the space is best for.
+                      </Typography>
+                    </Stack>
+
+                    <TextField
+                      label="Description"
+                      name="description"
+                      value={formData.description}
+                      onChange={handleInputChange}
+                      placeholder="Describe the space, what fits well, and any access details."
+                      fullWidth
+                      multiline
+                      minRows={4}
+                    />
+
+                    <TextField
+                      label="Custom tags"
+                      name="customTags"
+                      value={formData.customTags}
+                      onChange={handleInputChange}
+                      placeholder="Example: Indoor, Student friendly, Flexible"
+                      helperText="Separate tags with commas."
+                      fullWidth
+                    />
+
+                    <Box>
+                      <Typography fontWeight={800} sx={{ mb: 1 }}>
+                        Amenities
+                      </Typography>
+
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "1fr",
+                            sm: "repeat(2, minmax(0, 1fr))",
+                          },
+                          gap: 1,
+                        }}
+                      >
+                        {amenityOptions.map((amenity) => (
+                          <FormControlLabel
+                            key={amenity}
+                            control={
+                              <Checkbox
+                                checked={selectedAmenities.includes(amenity)}
+                                onChange={() => handleAmenityToggle(amenity)}
+                              />
+                            }
+                            label={amenity}
+                          />
+                        ))}
+                      </Box>
+                    </Box>
+
+                    <Divider />
+
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={1.5}
+                      justifyContent="flex-end"
+                    >
+                      <Button
+                        type="button"
+                        variant="outlined"
+                        onClick={() => navigate("/explore")}
+                      >
+                        Cancel
+                      </Button>
+
+                      <Button
+                        type="submit"
+                        variant="contained"
+                        size="large"
+                        startIcon={<AddHomeWorkRoundedIcon />}
+                      >
+                        Create listing
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Box>
+              </CardContent>
+            </Card>
+          </Box>
+
+          <Box sx={{ width: { xs: "100%", lg: 360 } }}>
+            <Card
+              sx={{
+                position: { lg: "sticky" },
+                top: { lg: 96 },
+              }}
             >
-              Delete Listing
-            </button>
-          </div>
-        )}
-      </div>
+              <CardContent sx={{ p: 3 }}>
+                <Stack spacing={2.5}>
+                  <Stack spacing={1}>
+                    <Typography variant="h5">Listing preview</Typography>
+                    <Typography color="text.secondary">
+                      This is how your space will start appearing in Storet.
+                    </Typography>
+                  </Stack>
 
-      <form className="listing-form-card" onSubmit={handleSubmit}>
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="title">Listing Title</label>
-            <input
-              id="title"
-              name="title"
-              type="text"
-              value={formData.title}
-              onChange={handleChange}
-              placeholder="Garage space near downtown"
-            />
-            {errors.title && <span className="form-error">{errors.title}</span>}
-          </div>
+                  <Box
+                    sx={{
+                      borderRadius: 4,
+                      minHeight: 180,
+                      background:
+                        previewListing.listingType === "Commercial"
+                          ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.74))"
+                          : "linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(20, 184, 166, 0.78))",
+                      color: "white",
+                      p: 2.5,
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Chip
+                      label={previewListing.listingType}
+                      sx={{
+                        width: "fit-content",
+                        bgcolor: "rgba(255,255,255,0.9)",
+                        color: "text.primary",
+                        fontWeight: 700,
+                      }}
+                    />
 
-          <div className="filter-group">
-            <label htmlFor="type">Listing Type</label>
-            <select
-              id="type"
-              name="type"
-              value={formData.type}
-              onChange={handleChange}
-            >
-              <option value="Private">Private</option>
-              <option value="Commercial">Commercial</option>
-            </select>
-          </div>
-        </div>
+                    <Box>
+                      <Typography variant="h5">{previewListing.title}</Typography>
+                      <Typography sx={{ opacity: 0.9 }}>
+                        Hosted by {activeUser?.fullName || "Storet Host"}
+                      </Typography>
+                    </Box>
+                  </Box>
 
-        <div className="filter-group">
-          <label htmlFor="imageUrl">Listing Photo URL</label>
-          <input
-            id="imageUrl"
-            name="imageUrl"
-            type="text"
-            value={formData.imageUrl}
-            onChange={handleChange}
-            placeholder="https://images.unsplash.com/..."
-          />
-          <span className="field-hint">
-            Optional. Paste a direct image URL to give your listing a visual preview.
-          </span>
-        </div>
+                  <Stack spacing={1.5}>
+                    <PreviewRow
+                      icon={<PlaceRoundedIcon />}
+                      label="Location"
+                      value={previewListing.location}
+                    />
+                    <PreviewRow
+                      icon={<WarehouseRoundedIcon />}
+                      label="Type"
+                      value={previewListing.storageType}
+                    />
+                    <PreviewRow
+                      icon={<PaymentsRoundedIcon />}
+                      label="Monthly price"
+                      value={`$${previewListing.price}/mo`}
+                    />
+                    <PreviewRow
+                      icon={<StraightenRoundedIcon />}
+                      label="Size"
+                      value={`${previewListing.sqft} sq ft`}
+                    />
+                    <PreviewRow
+                      icon={<EventAvailableRoundedIcon />}
+                      label="Booking"
+                      value={
+                        previewListing.instantBook
+                          ? "Instant book"
+                          : previewListing.waitlist
+                          ? "Waitlist"
+                          : "Request-based"
+                      }
+                    />
+                  </Stack>
 
-        <div className="filter-group">
-          <label htmlFor="location">Location / Address</label>
-          <div className="location-geocode-row">
-            <input
-              id="location"
-              name="location"
-              type="text"
-              value={formData.location}
-              onChange={handleChange}
-              placeholder="123 Main St, Columbus, OH"
-            />
+                  <Divider />
 
-            <button
-              type="button"
-              className="secondary-button geocode-button"
-              onClick={handleGeocodeLocation}
-              disabled={isGeocoding}
-            >
-              {isGeocoding ? 'Finding...' : 'Find on Map'}
-            </button>
-          </div>
+                  <Stack spacing={1}>
+                    <Typography variant="body2" color="text.secondary">
+                      {previewListing.description}
+                    </Typography>
 
-          {errors.location && (
-            <span className="form-error">{errors.location}</span>
-          )}
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      {buildTags().map((tag) => (
+                        <Chip key={tag} label={tag} size="small" />
+                      ))}
+                    </Stack>
+                  </Stack>
 
-          {!errors.location && geocodeError && (
-            <span className="geocode-status error">{geocodeError}</span>
-          )}
+                  <Alert severity="info">
+                    Created listings are saved locally for now and will appear on
+                    Explore and Listing Details.
+                  </Alert>
+                </Stack>
+              </CardContent>
+            </Card>
+          </Box>
+        </Stack>
+      </Container>
+    </Box>
+  );
+}
 
-          {!errors.location && !geocodeError && geocodeSuccess && (
-            <span className="geocode-status success">{geocodeSuccess}</span>
-          )}
+function PreviewRow({ icon, label, value }) {
+  return (
+    <Stack direction="row" spacing={1.25} alignItems="center">
+      <Avatar
+        sx={{
+          width: 34,
+          height: 34,
+          bgcolor: "primary.light",
+          color: "primary.dark",
+        }}
+      >
+        {icon}
+      </Avatar>
 
-          <span className="field-hint">
-            Use a fuller street address for the best geocoding result.
-          </span>
-        </div>
-
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="price">Monthly Price</label>
-            <input
-              id="price"
-              name="price"
-              type="text"
-              value={formData.price}
-              onChange={handleChange}
-              placeholder="75"
-            />
-            {errors.price && <span className="form-error">{errors.price}</span>}
-          </div>
-
-          <div className="filter-group">
-            <label htmlFor="size">Space Size</label>
-            <input
-              id="size"
-              name="size"
-              type="text"
-              value={formData.size}
-              onChange={handleChange}
-              placeholder="Small, medium, 5x10, etc."
-            />
-            {errors.size && <span className="form-error">{errors.size}</span>}
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="latitude">Latitude</label>
-            <input
-              id="latitude"
-              name="latitude"
-              type="text"
-              value={formData.latitude}
-              onChange={handleChange}
-              placeholder="39.9612"
-            />
-            {errors.latitude && (
-              <span className="form-error">{errors.latitude}</span>
-            )}
-          </div>
-
-          <div className="filter-group">
-            <label htmlFor="longitude">Longitude</label>
-            <input
-              id="longitude"
-              name="longitude"
-              type="text"
-              value={formData.longitude}
-              onChange={handleChange}
-              placeholder="-82.9988"
-            />
-            {errors.longitude && (
-              <span className="form-error">{errors.longitude}</span>
-            )}
-          </div>
-        </div>
-
-        <div className="field-hint coordinates-hint">
-          Find on Map fills these automatically, but you can still edit them manually.
-        </div>
-
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="bookingMode">Booking Mode</label>
-            <select
-              id="bookingMode"
-              name="bookingMode"
-              value={formData.bookingMode}
-              onChange={handleChange}
-            >
-              <option value="request">Request Approval</option>
-              <option value="instant">Instant Book</option>
-            </select>
-          </div>
-
-          <div className="filter-group checkbox-setting-group">
-            <label className="checkbox-inline-label">
-              <input
-                name="allowWaitlist"
-                type="checkbox"
-                checked={formData.allowWaitlist}
-                onChange={handleChange}
-              />
-              Allow waitlist when dates conflict
-            </label>
-            <span className="field-hint">
-              If enabled, unavailable date requests will be added as waitlisted instead of rejected.
-            </span>
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="duration">Rental Length</label>
-            <select
-              id="duration"
-              name="duration"
-              value={formData.duration}
-              onChange={handleChange}
-            >
-              <option value="Short-term">Short-term</option>
-              <option value="Long-term">Long-term</option>
-            </select>
-          </div>
-
-          <div className="filter-group">
-            <label htmlFor="availability">Availability</label>
-            <select
-              id="availability"
-              name="availability"
-              value={formData.availability}
-              onChange={handleChange}
-            >
-              <option value="Available now">Available now</option>
-              <option value="Available next week">Available next week</option>
-              <option value="Available next month">Available next month</option>
-            </select>
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="access">Access Details</label>
-            <input
-              id="access"
-              name="access"
-              type="text"
-              value={formData.access}
-              onChange={handleChange}
-              placeholder="24/7 access, scheduled access, weekends only, etc."
-            />
-            {errors.access && <span className="form-error">{errors.access}</span>}
-          </div>
-
-          <div className="filter-group">
-            <label htmlFor="hostName">Host Display Name</label>
-            <input
-              id="hostName"
-              name="hostName"
-              type="text"
-              value={formData.hostName}
-              onChange={handleChange}
-              placeholder="Your name or business name"
-            />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="features">Features</label>
-            <input
-              id="features"
-              name="features"
-              type="text"
-              value={formData.features}
-              onChange={handleChange}
-              placeholder="Climate controlled, secure entry, flexible terms"
-            />
-            <span className="field-hint">Separate features with commas.</span>
-          </div>
-
-          <div className="filter-group">
-            <label htmlFor="security">Security Details</label>
-            <input
-              id="security"
-              name="security"
-              type="text"
-              value={formData.security}
-              onChange={handleChange}
-              placeholder="Camera coverage, locked entry, keypad access, etc."
-            />
-          </div>
-        </div>
-
-        <div className="form-row">
-          <div className="filter-group">
-            <label htmlFor="restrictions">Restrictions / Rules</label>
-            <input
-              id="restrictions"
-              name="restrictions"
-              type="text"
-              value={formData.restrictions}
-              onChange={handleChange}
-              placeholder="No vehicle storage, no hazardous items, boxes only"
-            />
-            <span className="field-hint">Separate rules with commas.</span>
-          </div>
-
-          <div className="filter-group">
-            <label htmlFor="blackoutRanges">Blackout Dates</label>
-            <textarea
-              id="blackoutRanges"
-              name="blackoutRanges"
-              rows="5"
-              value={formData.blackoutRanges}
-              onChange={handleChange}
-              placeholder={`2026-07-01 to 2026-07-05\n2026-08-14 to 2026-08-18`}
-            />
-            <span className="field-hint">
-              One range per line in YYYY-MM-DD to YYYY-MM-DD format.
-            </span>
-          </div>
-        </div>
-
-        <div className="filter-group">
-          <label htmlFor="description">Description</label>
-          <textarea
-            id="description"
-            name="description"
-            rows="5"
-            value={formData.description}
-            onChange={handleChange}
-            placeholder="Describe the space, ideal storage use cases, security, and access details."
-          />
-          {errors.description && (
-            <span className="form-error">{errors.description}</span>
-          )}
-        </div>
-
-        <div className="management-actions">
-          <button type="submit" className="primary-button">
-            {isEditing ? 'Update Listing' : 'Save Listing'}
-          </button>
-
-          <Link to="/profile" className="secondary-button">
-            Cancel
-          </Link>
-        </div>
-      </form>
-    </div>
+      <Box sx={{ minWidth: 0 }}>
+        <Typography variant="body2" color="text.secondary">
+          {label}
+        </Typography>
+        <Typography fontWeight={800} noWrap>
+          {value}
+        </Typography>
+      </Box>
+    </Stack>
   );
 }
 

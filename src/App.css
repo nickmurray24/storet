@@ -125,8 +125,7 @@ textarea {
 .hero-section,
 .explore-layout,
 .profile-grid,
-.feature-grid,
-.form-row {
+.feature-grid {
   display: grid;
   gap: 24px;
 }
@@ -140,7 +139,6 @@ textarea {
 .hero-copy,
 .filters-panel,
 .map-placeholder,
-.listing-form-card,
 .profile-card {
   background: white;
   border-radius: 22px;
@@ -149,7 +147,6 @@ textarea {
 
 .hero-copy,
 .filters-panel,
-.listing-form-card,
 .profile-card {
   padding: 24px;
 }
@@ -388,15 +385,10 @@ textarea {
   box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
 }
 
-.form-row {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 @media (max-width: 1024px) {
   .hero-section,
   .explore-layout,
   .feature-grid,
-  .form-row,
   .profile-grid{
     grid-template-columns: 1fr;
   }
@@ -437,22 +429,6 @@ textarea {
     text-align: center;
   }
   
-  .listing-details-page {
-    display: grid;
-    gap: 24px;
-  }
-  
-  .listing-details-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 24px;
-    background: white;
-    border-radius: 22px;
-    padding: 24px;
-    box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
-  }
-  
   .details-eyebrow {
     margin: 0 0 8px;
     color: #2563eb;
@@ -483,13 +459,6 @@ textarea {
   .details-availability {
     color: #2563eb;
     font-weight: 700;
-  }
-  
-  .listing-details-layout {
-    display: grid;
-    grid-template-columns: 1.6fr 0.8fr;
-    gap: 24px;
-    align-items: start;
   }
   
   .listing-main-card,
@@ -538,15 +507,7 @@ textarea {
   .back-link {
     display: inline-block;
     margin-top: 18px;
-  }
-  
-  @media (max-width: 1024px) {
-    .listing-details-layout,
-    .listing-details-header {
-      grid-template-columns: 1fr;
-      display: grid;
-    }
-  }
+  } 
 
   .booking-form {
     display: grid;
@@ -1278,21 +1239,6 @@ textarea {
     margin: 0;
   }
 
-  .listing-detail-image {
-    width: 100%;
-    height: 340px;
-    object-fit: cover;
-    border-radius: 18px;
-    display: block;
-    margin-bottom: 24px;
-  }
-
-  .listing-detail-subgrid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 20px;
-  }
-
   .detail-chip-row {
     display: flex;
     gap: 10px;
@@ -1316,8 +1262,7 @@ textarea {
   }
 
   @media (max-width: 1024px) {
-    .selected-listing-detail-grid,
-    .listing-detail-subgrid {
+    .selected-listing-detail-grid {
       grid-template-columns: 1fr;
     }
   }
@@ -1327,8 +1272,7 @@ textarea {
       min-width: 100%;
     }
 
-    .selected-listing-visual,
-    .listing-detail-image {
+    .selected-listing-visual {
       height: 220px;
     }
   }
