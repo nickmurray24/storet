@@ -1,485 +1,819 @@
-import { Link, useNavigate } from 'react-router-dom';
-import ListingCard from '../components/ListingCard';
+import React, { useMemo } from "react";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
+import {
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardActionArea,
+  //CardActions,
+  CardContent,
+  Chip,
+  Container,
+  Divider,
+  Stack,
+  Typography,
+} from "@mui/material";
 
-function formatDateTime(dateValue) {
-  return new Date(dateValue).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
+import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
+import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
+import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
+import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
+import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
+import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
+import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
+import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
+import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
+
+const CURRENT_USER_KEY = "storet_current_user";
+const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
+
+const fallbackListings = [
+  {
+    id: "1",
+    title: "Oakley Garage Space",
+    location: "Oakley, Cincinnati, OH",
+    distance: "6 miles away",
+    price: 85,
+    sqft: 120,
+    storageType: "Garage",
+    listingType: "Private host",
+    access: "By appointment",
+    rating: 4.9,
+    reviews: 18,
+    instantBook: true,
+    waitlist: false,
+    host: "Maya",
+    description:
+      "Clean indoor garage space for boxes, bikes, dorm items, and small furniture.",
+    tags: ["Indoor", "Private", "Instant book"],
+  },
+  {
+    id: "2",
+    title: "Clifton Basement Corner",
+    location: "Clifton, Cincinnati, OH",
+    distance: "2 miles away",
+    price: 55,
+    sqft: 75,
+    storageType: "Basement",
+    listingType: "Private host",
+    access: "Weekly access",
+    rating: 4.7,
+    reviews: 11,
+    instantBook: false,
+    waitlist: true,
+    host: "Evan",
+    description:
+      "Affordable basement storage close to campus and apartment-heavy neighborhoods.",
+    tags: ["Budget", "Student friendly", "Waitlist"],
+  },
+  {
+    id: "3",
+    title: "Downtown Storage Locker",
+    location: "Downtown Cincinnati, OH",
+    distance: "4 miles away",
+    price: 110,
+    sqft: 100,
+    storageType: "Storage unit",
+    listingType: "Commercial",
+    access: "Daily access",
+    rating: 4.8,
+    reviews: 32,
+    instantBook: true,
+    waitlist: false,
+    host: "Storet Partner",
+    description: "Traditional storage-style locker with flexible monthly availability.",
+    tags: ["Commercial", "Daily access", "Secure"],
+  },
+  {
+    id: "4",
+    title: "Mason Spare Room Storage",
+    location: "Mason, OH",
+    distance: "18 miles away",
+    price: 70,
+    sqft: 90,
+    storageType: "Spare room",
+    listingType: "Private host",
+    access: "By appointment",
+    rating: 4.6,
+    reviews: 9,
+    instantBook: false,
+    waitlist: false,
+    host: "Jordan",
+    description:
+      "Climate-friendly spare room space for bins, seasonal items, and dorm storage.",
+    tags: ["Climate friendly", "Residential", "Flexible"],
+  },
+];
+
+function safeReadJson(key, fallbackValue) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallbackValue;
+  } catch {
+    return fallbackValue;
+  }
 }
 
-function getStatusClass(status) {
-  return status.toLowerCase().replace(/\s+/g, '-');
+function normalizeSavedIds(value) {
+  if (Array.isArray(value)) {
+    return value.map(String);
+  }
+
+  if (value instanceof Set) {
+    return Array.from(value).map(String);
+  }
+
+  if (value && Array.isArray(value.ids)) {
+    return value.ids.map(String);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.entries(value)
+      .filter(([, isSaved]) => Boolean(isSaved))
+      .map(([id]) => String(id));
+  }
+
+  return [];
 }
 
-function formatCurrency(value) {
-  return `$${value.toFixed(2)}`;
+function parseNumber(value, fallbackValue) {
+  if (typeof value === "number" && !Number.isNaN(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const cleanedValue = value.replace(/[^0-9.]/g, "");
+    const parsedValue = Number(cleanedValue);
+
+    if (!Number.isNaN(parsedValue) && parsedValue > 0) {
+      return parsedValue;
+    }
+  }
+
+  return fallbackValue;
+}
+
+function normalizeListing(listing, index) {
+  const price = parseNumber(
+    listing.price ??
+      listing.monthlyPrice ??
+      listing.monthlyRate ??
+      listing.pricePerMonth ??
+      listing.rate,
+    75
+  );
+
+  const sqft = parseNumber(
+    listing.sqft ??
+      listing.squareFeet ??
+      listing.sizeSqft ??
+      listing.squareFootage ??
+      listing.size,
+    100
+  );
+
+  const listingType =
+    listing.listingType ??
+    listing.hostType ??
+    (listing.isCommercial ? "Commercial" : "Private host");
+
+  return {
+    ...listing,
+    id: String(listing.id ?? `listing-${index + 1}`),
+    title: listing.title ?? listing.name ?? "Storage space",
+    location: listing.location ?? listing.address ?? "Cincinnati, OH",
+    distance: listing.distance ?? "Nearby",
+    price,
+    sqft,
+    storageType: listing.storageType ?? listing.type ?? "Storage space",
+    listingType,
+    access: listing.access ?? "Flexible access",
+    rating: Number(listing.rating ?? 4.8),
+    reviews: Number(listing.reviews ?? listing.reviewCount ?? 0),
+    instantBook: Boolean(
+      listing.instantBook ??
+        listing.instantBooking ??
+        listing.bookingType === "instant" ??
+        false
+    ),
+    waitlist: Boolean(
+      listing.waitlist ??
+        listing.hasWaitlist ??
+        listing.availability === "waitlist" ??
+        false
+    ),
+    host: listing.host ?? listing.hostName ?? "Storet Host",
+    description:
+      listing.description ??
+      "Flexible local storage space for short-term or long-term needs.",
+    tags: Array.isArray(listing.tags) ? listing.tags : [],
+  };
+}
+
+function getInitials(name) {
+  if (!name) return "S";
+
+  return name
+    .split(" ")
+    .map((part) => part.charAt(0))
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }
 
 function ProfilePage({
   currentUser,
-  savedListings,
-  myListings,
+  listings,
   savedListingIds,
   onToggleSave,
-  bookingRequests = [],
-  hostMessages = [],
-  paymentRecords = [],
-  reviews = [],
-  onDeleteListing,
-  onToggleListingStatus,
-  onUpdateBookingLifecycle,
-  onUpdateRole,
   onLogout,
 }) {
   const navigate = useNavigate();
 
-  const pendingCount = bookingRequests.filter(
-    (request) => request.status === 'Pending'
-  ).length;
-  const waitlistedCount = bookingRequests.filter(
-    (request) => request.status === 'Waitlisted'
-  ).length;
-  const approvedCount = bookingRequests.filter(
-    (request) => request.status === 'Approved'
-  ).length;
-  const confirmedCount = bookingRequests.filter(
-    (request) => request.status === 'Confirmed'
-  ).length;
-  const activeRentalCount = bookingRequests.filter(
-    (request) => request.status === 'Active'
-  ).length;
-  const completedCount = bookingRequests.filter(
-    (request) => request.status === 'Completed'
-  ).length;
-  const unreadSentMessages = hostMessages.filter(
-    (message) => message.status === 'Unread'
+  const storedUser = safeReadJson(CURRENT_USER_KEY, {
+    fullName: "Demo User",
+    email: "demo@storet.com",
+    role: "Renter",
+    isAuthenticated: true,
+  });
+
+  const activeUser = currentUser || storedUser;
+
+  const storedUserListings = useMemo(() => {
+    const storedListings = safeReadJson(USER_LISTINGS_KEY, []);
+    return Array.isArray(storedListings) ? storedListings : [];
+  }, []);
+
+  const hostListings = useMemo(() => {
+    const sourceListings =
+      Array.isArray(listings) && listings.length > 0
+        ? listings
+        : storedUserListings;
+
+    const normalizedListings = sourceListings.map(normalizeListing);
+    const seenIds = new Set();
+
+    return normalizedListings.filter((listing) => {
+      if (seenIds.has(listing.id)) return false;
+      seenIds.add(listing.id);
+      return true;
+    });
+  }, [listings, storedUserListings]);
+
+  const allListings = useMemo(() => {
+    const combinedListings = [...fallbackListings, ...hostListings];
+    const normalizedListings = combinedListings.map(normalizeListing);
+    const seenIds = new Set();
+
+    return normalizedListings.filter((listing) => {
+      if (seenIds.has(listing.id)) return false;
+      seenIds.add(listing.id);
+      return true;
+    });
+  }, [hostListings]);
+
+  const savedIds = normalizeSavedIds(savedListingIds);
+
+  const savedListings = useMemo(() => {
+    const savedIdSet = new Set(savedIds.map(String));
+
+    return allListings.filter((listing) => savedIdSet.has(String(listing.id)));
+  }, [allListings, savedIds]);
+
+  const instantHostListings = hostListings.filter(
+    (listing) => listing.instantBook
   ).length;
 
-  function handleDelete(listing) {
-    const shouldDelete = window.confirm(
-      `Delete "${listing.title}"? This will remove it from your listings.`
-    );
-
-    if (!shouldDelete) {
-      return;
-    }
-
-    onDeleteListing(listing.id);
-  }
+  const waitlistHostListings = hostListings.filter(
+    (listing) => listing.waitlist
+  ).length;
 
   function handleLogoutClick() {
-    onLogout();
-    navigate('/');
+    if (onLogout) {
+      onLogout();
+    }
+
+    navigate("/");
+  }
+
+  function handleUnsave(listingId) {
+    if (onToggleSave) {
+      onToggleSave(listingId);
+    }
   }
 
   return (
-    <div className="profile-page">
-      <div className="page-header-block">
-        <h1>My Profile</h1>
-        <p>Manage your account, role, listings, saved spaces, and activity.</p>
-      </div>
-
-      <div className="profile-grid">
-        <div className="profile-card">
-          <h3>Account</h3>
-          <p>Name: {currentUser.fullName}</p>
-          <p>Email: {currentUser.email}</p>
-          <p>Role: {currentUser.role}</p>
-          <p>Status: {currentUser.isAuthenticated ? 'Signed in' : 'Guest'}</p>
-        </div>
-
-        <div className="profile-card">
-          <h3>Activity Snapshot</h3>
-          <p>Saved Listings: {savedListings.length}</p>
-          <p>My Listings: {myListings.length}</p>
-          <p>Pending Requests: {pendingCount}</p>
-          <p>Waitlisted: {waitlistedCount}</p>
-          <p>Approved Requests: {approvedCount}</p>
-          <p>Confirmed Bookings: {confirmedCount}</p>
-          <p>Active Rentals: {activeRentalCount}</p>
-          <p>Completed Rentals: {completedCount}</p>
-          <p>Reviews Written: {reviews.length}</p>
-          <p>Unread Message Threads: {unreadSentMessages}</p>
-          <p>Payments Recorded: {paymentRecords.length}</p>
-        </div>
-      </div>
-
-      <section className="profile-section">
-        <div className="profile-card account-controls-card">
-          <h3>Account Controls</h3>
-          <p className="results-subtext">
-            Switch the role for this demo account or log out.
-          </p>
-
-          <div className="role-switch-grid">
-            {['Renter', 'Host', 'Both'].map((role) => (
-              <button
-                key={role}
-                type="button"
-                className={`role-switch-button ${
-                  currentUser.role === role ? 'active' : ''
-                }`}
-                onClick={() => onUpdateRole(role)}
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      <Box
+        sx={{
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.paper",
+        }}
+      >
+        <Container maxWidth="lg" sx={{ py: { xs: 4, md: 5 } }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={3}
+            alignItems={{ xs: "flex-start", md: "center" }}
+            justifyContent="space-between"
+          >
+            <Stack direction="row" spacing={2.5} alignItems="center">
+              <Avatar
+                sx={{
+                  width: { xs: 72, md: 88 },
+                  height: { xs: 72, md: 88 },
+                  bgcolor: "primary.main",
+                  fontSize: { xs: "1.7rem", md: "2rem" },
+                  fontWeight: 900,
+                }}
               >
-                {role}
-              </button>
-            ))}
-          </div>
+                {getInitials(activeUser?.fullName)}
+              </Avatar>
 
-          <div className="management-actions">
-            <button
-              type="button"
-              className="danger-button"
-              onClick={handleLogoutClick}
-            >
-              Log Out
-            </button>
-          </div>
-        </div>
-      </section>
+              <Box>
+                <Chip
+                  icon={<PersonRoundedIcon />}
+                  label={`${activeUser?.role || "Renter"} account`}
+                  color="primary"
+                  variant="outlined"
+                  sx={{ mb: 1, fontWeight: 700 }}
+                />
 
-      <section className="profile-section">
-        <div className="section-header">
-          <h2>Reservation Requests & Bookings</h2>
-          <span>{bookingRequests.length}</span>
-        </div>
-
-        {bookingRequests.length > 0 ? (
-          <div className="listings-grid">
-            {bookingRequests.map((request) => (
-              <div key={request.id} className="empty-state-card">
-                <div className="activity-card-header">
-                  <h3>{request.listingTitle}</h3>
-                  <span className={`activity-status ${getStatusClass(request.status)}`}>
-                    {request.status}
-                  </span>
-                </div>
-
-                <div className="booking-summary">
-                  <p><strong>Submitted:</strong> {formatDateTime(request.submittedAt)}</p>
-                  <p><strong>Host:</strong> {request.hostName}</p>
-                  <p><strong>Move-in date:</strong> {request.moveInDate}</p>
-                  <p><strong>Move-out date:</strong> {request.moveOutDate}</p>
-                  <p><strong>Duration:</strong> {request.duration}</p>
-                  {request.waitlistReason && (
-                    <p><strong>Waitlist reason:</strong> {request.waitlistReason}</p>
-                  )}
-                  {request.notes && <p><strong>Notes:</strong> {request.notes}</p>}
-                </div>
-
-                <div className="activity-action-row">
-                  {request.status === 'Approved' && (
-                    <Link to={`/checkout/${request.id}`} className="primary-button">
-                      Complete Checkout
-                    </Link>
-                  )}
-
-                  {(request.status === 'Approved' ||
-                    request.status === 'Confirmed' ||
-                    request.status === 'Waitlisted') && (
-                    <button
-                      type="button"
-                      className="danger-button"
-                      onClick={() =>
-                        onUpdateBookingLifecycle(request.id, 'Cancelled')
-                      }
-                    >
-                      Cancel
-                    </button>
-                  )}
-
-                  {request.status === 'Waitlisted' && (
-                    <span className="results-subtext">
-                      Waiting for host availability
-                    </span>
-                  )}
-
-                  {(request.status === 'Confirmed' ||
-                    request.status === 'Active' ||
-                    request.status === 'Completed' ||
-                    request.status === 'Cancelled') && (
-                    <Link to={`/checkout/${request.id}`} className="secondary-button">
-                      View Receipt
-                    </Link>
-                  )}
-
-                  <Link
-                    to={`/listing/${request.listingId}`}
-                    className="secondary-button"
-                  >
-                    View Listing
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No reservation requests yet</h3>
-            <p>Reserve a space from a listing page and it will show up here.</p>
-            <Link to="/explore" className="secondary-button">
-              Explore Listings
-            </Link>
-          </div>
-        )}
-      </section>
-
-      <section className="profile-section">
-        <div className="section-header">
-          <h2>My Reviews</h2>
-          <span>{reviews.length}</span>
-        </div>
-
-        {reviews.length > 0 ? (
-          <div className="listings-grid">
-            {reviews.map((review) => (
-              <div key={review.id} className="empty-state-card">
-                <div className="activity-card-header">
-                  <h3>{review.listingTitle}</h3>
-                  <span className="rating-summary">⭐ {review.rating}.0</span>
-                </div>
-
-                <div className="booking-summary">
-                  <p><strong>Host:</strong> {review.hostName}</p>
-                  <p><strong>Submitted:</strong> {formatDateTime(review.createdAt)}</p>
-                  <p>{review.reviewText}</p>
-                </div>
-
-                <Link
-                  to={`/listing/${review.listingId}`}
-                  className="secondary-button"
+                <Typography
+                  variant="h2"
+                  sx={{
+                    fontSize: { xs: "2.1rem", md: "3rem" },
+                    lineHeight: 1,
+                  }}
                 >
-                  View Listing
-                </Link>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No reviews yet</h3>
-            <p>Once you complete a rental, you can leave a verified review on that listing.</p>
-          </div>
-        )}
-      </section>
+                  {activeUser?.fullName || "Demo User"}
+                </Typography>
 
-      <section className="profile-section">
-        <div className="section-header">
-          <h2>Payment History</h2>
-          <span>{paymentRecords.length}</span>
-        </div>
+                <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+                  {activeUser?.email || "demo@storet.com"}
+                </Typography>
+              </Box>
+            </Stack>
 
-        {paymentRecords.length > 0 ? (
-          <div className="listings-grid">
-            {paymentRecords.map((payment) => (
-              <div key={payment.id} className="empty-state-card">
-                <div className="activity-card-header">
-                  <h3>{payment.listingTitle}</h3>
-                  <span className="activity-status confirmed">Paid</span>
-                </div>
+            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+              <Button
+                component={RouterLink}
+                to="/notifications"
+                variant="outlined"
+                startIcon={<NotificationsRoundedIcon />}
+                sx={{ bgcolor: "background.paper" }}
+              >
+                Activity
+              </Button>
 
-                <div className="booking-summary">
-                  <p><strong>Receipt:</strong> {payment.receiptNumber}</p>
-                  <p><strong>Host:</strong> {payment.hostName}</p>
-                  <p><strong>Paid at:</strong> {formatDateTime(payment.paidAt)}</p>
-                  <p>
-                    <strong>Card:</strong> {payment.cardBrand} ending in {payment.last4}
-                  </p>
-                  <p><strong>Total:</strong> {formatCurrency(payment.amount)}</p>
-                </div>
+              <Button
+                component={RouterLink}
+                to="/create-listing"
+                variant="contained"
+                startIcon={<AddHomeWorkRoundedIcon />}
+              >
+                List space
+              </Button>
 
-                <Link
-                  to={`/checkout/${payment.requestId}`}
-                  className="secondary-button"
-                >
-                  View Receipt
-                </Link>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No payments yet</h3>
-            <p>
-              Once an approved request goes through checkout, the payment record
-              will show up here.
-            </p>
-          </div>
-        )}
-      </section>
+              <Button
+                variant="text"
+                color="inherit"
+                startIcon={<LogoutRoundedIcon />}
+                onClick={handleLogoutClick}
+              >
+                Log out
+              </Button>
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
 
-      <section className="profile-section">
-        <div className="section-header">
-          <h2>Messages Sent</h2>
-          <span>{hostMessages.length}</span>
-        </div>
+      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
+        <Stack spacing={3}>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "1fr",
+                sm: "repeat(2, minmax(0, 1fr))",
+                md: "repeat(4, minmax(0, 1fr))",
+              },
+              gap: 2,
+            }}
+          >
+            <StatCard
+              icon={<FavoriteRoundedIcon />}
+              label="Saved spaces"
+              value={savedListings.length}
+              color="primary"
+            />
 
-        {hostMessages.length > 0 ? (
-          <div className="listings-grid">
-            {hostMessages.map((message) => (
-              <div key={message.id} className="empty-state-card">
-                <div className="activity-card-header">
-                  <h3>{message.listingTitle}</h3>
-                  <span className={`activity-status ${getStatusClass(message.status)}`}>
-                    {message.status}
-                  </span>
-                </div>
+            <StatCard
+              icon={<HomeWorkRoundedIcon />}
+              label="Your listings"
+              value={hostListings.length}
+              color="secondary"
+            />
 
-                <div className="booking-summary">
-                  <p><strong>Submitted:</strong> {formatDateTime(message.submittedAt)}</p>
-                  <p><strong>Host:</strong> {message.hostName}</p>
-                  <p><strong>Email used:</strong> {message.senderEmail}</p>
-                  <p>{message.message}</p>
-                  {message.readAt && (
-                    <p><strong>Marked read:</strong> {formatDateTime(message.readAt)}</p>
-                  )}
-                </div>
+            <StatCard
+              icon={<BoltRoundedIcon />}
+              label="Instant book"
+              value={instantHostListings}
+              color="success"
+            />
 
-                <Link
-                  to={`/listing/${message.listingId}`}
-                  className="secondary-button"
-                >
-                  Open Listing
-                </Link>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No messages sent yet</h3>
-            <p>Contact a host from a listing page and the message will appear here.</p>
-            <Link to="/explore" className="secondary-button">
-              Browse Listings
-            </Link>
-          </div>
-        )}
-      </section>
+            <StatCard
+              icon={<EventAvailableRoundedIcon />}
+              label="Waitlist listings"
+              value={waitlistHostListings}
+              color="warning"
+            />
+          </Box>
 
-      <section className="profile-section">
-        <div className="section-header">
-          <h2>Saved Listings</h2>
-          <span>{savedListings.length}</span>
-        </div>
+          <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
+            <Box sx={{ flex: 1.4 }}>
+              <Stack spacing={3}>
+                <Card>
+                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                    <Stack spacing={2.5}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={2}
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        justifyContent="space-between"
+                      >
+                        <Box>
+                          <Typography variant="h5">Saved spaces</Typography>
+                          <Typography color="text.secondary">
+                            Listings you have saved while browsing Storet.
+                          </Typography>
+                        </Box>
 
-        {savedListings.length > 0 ? (
-          <div className="listings-grid">
-            {savedListings.map((listing) => (
-              <ListingCard
-                key={listing.id}
-                listing={listing}
-                isSaved={savedListingIds.includes(listing.id)}
-                onToggleSave={onToggleSave}
-                isSelected={false}
-                onSelectListing={() => {}}
-                isCompared={false}
-                onToggleCompare={() => {}}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No saved listings yet</h3>
-            <p>Save a listing from Explore or from a listing details page.</p>
-            <Link to="/explore" className="secondary-button">
-              Browse Listings
-            </Link>
-          </div>
-        )}
-      </section>
+                        <Button
+                          component={RouterLink}
+                          to="/explore"
+                          endIcon={<ArrowForwardRoundedIcon />}
+                        >
+                          Explore more
+                        </Button>
+                      </Stack>
 
-      <section className="profile-section">
-        <div className="section-header">
-          <h2>My Listings</h2>
-          <span>{myListings.length}</span>
-        </div>
+                      <Divider />
 
-        {myListings.length > 0 ? (
-          <div className="listings-grid">
-            {myListings.map((listing) => (
-              <div key={listing.id} className="my-listing-card">
-                <div className="my-listing-top">
-                  <div>
-                    <h3>{listing.title}</h3>
-                    <p className="listing-location">{listing.location}</p>
-                    <div className="rating-row">
-                      {listing.reviewCount > 0 ? (
-                        <span className="rating-summary">
-                          ⭐ {listing.averageRating.toFixed(1)} ({listing.reviewCount})
-                        </span>
+                      {savedListings.length === 0 ? (
+                        <EmptyState
+                          icon={<FavoriteRoundedIcon />}
+                          title="No saved spaces yet"
+                          description="Save listings from Explore so you can compare them later."
+                          actionLabel="Browse listings"
+                          actionTo="/explore"
+                        />
                       ) : (
-                        <span className="rating-summary empty">No reviews yet</span>
+                        <Stack spacing={2}>
+                          {savedListings.map((listing) => (
+                            <ListingRow
+                              key={listing.id}
+                              listing={listing}
+                              action={
+                                <Button
+                                  size="small"
+                                  variant="outlined"
+                                  onClick={() => handleUnsave(listing.id)}
+                                >
+                                  Unsave
+                                </Button>
+                              }
+                            />
+                          ))}
+                        </Stack>
                       )}
-                    </div>
-                  </div>
+                    </Stack>
+                  </CardContent>
+                </Card>
 
-                  <span
-                    className={`status-pill ${
-                      listing.status === 'paused' ? 'paused' : 'active'
-                    }`}
+                <Card>
+                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                    <Stack spacing={2.5}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={2}
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        justifyContent="space-between"
+                      >
+                        <Box>
+                          <Typography variant="h5">Your hosted spaces</Typography>
+                          <Typography color="text.secondary">
+                            Listings you have created for renters to find.
+                          </Typography>
+                        </Box>
+
+                        <Button
+                          component={RouterLink}
+                          to="/create-listing"
+                          variant="contained"
+                          startIcon={<AddHomeWorkRoundedIcon />}
+                        >
+                          New listing
+                        </Button>
+                      </Stack>
+
+                      <Divider />
+
+                      {hostListings.length === 0 ? (
+                        <EmptyState
+                          icon={<WarehouseRoundedIcon />}
+                          title="No hosted spaces yet"
+                          description="Create your first listing to start offering storage through Storet."
+                          actionLabel="Create listing"
+                          actionTo="/create-listing"
+                        />
+                      ) : (
+                        <Stack spacing={2}>
+                          {hostListings.map((listing) => (
+                            <ListingRow
+                              key={listing.id}
+                              listing={listing}
+                              action={
+                                <Button
+                                  size="small"
+                                  component={RouterLink}
+                                  to={`/listing/${listing.id}`}
+                                  endIcon={<ArrowForwardRoundedIcon />}
+                                >
+                                  View
+                                </Button>
+                              }
+                            />
+                          ))}
+                        </Stack>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Stack>
+            </Box>
+
+            <Box sx={{ width: { xs: "100%", lg: 360 } }}>
+              <Stack spacing={3}>
+                <Card>
+                  <CardContent sx={{ p: 3 }}>
+                    <Stack spacing={2.5}>
+                      <Box>
+                        <Typography variant="h5">Account overview</Typography>
+                        <Typography color="text.secondary">
+                          Your current Storet profile setup.
+                        </Typography>
+                      </Box>
+
+                      <Divider />
+
+                      <ProfileInfoRow
+                        icon={<PersonRoundedIcon />}
+                        label="Name"
+                        value={activeUser?.fullName || "Demo User"}
+                      />
+
+                      <ProfileInfoRow
+                        icon={<ShieldRoundedIcon />}
+                        label="Role"
+                        value={activeUser?.role || "Renter"}
+                      />
+
+                      <ProfileInfoRow
+                        icon={<Inventory2RoundedIcon />}
+                        label="Saved listings"
+                        value={`${savedListings.length} saved`}
+                      />
+
+                      <ProfileInfoRow
+                        icon={<HomeWorkRoundedIcon />}
+                        label="Hosted listings"
+                        value={`${hostListings.length} active`}
+                      />
+
+                      <Alert severity="info">
+                        Profile details are still local-demo data for now. Later,
+                        this can connect to real account settings.
+                      </Alert>
+                    </Stack>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent sx={{ p: 3 }}>
+                    <Stack spacing={2}>
+                      <Typography variant="h5">Quick actions</Typography>
+
+                      <Button
+                        component={RouterLink}
+                        to="/explore"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<WarehouseRoundedIcon />}
+                      >
+                        Browse storage
+                      </Button>
+
+                      <Button
+                        component={RouterLink}
+                        to="/create-listing"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<AddHomeWorkRoundedIcon />}
+                      >
+                        Create listing
+                      </Button>
+
+                      <Button
+                        component={RouterLink}
+                        to="/notifications"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<NotificationsRoundedIcon />}
+                      >
+                        View activity
+                      </Button>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              </Stack>
+            </Box>
+          </Stack>
+        </Stack>
+      </Container>
+    </Box>
+  );
+}
+
+function StatCard({ icon, label, value, color }) {
+  return (
+    <Card>
+      <CardContent sx={{ p: 2.5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center">
+          <Avatar
+            sx={{
+              bgcolor: `${color}.light`,
+              color: `${color}.dark`,
+            }}
+          >
+            {icon}
+          </Avatar>
+
+          <Box>
+            <Typography variant="h5">{value}</Typography>
+            <Typography color="text.secondary">{label}</Typography>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ListingRow({ listing, action }) {
+  return (
+    <Card variant="outlined" sx={{ boxShadow: "none" }}>
+      <CardActionArea component={RouterLink} to={`/listing/${listing.id}`}>
+        <CardContent sx={{ p: 2.25 }}>
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            justifyContent="space-between"
+          >
+            <Stack direction="row" spacing={1.5} alignItems="center">
+              <Avatar
+                sx={{
+                  bgcolor:
+                    listing.listingType === "Commercial"
+                      ? "primary.main"
+                      : "secondary.main",
+                }}
+              >
+                <WarehouseRoundedIcon />
+              </Avatar>
+
+              <Box>
+                <Typography fontWeight={900}>{listing.title}</Typography>
+
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  flexWrap="wrap"
+                  useFlexGap
+                  sx={{ mt: 0.5 }}
+                >
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
                   >
-                    {listing.status === 'paused' ? 'Paused' : 'Active'}
-                  </span>
-                </div>
+                    <PlaceRoundedIcon fontSize="inherit" />
+                    {listing.location}
+                  </Typography>
 
-                <p className="listing-size">Size: {listing.size}</p>
-                <p className="listing-description">{listing.description}</p>
-                <p>
-                  <strong>Booking:</strong>{' '}
-                  {listing.bookingMode === 'instant' ? 'Instant Book' : 'Request Approval'}
-                </p>
-                <p>
-                  <strong>Waitlist:</strong> {listing.allowWaitlist ? 'Enabled' : 'Disabled'}
-                </p>
-
-                <div className="management-actions">
-                  <Link
-                    to={`/listing/${listing.id}`}
-                    className="secondary-button"
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
                   >
-                    View
-                  </Link>
+                    <StraightenRoundedIcon fontSize="inherit" />
+                    {listing.sqft} sq ft
+                  </Typography>
+                </Stack>
+              </Box>
+            </Stack>
 
-                  <Link
-                    to={`/edit-listing/${listing.id}`}
-                    className="primary-button"
-                  >
-                    Edit
-                  </Link>
+            <Stack
+              direction="row"
+              spacing={1}
+              alignItems="center"
+              onClick={(event) => event.preventDefault()}
+            >
+              <Chip label={`$${listing.price}/mo`} size="small" />
 
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => onToggleListingStatus(listing.id)}
-                  >
-                    {listing.status === 'paused' ? 'Resume' : 'Pause'}
-                  </button>
+              <Chip
+                icon={<StarRoundedIcon />}
+                label={listing.rating.toFixed(1)}
+                size="small"
+                variant="outlined"
+              />
 
-                  <button
-                    type="button"
-                    className="danger-button"
-                    onClick={() => handleDelete(listing)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>You have not created any listings yet</h3>
-            <p>
-              Only listings created by this signed-in account appear here.
-            </p>
-            <Link to="/create-listing" className="primary-button">
-              Create Listing
-            </Link>
-          </div>
-        )}
-      </section>
-    </div>
+              {action}
+            </Stack>
+          </Stack>
+        </CardContent>
+      </CardActionArea>
+    </Card>
+  );
+}
+
+function ProfileInfoRow({ icon, label, value }) {
+  return (
+    <Stack direction="row" spacing={1.5} alignItems="center">
+      <Avatar
+        sx={{
+          width: 38,
+          height: 38,
+          bgcolor: "primary.light",
+          color: "primary.dark",
+        }}
+      >
+        {icon}
+      </Avatar>
+
+      <Box>
+        <Typography variant="body2" color="text.secondary">
+          {label}
+        </Typography>
+        <Typography fontWeight={800}>{value}</Typography>
+      </Box>
+    </Stack>
+  );
+}
+
+function EmptyState({ icon, title, description, actionLabel, actionTo }) {
+  return (
+    <Box
+      sx={{
+        border: "1px dashed",
+        borderColor: "divider",
+        borderRadius: 4,
+        p: 4,
+        textAlign: "center",
+        bgcolor: "background.default",
+      }}
+    >
+      <Stack spacing={1.5} alignItems="center">
+        <Avatar sx={{ bgcolor: "primary.light", color: "primary.dark" }}>
+          {icon}
+        </Avatar>
+
+        <Typography variant="h6">{title}</Typography>
+
+        <Typography color="text.secondary" sx={{ maxWidth: 440 }}>
+          {description}
+        </Typography>
+
+        <Button
+          component={RouterLink}
+          to={actionTo}
+          variant="contained"
+          endIcon={<ArrowForwardRoundedIcon />}
+        >
+          {actionLabel}
+        </Button>
+      </Stack>
+    </Box>
   );
 }
 
