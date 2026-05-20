@@ -22,7 +22,8 @@ import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 
-const CURRENT_USER_KEY = "storet_current_user";
+import { CURRENT_USER_KEY } from "../constants/storageKeys";
+import { safeWriteJson } from "../utils/storage";
 
 function AuthPage({ onLogin }) {
   const navigate = useNavigate();
@@ -112,7 +113,7 @@ function AuthPage({ onLogin }) {
       role,
     };
 
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+    safeWriteJson(CURRENT_USER_KEY, user);
 
     if (onLogin) {
       onLogin(user);

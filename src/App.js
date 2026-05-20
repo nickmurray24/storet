@@ -11,54 +11,17 @@ import ListingDetailsPage from "./pages/ListingDetailsPage";
 import CreateListingPage from "./pages/CreateListingPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationsPage from "./pages/NotificationsPage";
-
-const CURRENT_USER_KEY = "storet_current_user";
-const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
-const SAVED_LISTINGS_KEY = "storet_saved_listing_ids";
-
-function safeReadJson(key, fallbackValue) {
-  try {
-    const storedValue = localStorage.getItem(key);
-    return storedValue ? JSON.parse(storedValue) : fallbackValue;
-  } catch {
-    return fallbackValue;
-  }
-}
-
-function getStoredCurrentUser() {
-  const storedUser = safeReadJson(CURRENT_USER_KEY, null);
-
-  if (!storedUser) {
-    return null;
-  }
-
-  return {
-    ...storedUser,
-    isAuthenticated: Boolean(storedUser.isAuthenticated),
-  };
-}
-
-function normalizeSavedIds(value) {
-  if (Array.isArray(value)) {
-    return value.map(String);
-  }
-
-  if (value instanceof Set) {
-    return Array.from(value).map(String);
-  }
-
-  if (value && Array.isArray(value.ids)) {
-    return value.ids.map(String);
-  }
-
-  if (value && typeof value === "object") {
-    return Object.entries(value)
-      .filter(([, isSaved]) => Boolean(isSaved))
-      .map(([id]) => String(id));
-  }
-
-  return [];
-}
+import {
+  getStoredCurrentUser,
+  readSavedListingIds,
+  readUserListings,
+  safeRemoveItem,
+  safeWriteJson,
+  writeSavedListingIds,
+  writeUserListings,
+} from "./utils/storage";
+import { CURRENT_USER_KEY } from "./constants/storageKeys";
+import { normalizeSavedIds } from "./utils/listingUtils";
 
 function ProtectedRoute({ currentUser, children }) {
   const storedUser = getStoredCurrentUser();
@@ -73,14 +36,9 @@ function ProtectedRoute({ currentUser, children }) {
 
 function App() {
   const [currentUser, setCurrentUser] = useState(() => getStoredCurrentUser());
-
-  const [userListings, setUserListings] = useState(() => {
-    const storedListings = safeReadJson(USER_LISTINGS_KEY, []);
-    return Array.isArray(storedListings) ? storedListings : [];
-  });
-
+  const [userListings, setUserListings] = useState(() => readUserListings());
   const [savedListingIds, setSavedListingIds] = useState(() =>
-    normalizeSavedIds(safeReadJson(SAVED_LISTINGS_KEY, []))
+    readSavedListingIds()
   );
 
   const allUserListings = useMemo(() => {
@@ -96,12 +54,12 @@ function App() {
       role: user?.role || "Renter",
     };
 
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(loggedInUser));
+    safeWriteJson(CURRENT_USER_KEY, loggedInUser);
     setCurrentUser(loggedInUser);
   }
 
   function handleLogout() {
-    localStorage.removeItem(CURRENT_USER_KEY);
+    safeRemoveItem(CURRENT_USER_KEY);
     setCurrentUser(null);
   }
 
@@ -117,7 +75,7 @@ function App() {
 
       const updatedListings = [newListing, ...safeCurrentListings];
 
-      localStorage.setItem(USER_LISTINGS_KEY, JSON.stringify(updatedListings));
+      writeUserListings(updatedListings);
 
       return updatedListings;
     });
@@ -133,7 +91,7 @@ function App() {
         ? safeCurrentIds.filter((id) => id !== normalizedId)
         : [...safeCurrentIds, normalizedId];
 
-      localStorage.setItem(SAVED_LISTINGS_KEY, JSON.stringify(updatedIds));
+      writeSavedListingIds(updatedIds);
 
       return updatedIds;
     });

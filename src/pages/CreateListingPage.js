@@ -33,8 +33,9 @@ import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
-const CURRENT_USER_KEY = "storet_current_user";
+import { CURRENT_USER_KEY, USER_LISTINGS_KEY } from "../constants/storageKeys";
+import { parseNumber } from "../utils/listingUtils";
+import { safeReadJson, safeWriteJson } from "../utils/storage";
 
 const storageTypes = [
   "Garage",
@@ -66,32 +67,6 @@ const amenityOptions = [
   "Short-term friendly",
   "Long-term friendly",
 ];
-
-function safeReadJson(key, fallbackValue) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallbackValue;
-  } catch {
-    return fallbackValue;
-  }
-}
-
-function parseNumber(value, fallbackValue) {
-  if (typeof value === "number" && !Number.isNaN(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const cleanedValue = value.replace(/[^0-9.]/g, "");
-    const parsedValue = Number(cleanedValue);
-
-    if (!Number.isNaN(parsedValue) && parsedValue > 0) {
-      return parsedValue;
-    }
-  }
-
-  return fallbackValue;
-}
 
 function CreateListingPage({ currentUser, onAddListing }) {
   const navigate = useNavigate();
@@ -263,7 +238,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
 
     const updatedListings = [newListing, ...safeExistingListings];
 
-    localStorage.setItem(USER_LISTINGS_KEY, JSON.stringify(updatedListings));
+    safeWriteJson(USER_LISTINGS_KEY, updatedListings);
 
     if (onAddListing) {
       onAddListing(newListing);

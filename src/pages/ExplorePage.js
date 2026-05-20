@@ -39,9 +39,13 @@ import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
-const SAVED_LISTINGS_KEY = "storet_saved_listing_ids";
-const CURRENT_USER_KEY = "storet_current_user";
+import {
+  CURRENT_USER_KEY,
+  SAVED_LISTINGS_KEY,
+  USER_LISTINGS_KEY,
+} from "../constants/storageKeys";
+import { normalizeListing, normalizeSavedIds } from "../utils/listingUtils";
+import { safeReadJson, safeWriteJson } from "../utils/storage";
 
 const fallbackListings = [
   {
@@ -117,109 +121,6 @@ const fallbackListings = [
     tags: ["Climate friendly", "Residential", "Flexible"],
   },
 ];
-
-function safeReadJson(key, fallbackValue) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallbackValue;
-  } catch {
-    return fallbackValue;
-  }
-}
-
-function normalizeSavedIds(value) {
-  if (Array.isArray(value)) {
-    return value.map(String);
-  }
-
-  if (value instanceof Set) {
-    return Array.from(value).map(String);
-  }
-
-  if (value && Array.isArray(value.ids)) {
-    return value.ids.map(String);
-  }
-
-  if (value && typeof value === "object") {
-    return Object.entries(value)
-      .filter(([, isSaved]) => Boolean(isSaved))
-      .map(([id]) => String(id));
-  }
-
-  return [];
-}
-
-function parseNumber(value, fallbackValue) {
-  if (typeof value === "number" && !Number.isNaN(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const cleanedValue = value.replace(/[^0-9.]/g, "");
-    const parsedValue = Number(cleanedValue);
-
-    if (!Number.isNaN(parsedValue) && parsedValue > 0) {
-      return parsedValue;
-    }
-  }
-
-  return fallbackValue;
-}
-
-function normalizeListing(listing, index) {
-  const price = parseNumber(
-    listing.price ??
-      listing.monthlyPrice ??
-      listing.monthlyRate ??
-      listing.pricePerMonth ??
-      listing.rate,
-    75
-  );
-  
-  const sqft = parseNumber(
-    listing.sqft ??
-      listing.squareFeet ??
-      listing.sizeSqft ??
-      listing.squareFootage ??
-      listing.size,
-    100
-  );
-
-  const listingType =
-    listing.listingType ??
-    listing.hostType ??
-    (listing.isCommercial ? "Commercial" : "Private host");
-
-  return {
-    ...listing,
-    id: String(listing.id ?? `listing-${index + 1}`),
-    title: listing.title ?? listing.name ?? "Storage space",
-    location: listing.location ?? listing.address ?? "Cincinnati, OH",
-    distance: listing.distance ?? "Nearby",
-    price,
-    sqft,
-    storageType: listing.storageType ?? listing.type ?? "Storage space",
-    listingType,
-    access: listing.access ?? "Flexible access",
-    rating: Number(listing.rating ?? 4.8),
-    reviews: Number(listing.reviews ?? listing.reviewCount ?? 0),
-    instantBook:
-      listing.instantBook ??
-      listing.instantBooking ??
-      listing.bookingType === "instant" ??
-      false,
-    waitlist:
-      listing.waitlist ??
-      listing.hasWaitlist ??
-      listing.availability === "waitlist" ??
-      false,
-    host: listing.host ?? listing.hostName ?? "Storet Host",
-    description:
-      listing.description ??
-      "Flexible local storage space for short-term or long-term needs.",
-    tags: Array.isArray(listing.tags) ? listing.tags : [],
-  };
-}
 
 function ExplorePage({
   listings,
@@ -374,7 +275,7 @@ function ExplorePage({
         ? currentIds.filter((id) => id !== normalizedId)
         : [...currentIds, normalizedId];
 
-      localStorage.setItem(SAVED_LISTINGS_KEY, JSON.stringify(nextIds));
+      safeWriteJson(SAVED_LISTINGS_KEY, nextIds);
       return nextIds;
     });
   }

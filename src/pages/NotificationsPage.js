@@ -29,41 +29,14 @@ import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-const CURRENT_USER_KEY = "storet_current_user";
-const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
-const SAVED_LISTINGS_KEY = "storet_saved_listing_ids";
-const ACTIVITY_FEED_KEY = "storet_activity_feed";
-
-function safeReadJson(key, fallbackValue) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallbackValue;
-  } catch {
-    return fallbackValue;
-  }
-}
-
-function normalizeSavedIds(value) {
-  if (Array.isArray(value)) {
-    return value.map(String);
-  }
-
-  if (value instanceof Set) {
-    return Array.from(value).map(String);
-  }
-
-  if (value && Array.isArray(value.ids)) {
-    return value.ids.map(String);
-  }
-
-  if (value && typeof value === "object") {
-    return Object.entries(value)
-      .filter(([, isSaved]) => Boolean(isSaved))
-      .map(([id]) => String(id));
-  }
-
-  return [];
-}
+import {
+  ACTIVITY_FEED_KEY,
+  CURRENT_USER_KEY,
+  SAVED_LISTINGS_KEY,
+  USER_LISTINGS_KEY,
+} from "../constants/storageKeys";
+import { normalizeListing, normalizeSavedIds } from "../utils/listingUtils";
+import { safeReadJson } from "../utils/storage";
 
 function formatActivityTime(value) {
   if (!value) {
@@ -106,30 +79,6 @@ function getActivityColor(type) {
   if (type === "waitlist") return "warning";
   if (type === "system") return "primary";
   return "primary";
-}
-
-function normalizeListing(listing, index) {
-  return {
-    ...listing,
-    id: String(listing.id ?? `listing-${index + 1}`),
-    title: listing.title ?? listing.name ?? "Storage space",
-    location: listing.location ?? listing.address ?? "Cincinnati, OH",
-    price: listing.price ?? listing.monthlyPrice ?? listing.monthlyRate ?? 75,
-    sqft: listing.sqft ?? listing.squareFeet ?? listing.sizeSqft ?? 100,
-    instantBook: Boolean(
-      listing.instantBook ??
-        listing.instantBooking ??
-        listing.bookingType === "instant" ??
-        false
-    ),
-    waitlist: Boolean(
-      listing.waitlist ??
-        listing.hasWaitlist ??
-        listing.availability === "waitlist" ??
-        false
-    ),
-    createdAt: listing.createdAt ?? new Date().toISOString(),
-  };
 }
 
 function buildFallbackActivities(activeUser, hostListings, savedIds) {

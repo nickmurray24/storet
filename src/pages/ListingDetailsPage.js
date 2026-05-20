@@ -31,9 +31,13 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-const USER_LISTINGS_KEY = "STORET_USER_LISTINGS";
-const SAVED_LISTINGS_KEY = "storet_saved_listing_ids";
-const CURRENT_USER_KEY = "storet_current_user";
+import {
+  CURRENT_USER_KEY,
+  SAVED_LISTINGS_KEY,
+  USER_LISTINGS_KEY,
+} from "../constants/storageKeys";
+import { normalizeListing, normalizeSavedIds } from "../utils/listingUtils";
+import { safeReadJson, safeWriteJson } from "../utils/storage";
 
 const fallbackListings = [
   {
@@ -118,99 +122,6 @@ const fallbackListings = [
   },
 ];
 
-function safeReadJson(key, fallbackValue) {
-  try {
-    const value = localStorage.getItem(key);
-    return value ? JSON.parse(value) : fallbackValue;
-  } catch {
-    return fallbackValue;
-  }
-}
-
-function normalizeSavedIds(value) {
-  if (Array.isArray(value)) {
-    return value.map(String);
-  }
-
-  if (value instanceof Set) {
-    return Array.from(value).map(String);
-  }
-
-  if (value && Array.isArray(value.ids)) {
-    return value.ids.map(String);
-  }
-
-  if (value && typeof value === "object") {
-    return Object.entries(value)
-      .filter(([, isSaved]) => Boolean(isSaved))
-      .map(([id]) => String(id));
-  }
-
-  return [];
-}
-
-function normalizeListing(listing, index) {
-  const price = Number(
-    listing.price ??
-      listing.monthlyPrice ??
-      listing.monthlyRate ??
-      listing.rate ??
-      75
-  );
-
-  const sqft = Number(
-    listing.sqft ??
-      listing.squareFeet ??
-      listing.sizeSqft ??
-      listing.size ??
-      100
-  );
-
-  const listingType =
-    listing.listingType ??
-    listing.hostType ??
-    (listing.isCommercial ? "Commercial" : "Private host");
-
-  const instantBook = Boolean(
-    listing.instantBook ??
-      listing.instantBooking ??
-      (listing.bookingType === "instant") ??
-      false
-  );
-
-  const waitlist = Boolean(
-    listing.waitlist ??
-      listing.hasWaitlist ??
-      (listing.availability === "waitlist") ??
-      false
-  );
-
-  return {
-    ...listing,
-    id: String(listing.id ?? `listing-${index + 1}`),
-    title: listing.title ?? listing.name ?? "Storage space",
-    location: listing.location ?? listing.address ?? "Cincinnati, OH",
-    distance: listing.distance ?? "Nearby",
-    price,
-    sqft,
-    storageType: listing.storageType ?? listing.type ?? "Storage space",
-    listingType,
-    access: listing.access ?? "Flexible access",
-    rating: Number(listing.rating ?? 4.8),
-    reviews: Number(listing.reviews ?? listing.reviewCount ?? 0),
-    instantBook,
-    waitlist,
-    host: listing.host ?? listing.hostName ?? "Storet Host",
-    description:
-      listing.description ??
-      "Flexible local storage space for short-term or long-term needs.",
-    tags: Array.isArray(listing.tags) ? listing.tags : [],
-    amenities: Array.isArray(listing.amenities)
-      ? listing.amenities
-      : ["Flexible rental", "Local storage", "Host managed"],
-  };
-}
-
 function ListingDetailsPage({
   listings,
   savedListingIds,
@@ -285,7 +196,7 @@ function ListingDetailsPage({
         ? currentIds.filter((id) => id !== normalizedId)
         : [...currentIds, normalizedId];
 
-      localStorage.setItem(SAVED_LISTINGS_KEY, JSON.stringify(nextIds));
+      safeWriteJson(SAVED_LISTINGS_KEY, nextIds);
       return nextIds;
     });
   }
