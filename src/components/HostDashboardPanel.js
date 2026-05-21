@@ -484,7 +484,7 @@ function BookingRequestCard({ request, onUpdateBookingRequestStatus, onUpdateBoo
           </Stack>
 
           <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
-            {formatMoney(request.listingPrice)} / month
+            {request.rateDisplay || formatMoney(request.listingPrice)}
           </Typography>
         </Stack>
 
@@ -795,7 +795,7 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
             my: 2,
           }}
         >
-          <MetricPill label="Price" value={listing.price || "$0/month"} />
+          <MetricPill label="Rates" value={listing.pricingSummary || listing.priceDisplay || "$0/month"} />
           <MetricPill
             label="Booking"
             value={listing.instantBook ? "Instant" : listing.waitlist ? "Waitlist" : "Approval"}
@@ -960,7 +960,13 @@ function HostDashboardPanel({
       ).length;
 
       const unreadMessages = listingMessages.filter((message) => message.status === "Unread").length;
-      const bookedEstimate = confirmed * getPriceValue(listing.price);
+      const bookedEstimate = listingRequests.reduce((sum, request) => {
+        if (!BOOKED_STATUSES.includes(request.status)) {
+          return sum;
+        }
+
+        return sum + getPriceValue(request.listingPrice);
+      }, 0);
 
       return {
         ...listing,

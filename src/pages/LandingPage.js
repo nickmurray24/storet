@@ -284,8 +284,8 @@ function LandingPage() {
                         justifyContent="space-between"
                         alignItems="center"
                       >
-                        <Typography color="text.secondary">Monthly rate</Typography>
-                        <Typography variant="h5">$85/mo</Typography>
+                        <Typography color="text.secondary">Available rates</Typography>
+                        <Typography variant="h5">$10/day · $85/mo</Typography>
                       </Stack>
 
                       <Divider />

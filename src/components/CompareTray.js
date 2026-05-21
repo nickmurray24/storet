@@ -37,7 +37,7 @@ function CompareTray({ listings, onToggleCompare, onClearCompare }) {
             </div>
 
             <div className="compare-card-body">
-              <p><strong>Price:</strong> {listing.price}</p>
+              <p><strong>Rates:</strong> {listing.pricingSummary || listing.priceDisplay}</p>
               <p><strong>Type:</strong> {listing.type}</p>
               <p><strong>Size:</strong> {listing.size}</p>
               <p><strong>Location:</strong> {listing.location}</p>

@@ -1,10 +1,13 @@
 import { PAYMENT_STATUSES } from "../constants/appEnums";
 import { DEFAULT_PAYMENT_RECORD_MODEL, getIsoTimestamp } from "../models/storetModels";
+import { formatRate } from "./pricingUtils";
 
 export function normalizePaymentRecord(payment = {}, index = 0) {
   const now = new Date().toISOString();
   const createdAt = getIsoTimestamp(payment.createdAt || payment.paidAt, now);
   const paidAt = payment.paidAt ? getIsoTimestamp(payment.paidAt, createdAt) : createdAt;
+  const storageCharge = Number(payment.storageCharge || 0);
+  const ratePeriod = payment.ratePeriod || DEFAULT_PAYMENT_RECORD_MODEL.ratePeriod;
 
   return {
     ...DEFAULT_PAYMENT_RECORD_MODEL,
@@ -23,7 +26,10 @@ export function normalizePaymentRecord(payment = {}, index = 0) {
     billingZip: payment.billingZip || "",
     last4: payment.last4 || DEFAULT_PAYMENT_RECORD_MODEL.last4,
     cardBrand: payment.cardBrand || DEFAULT_PAYMENT_RECORD_MODEL.cardBrand,
-    storageCharge: Number(payment.storageCharge || 0),
+    storageCharge,
+    ratePeriod,
+    rateLabel: payment.rateLabel || DEFAULT_PAYMENT_RECORD_MODEL.rateLabel,
+    rateDisplay: payment.rateDisplay || formatRate(storageCharge, ratePeriod),
     serviceFee: Number(payment.serviceFee || 0),
     amount: Number(payment.amount || payment.totalAmount || 0),
     status: payment.status || PAYMENT_STATUSES.PAID,

@@ -28,7 +28,7 @@ function ListingCard({
         <span className={`listing-badge ${listing.type.toLowerCase()}`}>
           {listing.type}
         </span>
-        <span className="listing-price">{listing.price}</span>
+        <span className="listing-price">{listing.startingPriceDisplay || listing.priceDisplay}</span>
       </div>
 
       <h3>{listing.title}</h3>

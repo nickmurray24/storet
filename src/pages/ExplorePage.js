@@ -43,6 +43,7 @@ import { getPageListings } from "../data/listingCatalog";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { normalizeSavedIds } from "../utils/listingUtils";
+import { getMonthlyEquivalentAmount } from "../utils/pricingUtils";
 import {
   getStoredCurrentUser,
   readSavedListingIds,
@@ -133,10 +134,8 @@ function ExplorePage({
         bookingType === "All" ||
         (bookingType === "Instant" && listing.instantBook) ||
         (bookingType === "Waitlist" && listing.waitlist);
-        const matchesPrice =
-          typeof listing.price === "number" &&
-          !Number.isNaN(listing.price) &&
-          listing.price <= maxPrice;
+      const monthlyEquivalentPrice = getMonthlyEquivalentAmount(listing.pricing);
+      const matchesPrice = monthlyEquivalentPrice > 0 && monthlyEquivalentPrice <= maxPrice;
 
       return (
         matchesSearch &&
@@ -148,8 +147,12 @@ function ExplorePage({
     });
 
     return filtered.sort((a, b) => {
-      if (sortBy === "priceLow") return a.price - b.price;
-      if (sortBy === "priceHigh") return b.price - a.price;
+      if (sortBy === "priceLow") {
+        return getMonthlyEquivalentAmount(a.pricing) - getMonthlyEquivalentAmount(b.pricing);
+      }
+      if (sortBy === "priceHigh") {
+        return getMonthlyEquivalentAmount(b.pricing) - getMonthlyEquivalentAmount(a.pricing);
+      }
       if (sortBy === "sqftHigh") return b.sqft - a.sqft;
       if (sortBy === "ratingHigh") return b.rating - a.rating;
 
@@ -400,7 +403,7 @@ function ExplorePage({
                     justifyContent="space-between"
                     alignItems="center"
                   >
-                    <Typography fontWeight={700}>Max monthly price</Typography>
+                    <Typography fontWeight={700}>Max monthly-equivalent price</Typography>
                     <Chip label={`$${maxPrice}`} size="small" />
                   </Stack>
 
@@ -459,7 +462,7 @@ function ExplorePage({
                   {filteredListings.length} matching spaces
                 </Typography>
                 <Typography color="text.secondary">
-                  Compare space, access, booking style, and monthly price.
+                  Compare space, access, booking style, and available rates.
                 </Typography>
               </Box>
             </Stack>
@@ -473,7 +476,7 @@ function ExplorePage({
                     </Avatar>
                     <Typography variant="h5">No spaces found</Typography>
                     <Typography color="text.secondary" sx={{ maxWidth: 460 }}>
-                      Try adjusting your filters or increasing the monthly price
+                      Try adjusting your filters or increasing the monthly-equivalent price
                       range.
                     </Typography>
                   </Stack>
@@ -607,16 +610,19 @@ function ExplorePage({
                             >
                               <Box>
                                 <Typography variant="h5">
-                                  ${listing.price}
-                                  <Typography
-                                    component="span"
-                                    color="text.secondary"
-                                    fontSize="0.95rem"
-                                  >
-                                    /mo
-                                  </Typography>
+                                  {listing.startingPriceDisplay}
                                 </Typography>
-                                <Typography color="text.secondary">
+                                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.75 }}>
+                                  {listing.pricingOptions.map((option) => (
+                                    <Chip
+                                      key={option.period}
+                                      label={option.display}
+                                      size="small"
+                                      variant="outlined"
+                                    />
+                                  ))}
+                                </Stack>
+                                <Typography color="text.secondary" sx={{ mt: 0.75 }}>
                                   {listing.access}
                                 </Typography>
                               </Box>

@@ -131,7 +131,7 @@ function buildFallbackActivities(activeUser, hostListings, savedIds) {
     id: `listing-${listing.id}`,
     type: "listing",
     title: `${listing.title} is active`,
-    description: `${listing.location} · ${listing.sqft} sq ft · $${listing.price}/mo`,
+    description: `${listing.location} · ${listing.sqft} sq ft · ${listing.pricingSummary || listing.priceDisplay}`,
     time: listing.createdAt,
     status: listing.instantBook
       ? "Instant book"

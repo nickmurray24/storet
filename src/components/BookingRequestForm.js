@@ -1,11 +1,28 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
-function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
+import { PRICING_PERIODS } from '../constants/appEnums';
+import { getAvailablePricingOptions, getPricingOptionByPeriod } from '../utils/pricingUtils';
+
+function BookingRequestForm({
+  listingTitle,
+  currentUser,
+  pricing,
+  selectedRatePeriod,
+  onSubmitRequest,
+}) {
+  const pricingOptions = useMemo(() => getAvailablePricingOptions(pricing), [pricing]);
+  const defaultRatePeriod =
+    selectedRatePeriod ||
+    pricingOptions.find((option) => option.period === PRICING_PERIODS.MONTHLY)?.period ||
+    pricingOptions[0]?.period ||
+    '';
+
   const [formData, setFormData] = useState({
     fullName: currentUser?.isAuthenticated ? currentUser.fullName : '',
     email: currentUser?.isAuthenticated ? currentUser.email : '',
     moveInDate: '',
     moveOutDate: '',
+    ratePeriod: defaultRatePeriod,
     duration: '',
     notes: '',
   });
@@ -13,6 +30,11 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [submitState, setSubmitState] = useState(null);
+
+  const selectedPricingOption = getPricingOptionByPeriod(
+    pricing,
+    formData.ratePeriod || defaultRatePeriod
+  );
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -51,6 +73,10 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
       nextErrors.moveOutDate = 'Move-out date must be on or after the move-in date.';
     }
 
+    if (!selectedPricingOption) {
+      nextErrors.ratePeriod = 'Please select an available rate.';
+    }
+
     if (!formData.duration.trim()) {
       nextErrors.duration = 'Please select a rental length.';
     }
@@ -73,6 +99,9 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
       email: formData.email,
       moveInDate: formData.moveInDate,
       moveOutDate: formData.moveOutDate,
+      ratePeriod: selectedPricingOption.period,
+      rateLabel: selectedPricingOption.label,
+      rateDisplay: selectedPricingOption.display,
       duration: formData.duration,
       notes: formData.notes,
     });
@@ -127,6 +156,9 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
           </p>
           <p>
             <strong>Move-out date:</strong> {formData.moveOutDate}
+          </p>
+          <p>
+            <strong>Selected rate:</strong> {selectedPricingOption?.display}
           </p>
           <p>
             <strong>Duration:</strong> {formData.duration}
@@ -207,6 +239,26 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
       </div>
 
       <div className="filter-group">
+        <label htmlFor="ratePeriod">Billing Rate</label>
+        <select
+          id="ratePeriod"
+          name="ratePeriod"
+          value={formData.ratePeriod}
+          onChange={handleChange}
+        >
+          <option value="">Select one</option>
+          {pricingOptions.map((option) => (
+            <option key={option.period} value={option.period}>
+              {option.label} · {option.display}
+            </option>
+          ))}
+        </select>
+        {errors.ratePeriod && (
+          <span className="form-error">{errors.ratePeriod}</span>
+        )}
+      </div>
+
+      <div className="filter-group">
         <label htmlFor="duration">Rental Length</label>
         <select
           id="duration"
@@ -219,6 +271,7 @@ function BookingRequestForm({ listingTitle, currentUser, onSubmitRequest }) {
           <option value="1-3 months">1-3 months</option>
           <option value="3-6 months">3-6 months</option>
           <option value="6+ months">6+ months</option>
+          <option value="1 year or longer">1 year or longer</option>
         </select>
         {errors.duration && (
           <span className="form-error">{errors.duration}</span>

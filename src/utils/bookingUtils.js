@@ -1,4 +1,4 @@
-import { BOOKING_STATUSES, PAYMENT_STATUSES } from "../constants/appEnums";
+import { BOOKING_STATUSES, PAYMENT_STATUSES, PRICING_PERIODS } from "../constants/appEnums";
 import { buildCheckoutPath, buildListingPath } from "../routes/appRoutes";
 import {
   DEFAULT_BOOKING_REQUEST_MODEL,
@@ -8,6 +8,11 @@ import {
   getIsoTimestamp,
 } from "../models/storetModels";
 import { normalizeListing, parseNumber } from "./listingUtils";
+import {
+  getPricingOptionByPeriod,
+  normalizePricing,
+  formatRate,
+} from "./pricingUtils";
 
 export { BOOKING_STATUSES, PAYMENT_STATUSES };
 
@@ -31,6 +36,18 @@ export function normalizeBookingRequest(request = {}, index = 0) {
     request.requesterName || request.renterName || request.fullName || DEFAULT_BOOKING_REQUEST_MODEL.requesterName;
   const requesterEmail =
     request.requesterEmail || request.renterEmail || request.email || DEFAULT_BOOKING_REQUEST_MODEL.requesterEmail;
+  const pricingSnapshot = normalizePricing(
+    request.pricingSnapshot || request.pricing,
+    request.listingPrice ?? request.price
+  );
+  const ratePeriod = request.ratePeriod || request.billingPeriod || PRICING_PERIODS.MONTHLY;
+  const pricingOption =
+    getPricingOptionByPeriod(pricingSnapshot, ratePeriod) ||
+    getPricingOptionByPeriod(pricingSnapshot, PRICING_PERIODS.MONTHLY);
+  const listingPrice = parseNumber(
+    request.listingPrice ?? request.price ?? pricingOption?.amount,
+    DEFAULT_BOOKING_REQUEST_MODEL.listingPrice
+  );
 
   return {
     ...DEFAULT_BOOKING_REQUEST_MODEL,
@@ -39,7 +56,14 @@ export function normalizeBookingRequest(request = {}, index = 0) {
     listingId: String(request.listingId || DEFAULT_BOOKING_REQUEST_MODEL.listingId),
     listingTitle: request.listingTitle || DEFAULT_BOOKING_REQUEST_MODEL.listingTitle,
     listingLocation: request.listingLocation || request.location || DEFAULT_BOOKING_REQUEST_MODEL.listingLocation,
-    listingPrice: parseNumber(request.listingPrice ?? request.price, DEFAULT_BOOKING_REQUEST_MODEL.listingPrice),
+    listingPrice,
+    ratePeriod: pricingOption?.period || ratePeriod,
+    rateLabel: request.rateLabel || pricingOption?.label || DEFAULT_BOOKING_REQUEST_MODEL.rateLabel,
+    rateDisplay:
+      request.rateDisplay ||
+      pricingOption?.display ||
+      formatRate(listingPrice, ratePeriod),
+    pricingSnapshot,
     hostName: request.hostName || request.host || DEFAULT_BOOKING_REQUEST_MODEL.hostName,
     hostId: String(request.hostId || request.ownerId || DEFAULT_BOOKING_REQUEST_MODEL.hostId),
     hostEmail: request.hostEmail || request.ownerEmail || DEFAULT_BOOKING_REQUEST_MODEL.hostEmail,
@@ -51,7 +75,11 @@ export function normalizeBookingRequest(request = {}, index = 0) {
     submittedAt: getIsoTimestamp(request.submittedAt || createdAt, createdAt),
     moveInDate: request.moveInDate || DEFAULT_BOOKING_REQUEST_MODEL.moveInDate,
     moveOutDate: request.moveOutDate || DEFAULT_BOOKING_REQUEST_MODEL.moveOutDate,
-    duration: request.duration || DEFAULT_BOOKING_REQUEST_MODEL.duration,
+    duration:
+      request.duration ||
+      request.rateLabel ||
+      pricingOption?.durationLabel ||
+      DEFAULT_BOOKING_REQUEST_MODEL.duration,
     notes: request.notes || DEFAULT_BOOKING_REQUEST_MODEL.notes,
     status: request.status || BOOKING_STATUSES.PENDING,
     createdAt,
@@ -89,13 +117,21 @@ export function createBookingRequest({ listing, currentUser, requestData = {} })
     requestData.fullName || currentUser?.fullName || currentUser?.name || DEFAULT_BOOKING_REQUEST_MODEL.renterName;
   const renterEmail = requestData.email || currentUser?.email || "";
   const renterId = String(currentUser?.id || currentUser?.userId || renterEmail || "demo-renter");
+  const selectedPricingOption = getPricingOptionByPeriod(
+    normalizedListing.pricing,
+    requestData.ratePeriod || requestData.billingPeriod || normalizedListing.pricePeriod
+  );
 
   return normalizeBookingRequest({
     id: createModelId(MODEL_PREFIXES.BOOKING),
     listingId: normalizedListing.id,
     listingTitle: normalizedListing.title,
     listingLocation: normalizedListing.location,
-    listingPrice: normalizedListing.price,
+    listingPrice: selectedPricingOption?.amount || normalizedListing.price,
+    ratePeriod: selectedPricingOption?.period || normalizedListing.pricePeriod,
+    rateLabel: selectedPricingOption?.label || normalizedListing.priceLabel,
+    rateDisplay: selectedPricingOption?.display || normalizedListing.priceDisplay,
+    pricingSnapshot: normalizedListing.pricing,
     hostName: normalizedListing.host,
     hostId: normalizedListing.hostId,
     hostEmail: normalizedListing.hostEmail,
@@ -106,7 +142,10 @@ export function createBookingRequest({ listing, currentUser, requestData = {} })
     requesterEmail: renterEmail,
     moveInDate: requestData.moveInDate || DEFAULT_BOOKING_REQUEST_MODEL.moveInDate,
     moveOutDate: requestData.moveOutDate || DEFAULT_BOOKING_REQUEST_MODEL.moveOutDate,
-    duration: requestData.duration || DEFAULT_BOOKING_REQUEST_MODEL.duration,
+    duration:
+      requestData.duration ||
+      selectedPricingOption?.durationLabel ||
+      DEFAULT_BOOKING_REQUEST_MODEL.duration,
     notes: requestData.notes || "Created from the listing details page.",
     status,
     submittedAt: now,
@@ -148,7 +187,7 @@ export function updateBookingLifecycle(request, status) {
 
 export function createPaymentRecord(request, paymentData = {}) {
   const now = new Date().toISOString();
-  const storageCharge = Number(paymentData.storageCharge || 0);
+  const storageCharge = Number(paymentData.storageCharge || request.listingPrice || 0);
   const serviceFee = Number(paymentData.serviceFee || 0);
   const totalAmount = Number(paymentData.totalAmount || storageCharge + serviceFee);
 
@@ -169,6 +208,9 @@ export function createPaymentRecord(request, paymentData = {}) {
     last4: paymentData.last4 || "0000",
     cardBrand: paymentData.cardBrand || "Card",
     storageCharge,
+    ratePeriod: request.ratePeriod || paymentData.ratePeriod || DEFAULT_PAYMENT_RECORD_MODEL.ratePeriod,
+    rateLabel: request.rateLabel || paymentData.rateLabel || DEFAULT_PAYMENT_RECORD_MODEL.rateLabel,
+    rateDisplay: request.rateDisplay || paymentData.rateDisplay || formatRate(storageCharge, request.ratePeriod),
     serviceFee,
     amount: totalAmount,
     status: PAYMENT_STATUSES.PAID,
@@ -208,7 +250,7 @@ export function buildBookingActivity(request) {
     id: `activity-booking-${normalizedRequest.id}-${normalizedRequest.status}`,
     type,
     title: `${normalizedRequest.listingTitle} booking ${normalizedRequest.status.toLowerCase()}`,
-    description: `${normalizedRequest.renterName}'s request for ${normalizedRequest.listingTitle} is ${statusCopy[normalizedRequest.status] || normalizedRequest.status.toLowerCase()}.`,
+    description: `${normalizedRequest.renterName}'s ${normalizedRequest.rateLabel.toLowerCase()} request for ${normalizedRequest.listingTitle} is ${statusCopy[normalizedRequest.status] || normalizedRequest.status.toLowerCase()}.`,
     time: normalizedRequest.updatedAt || normalizedRequest.createdAt,
     status: normalizedRequest.status,
     actionLabel:
