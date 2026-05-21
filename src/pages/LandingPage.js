@@ -20,6 +20,7 @@ import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import MapRoundedIcon from "@mui/icons-material/MapRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
+import { APP_ROUTES } from "../routes/appRoutes";
 
 const featureCards = [
   {
@@ -80,7 +81,7 @@ function LandingPage() {
           >
             <Stack
               component={RouterLink}
-              to="/"
+              to={APP_ROUTES.home}
               direction="row"
               alignItems="center"
               spacing={1.25}
@@ -111,13 +112,13 @@ function LandingPage() {
             </Stack>
 
             <Stack direction="row" spacing={1}>
-              <Button component={RouterLink} to="/auth" color="inherit">
+              <Button component={RouterLink} to={APP_ROUTES.auth} color="inherit">
                 Log in
               </Button>
 
               <Button
                 component={RouterLink}
-                to="/explore"
+                to={APP_ROUTES.explore}
                 variant="contained"
                 endIcon={<ArrowForwardRoundedIcon />}
               >
@@ -196,7 +197,7 @@ function LandingPage() {
               >
                 <Button
                   component={RouterLink}
-                  to="/explore"
+                  to={APP_ROUTES.explore}
                   size="large"
                   variant="contained"
                   startIcon={<MapRoundedIcon />}
@@ -206,7 +207,7 @@ function LandingPage() {
 
                 <Button
                   component={RouterLink}
-                  to="/create-listing"
+                  to={APP_ROUTES.createListing}
                   size="large"
                   variant="outlined"
                   startIcon={<AddHomeWorkRoundedIcon />}
@@ -301,7 +302,7 @@ function LandingPage() {
 
                     <Button
                       component={RouterLink}
-                      to="/explore"
+                      to={APP_ROUTES.explore}
                       variant="contained"
                       fullWidth
                     >

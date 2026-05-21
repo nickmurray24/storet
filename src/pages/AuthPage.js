@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
   Avatar,
@@ -22,13 +22,17 @@ import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 
-import { CURRENT_USER_KEY } from "../constants/storageKeys";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
-import { safeWriteJson } from "../utils/storage";
+import { APP_ROUTES, getSafeRedirectPath } from "../routes/appRoutes";
 
 function AuthPage({ onLogin }) {
   const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectAfterAuth = getSafeRedirectPath(
+    location.state?.from,
+    APP_ROUTES.explore
+  );
 
   const [authMode, setAuthMode] = useState("login");
   const [role, setRole] = useState("Renter");
@@ -117,13 +121,13 @@ function AuthPage({ onLogin }) {
 
     const loginAction = onLogin || storetApp?.actions?.login;
 
-    if (loginAction) {
-      loginAction(user);
-    } else {
-      safeWriteJson(CURRENT_USER_KEY, user);
+    if (!loginAction) {
+      setError("We could not finish signing you in. Please refresh and try again.");
+      return;
     }
 
-    navigate("/explore");
+    loginAction(user);
+    navigate(redirectAfterAuth, { replace: true });
   }
 
   return (
@@ -165,7 +169,7 @@ function AuthPage({ onLogin }) {
           >
             <Stack
               component={RouterLink}
-              to="/"
+              to={APP_ROUTES.home}
               direction="row"
               alignItems="center"
               spacing={1.25}
@@ -197,7 +201,7 @@ function AuthPage({ onLogin }) {
 
             <Button
               component={RouterLink}
-              to="/explore"
+              to={APP_ROUTES.explore}
               variant="outlined"
               endIcon={<ArrowForwardRoundedIcon />}
               sx={{ bgcolor: "background.paper" }}

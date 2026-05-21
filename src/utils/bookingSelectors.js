@@ -1,3 +1,4 @@
+import { APP_ROUTES, buildCheckoutPath, buildListingPath } from "../routes/appRoutes";
 import { BOOKING_STATUSES, normalizeBookingRequestList } from "./bookingUtils";
 
 const CHECKOUT_READY_STATUSES = new Set([BOOKING_STATUSES.APPROVED]);
@@ -121,10 +122,10 @@ export function hasOpenBookingRequest(request = {}) {
 
 export function getBookingRequestCheckoutPath(request = {}) {
   if (!request?.id) {
-    return "/profile";
+    return APP_ROUTES.profile;
   }
 
-  return `/checkout/${request.id}`;
+  return buildCheckoutPath(request.id);
 }
 
 export function getBookingRequestPrimaryAction(request = {}) {
@@ -144,7 +145,7 @@ export function getBookingRequestPrimaryAction(request = {}) {
 
   return {
     label: "View listing",
-    to: `/listing/${request.listingId}`,
+    to: buildListingPath(request.listingId),
   };
 }
 
@@ -154,7 +155,7 @@ export function getCheckoutBlockedReason(request = {}) {
       title: "Checkout not available",
       description: "We couldn’t find that booking request for your account.",
       actionLabel: "Back to Profile",
-      actionTo: "/profile",
+      actionTo: APP_ROUTES.profile,
     };
   }
 
@@ -164,7 +165,7 @@ export function getCheckoutBlockedReason(request = {}) {
       description:
         "Your booking request is still pending. Checkout becomes available after the host approves your request.",
       actionLabel: "Back to Profile",
-      actionTo: "/profile",
+      actionTo: APP_ROUTES.profile,
     };
   }
 
@@ -174,7 +175,7 @@ export function getCheckoutBlockedReason(request = {}) {
       description:
         "This booking is on the waitlist, so checkout is not available yet.",
       actionLabel: "Back to Profile",
-      actionTo: "/profile",
+      actionTo: APP_ROUTES.profile,
     };
   }
 
@@ -184,7 +185,7 @@ export function getCheckoutBlockedReason(request = {}) {
       description:
         "This booking request was declined, so checkout is no longer available for it.",
       actionLabel: "Browse Other Listings",
-      actionTo: "/explore",
+      actionTo: APP_ROUTES.explore,
     };
   }
 

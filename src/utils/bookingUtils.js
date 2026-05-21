@@ -1,15 +1,15 @@
+import { BOOKING_STATUSES, PAYMENT_STATUSES } from "../constants/appEnums";
+import { buildCheckoutPath, buildListingPath } from "../routes/appRoutes";
+import {
+  DEFAULT_BOOKING_REQUEST_MODEL,
+  DEFAULT_PAYMENT_RECORD_MODEL,
+  MODEL_PREFIXES,
+  createModelId,
+  getIsoTimestamp,
+} from "../models/storetModels";
 import { normalizeListing, parseNumber } from "./listingUtils";
 
-export const BOOKING_STATUSES = {
-  PENDING: "Pending",
-  APPROVED: "Approved",
-  WAITLISTED: "Waitlisted",
-  DECLINED: "Declined",
-  CONFIRMED: "Confirmed",
-  ACTIVE: "Active",
-  COMPLETED: "Completed",
-  CANCELLED: "Cancelled",
-};
+export { BOOKING_STATUSES, PAYMENT_STATUSES };
 
 export function getInitialBookingStatus(listing = {}) {
   if (listing.waitlist && !listing.instantBook) {
@@ -24,30 +24,38 @@ export function getInitialBookingStatus(listing = {}) {
 }
 
 export function normalizeBookingRequest(request = {}, index = 0) {
-  const createdAt = request.createdAt || new Date().toISOString();
+  const now = new Date().toISOString();
+  const createdAt = getIsoTimestamp(request.createdAt || request.submittedAt, now);
+  const updatedAt = getIsoTimestamp(request.updatedAt || createdAt, createdAt);
+  const requesterName =
+    request.requesterName || request.renterName || request.fullName || DEFAULT_BOOKING_REQUEST_MODEL.requesterName;
+  const requesterEmail =
+    request.requesterEmail || request.renterEmail || request.email || DEFAULT_BOOKING_REQUEST_MODEL.requesterEmail;
 
   return {
+    ...DEFAULT_BOOKING_REQUEST_MODEL,
+    ...request,
     id: String(request.id || `booking-${index + 1}`),
-    listingId: String(request.listingId || ""),
-    listingTitle: request.listingTitle || "Storage space",
-    listingPrice: parseNumber(request.listingPrice ?? request.price, 0),
-    hostName: request.hostName || request.host || "Storet Host",
-    renterName:
-      request.renterName || request.requesterName || request.fullName || "Demo User",
-    renterEmail:
-      request.renterEmail || request.requesterEmail || request.email || "",
-    requesterName:
-      request.requesterName || request.renterName || request.fullName || "Demo User",
-    requesterEmail:
-      request.requesterEmail || request.renterEmail || request.email || "",
-    submittedAt: request.submittedAt || createdAt,
-    moveInDate: request.moveInDate || "Not selected",
-    moveOutDate: request.moveOutDate || "Not selected",
-    duration: request.duration || "Month-to-month",
-    notes: request.notes || "",
+    listingId: String(request.listingId || DEFAULT_BOOKING_REQUEST_MODEL.listingId),
+    listingTitle: request.listingTitle || DEFAULT_BOOKING_REQUEST_MODEL.listingTitle,
+    listingLocation: request.listingLocation || request.location || DEFAULT_BOOKING_REQUEST_MODEL.listingLocation,
+    listingPrice: parseNumber(request.listingPrice ?? request.price, DEFAULT_BOOKING_REQUEST_MODEL.listingPrice),
+    hostName: request.hostName || request.host || DEFAULT_BOOKING_REQUEST_MODEL.hostName,
+    hostId: String(request.hostId || request.ownerId || DEFAULT_BOOKING_REQUEST_MODEL.hostId),
+    hostEmail: request.hostEmail || request.ownerEmail || DEFAULT_BOOKING_REQUEST_MODEL.hostEmail,
+    renterName: request.renterName || requesterName,
+    renterEmail: request.renterEmail || requesterEmail,
+    renterId: String(request.renterId || request.requesterId || requesterEmail || DEFAULT_BOOKING_REQUEST_MODEL.renterId),
+    requesterName,
+    requesterEmail,
+    submittedAt: getIsoTimestamp(request.submittedAt || createdAt, createdAt),
+    moveInDate: request.moveInDate || DEFAULT_BOOKING_REQUEST_MODEL.moveInDate,
+    moveOutDate: request.moveOutDate || DEFAULT_BOOKING_REQUEST_MODEL.moveOutDate,
+    duration: request.duration || DEFAULT_BOOKING_REQUEST_MODEL.duration,
+    notes: request.notes || DEFAULT_BOOKING_REQUEST_MODEL.notes,
     status: request.status || BOOKING_STATUSES.PENDING,
     createdAt,
-    updatedAt: request.updatedAt || createdAt,
+    updatedAt,
     approvedAt: request.approvedAt || null,
     waitlistedAt: request.waitlistedAt || null,
     declinedAt: request.declinedAt || null,
@@ -77,21 +85,31 @@ export function createBookingRequest({ listing, currentUser, requestData = {} })
   const normalizedListing = normalizeListing(listing);
   const now = new Date().toISOString();
   const status = getInitialBookingStatus(normalizedListing);
+  const renterName =
+    requestData.fullName || currentUser?.fullName || currentUser?.name || DEFAULT_BOOKING_REQUEST_MODEL.renterName;
+  const renterEmail = requestData.email || currentUser?.email || "";
+  const renterId = String(currentUser?.id || currentUser?.userId || renterEmail || "demo-renter");
 
   return normalizeBookingRequest({
-    id: `booking-${Date.now()}`,
+    id: createModelId(MODEL_PREFIXES.BOOKING),
     listingId: normalizedListing.id,
     listingTitle: normalizedListing.title,
+    listingLocation: normalizedListing.location,
     listingPrice: normalizedListing.price,
     hostName: normalizedListing.host,
-    renterName:
-      requestData.fullName || currentUser?.fullName || currentUser?.name || "Demo User",
-    renterEmail: requestData.email || currentUser?.email || "",
-    moveInDate: requestData.moveInDate || "Not selected",
-    moveOutDate: requestData.moveOutDate || "Not selected",
-    duration: requestData.duration || "Month-to-month",
+    hostId: normalizedListing.hostId,
+    hostEmail: normalizedListing.hostEmail,
+    renterName,
+    renterEmail,
+    renterId,
+    requesterName: renterName,
+    requesterEmail: renterEmail,
+    moveInDate: requestData.moveInDate || DEFAULT_BOOKING_REQUEST_MODEL.moveInDate,
+    moveOutDate: requestData.moveOutDate || DEFAULT_BOOKING_REQUEST_MODEL.moveOutDate,
+    duration: requestData.duration || DEFAULT_BOOKING_REQUEST_MODEL.duration,
     notes: requestData.notes || "Created from the listing details page.",
     status,
+    submittedAt: now,
     createdAt: now,
     updatedAt: now,
     approvedAt: status === BOOKING_STATUSES.APPROVED ? now : null,
@@ -135,13 +153,17 @@ export function createPaymentRecord(request, paymentData = {}) {
   const totalAmount = Number(paymentData.totalAmount || storageCharge + serviceFee);
 
   return {
-    id: `payment-${Date.now()}`,
+    ...DEFAULT_PAYMENT_RECORD_MODEL,
+    id: createModelId(MODEL_PREFIXES.PAYMENT),
     requestId: request.id,
     listingId: request.listingId,
     listingTitle: request.listingTitle,
     hostName: request.hostName,
+    hostId: request.hostId || "",
+    hostEmail: request.hostEmail || "",
     renterName: request.renterName,
     renterEmail: request.renterEmail,
+    renterId: request.renterId || request.requesterId || request.renterEmail || "",
     cardholderName: paymentData.cardholderName || request.renterName,
     billingZip: paymentData.billingZip || "",
     last4: paymentData.last4 || "0000",
@@ -149,13 +171,17 @@ export function createPaymentRecord(request, paymentData = {}) {
     storageCharge,
     serviceFee,
     amount: totalAmount,
+    status: PAYMENT_STATUSES.PAID,
     paidAt: now,
+    createdAt: now,
+    updatedAt: now,
     receiptNumber: `ST-${Date.now().toString().slice(-8)}`,
   };
 }
 
 export function buildBookingActivity(request) {
-  const type = request.status === BOOKING_STATUSES.WAITLISTED ? "waitlist" : "booking";
+  const normalizedRequest = normalizeBookingRequest(request);
+  const type = normalizedRequest.status === BOOKING_STATUSES.WAITLISTED ? "waitlist" : "booking";
 
   const statusCopy = {
     [BOOKING_STATUSES.PENDING]: "waiting for host review",
@@ -176,24 +202,24 @@ export function buildBookingActivity(request) {
     BOOKING_STATUSES.CANCELLED,
   ];
 
-  const shouldOpenCheckout = checkoutStatuses.includes(request.status);
+  const shouldOpenCheckout = checkoutStatuses.includes(normalizedRequest.status);
 
   return {
-    id: `activity-booking-${request.id}-${request.status}`,
+    id: `activity-booking-${normalizedRequest.id}-${normalizedRequest.status}`,
     type,
-    title: `${request.listingTitle} booking ${request.status.toLowerCase()}`,
-    description: `${request.renterName}'s request for ${request.listingTitle} is ${statusCopy[request.status] || request.status.toLowerCase()}.`,
-    time: request.updatedAt || request.createdAt,
-    status: request.status,
+    title: `${normalizedRequest.listingTitle} booking ${normalizedRequest.status.toLowerCase()}`,
+    description: `${normalizedRequest.renterName}'s request for ${normalizedRequest.listingTitle} is ${statusCopy[normalizedRequest.status] || normalizedRequest.status.toLowerCase()}.`,
+    time: normalizedRequest.updatedAt || normalizedRequest.createdAt,
+    status: normalizedRequest.status,
     actionLabel:
-      request.status === BOOKING_STATUSES.APPROVED
+      normalizedRequest.status === BOOKING_STATUSES.APPROVED
         ? "Continue to checkout"
         : shouldOpenCheckout
         ? "View booking"
         : "View listing",
     actionTo: shouldOpenCheckout
-      ? `/checkout/${request.id}`
-      : `/listing/${request.listingId}`,
-    userName: request.renterName,
+      ? buildCheckoutPath(normalizedRequest.id)
+      : buildListingPath(normalizedRequest.listingId),
+    userName: normalizedRequest.renterName,
   };
 }

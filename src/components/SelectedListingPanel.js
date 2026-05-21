@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 
+import { buildListingPath } from '../routes/appRoutes';
+
 function SelectedListingPanel({
   listing,
   isSaved,
@@ -111,7 +113,7 @@ function SelectedListingPanel({
         </div>
 
         <div className="selected-listing-actions">
-          <Link to={`/listing/${listing.id}`} className="primary-button full-width">
+          <Link to={buildListingPath(listing.id)} className="primary-button full-width">
             View Details
           </Link>
 

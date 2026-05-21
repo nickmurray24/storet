@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import { useOptionalStoretApp } from '../context/StoretAppContext';
+import { APP_ROUTES, buildListingPath } from '../routes/appRoutes';
 import { BOOKING_STATUSES } from '../utils/bookingUtils';
 import {
   getBookingRequestById,
@@ -206,7 +207,7 @@ function CheckoutPage({
             </div>
 
             <div className="activity-action-row">
-              <Link to="/profile" className="primary-button">
+              <Link to={APP_ROUTES.profile} className="primary-button">
                 Back to Profile
               </Link>
             </div>
@@ -288,11 +289,11 @@ function CheckoutPage({
             </div>
 
             <div className="activity-action-row">
-              <Link to="/profile" className="primary-button">
+              <Link to={APP_ROUTES.profile} className="primary-button">
                 Back to Profile
               </Link>
 
-              <Link to={`/listing/${request.listingId}`} className="secondary-button">
+              <Link to={buildListingPath(request.listingId)} className="secondary-button">
                 View Listing
               </Link>
             </div>
@@ -404,7 +405,7 @@ function CheckoutPage({
                 Pay {formatCurrency(pricing.totalAmount)}
               </button>
 
-              <Link to="/profile" className="secondary-button">
+              <Link to={APP_ROUTES.profile} className="secondary-button">
                 Cancel
               </Link>
             </div>

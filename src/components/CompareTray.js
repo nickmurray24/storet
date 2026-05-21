@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 
+import { buildListingPath } from '../routes/appRoutes';
+
 function CompareTray({ listings, onToggleCompare, onClearCompare }) {
   return (
     <section className="compare-tray">
@@ -49,7 +51,7 @@ function CompareTray({ listings, onToggleCompare, onClearCompare }) {
               </p>
             </div>
 
-            <Link to={`/listing/${listing.id}`} className="secondary-button">
+            <Link to={buildListingPath(listing.id)} className="secondary-button">
               Open Details
             </Link>
           </div>

@@ -1,3 +1,18 @@
+import {
+  AVAILABILITY_STATUSES,
+  BOOKING_MODES,
+  LISTING_STATUSES,
+  LISTING_TYPES,
+} from "../constants/appEnums";
+import {
+  DEFAULT_LISTING_MODEL,
+  MODEL_PREFIXES,
+  createModelId,
+  getIsoTimestamp,
+} from "../models/storetModels";
+
+export { AVAILABILITY_STATUSES, BOOKING_MODES, LISTING_STATUSES, LISTING_TYPES };
+
 export function parseNumber(value, fallbackValue) {
   if (typeof value === "number" && !Number.isNaN(value)) {
     return value;
@@ -37,14 +52,50 @@ export function normalizeSavedIds(value) {
   return [];
 }
 
+export function getListingBookingMode(listing = {}) {
+  if (listing.bookingMode) {
+    return listing.bookingMode;
+  }
+
+  if (listing.waitlist || listing.availability === AVAILABILITY_STATUSES.WAITLIST) {
+    return BOOKING_MODES.WAITLIST;
+  }
+
+  if (listing.instantBook || listing.instantBooking || listing.bookingType === BOOKING_MODES.INSTANT) {
+    return BOOKING_MODES.INSTANT;
+  }
+
+  return BOOKING_MODES.REQUEST;
+}
+
+export function getListingAvailabilityStatus(listing = {}) {
+  if (listing.availabilityStatus) {
+    return listing.availabilityStatus;
+  }
+
+  if (listing.waitlist || listing.availability === AVAILABILITY_STATUSES.WAITLIST) {
+    return AVAILABILITY_STATUSES.WAITLIST;
+  }
+
+  if (listing.status === LISTING_STATUSES.PAUSED || listing.status === LISTING_STATUSES.ARCHIVED) {
+    return AVAILABILITY_STATUSES.UNAVAILABLE;
+  }
+
+  return AVAILABILITY_STATUSES.AVAILABLE;
+}
+
 export function normalizeListing(listing = {}, index = 0) {
+  const now = new Date().toISOString();
+  const createdAt = getIsoTimestamp(listing.createdAt, now);
+  const updatedAt = getIsoTimestamp(listing.updatedAt || listing.createdAt, createdAt);
+
   const price = parseNumber(
     listing.price ??
       listing.monthlyPrice ??
       listing.monthlyRate ??
       listing.pricePerMonth ??
       listing.rate,
-    75
+    DEFAULT_LISTING_MODEL.price
   );
 
   const sqft = parseNumber(
@@ -53,52 +104,74 @@ export function normalizeListing(listing = {}, index = 0) {
       listing.sizeSqft ??
       listing.squareFootage ??
       listing.size,
-    100
+    DEFAULT_LISTING_MODEL.sqft
   );
 
   const listingType =
     listing.listingType ??
     listing.hostType ??
-    (listing.isCommercial ? "Commercial" : "Private host");
+    (listing.isCommercial ? LISTING_TYPES.COMMERCIAL : LISTING_TYPES.PRIVATE_HOST);
 
+  const bookingMode = getListingBookingMode(listing);
   const instantBook = Boolean(
     listing.instantBook ??
       listing.instantBooking ??
-      (listing.bookingType === "instant") ??
-      false
+      bookingMode === BOOKING_MODES.INSTANT
   );
-
   const waitlist = Boolean(
     listing.waitlist ??
       listing.hasWaitlist ??
-      (listing.availability === "waitlist") ??
-      false
+      (listing.availability === AVAILABILITY_STATUSES.WAITLIST ||
+        bookingMode === BOOKING_MODES.WAITLIST)
+  );
+
+  const hostName = listing.host ?? listing.hostName ?? DEFAULT_LISTING_MODEL.host;
+  const hostEmail = listing.hostEmail ?? listing.ownerEmail ?? "";
+  const hostId = String(
+    listing.hostId ?? listing.ownerId ?? listing.createdBy ?? hostEmail ?? ""
   );
 
   return {
+    ...DEFAULT_LISTING_MODEL,
     ...listing,
-    id: String(listing.id ?? `listing-${index + 1}`),
-    title: listing.title ?? listing.name ?? "Storage space",
-    location: listing.location ?? listing.address ?? "Cincinnati, OH",
-    distance: listing.distance ?? "Nearby",
+    id: String(listing.id ?? createModelId(MODEL_PREFIXES.LISTING) ?? `listing-${index + 1}`),
+    title: listing.title ?? listing.name ?? DEFAULT_LISTING_MODEL.title,
+    location: listing.location ?? listing.address ?? DEFAULT_LISTING_MODEL.location,
+    distance: listing.distance ?? DEFAULT_LISTING_MODEL.distance,
     price,
     sqft,
-    storageType: listing.storageType ?? listing.type ?? "Storage space",
+    size: listing.size ?? `${sqft} sq ft`,
+    storageType: listing.storageType ?? listing.type ?? DEFAULT_LISTING_MODEL.storageType,
+    type: listing.type ?? listing.storageType ?? DEFAULT_LISTING_MODEL.storageType,
     listingType,
-    access: listing.access ?? "Flexible access",
-    rating: Number(listing.rating ?? 4.8),
-    reviews: Number(listing.reviews ?? listing.reviewCount ?? 0),
+    access: listing.access ?? DEFAULT_LISTING_MODEL.access,
+    rating: Number(listing.rating ?? listing.averageRating ?? DEFAULT_LISTING_MODEL.rating),
+    averageRating: Number(listing.averageRating ?? listing.rating ?? DEFAULT_LISTING_MODEL.rating),
+    reviews: Number(listing.reviews ?? listing.reviewCount ?? DEFAULT_LISTING_MODEL.reviews),
+    reviewCount: Number(listing.reviewCount ?? listing.reviews ?? DEFAULT_LISTING_MODEL.reviews),
     instantBook,
     waitlist,
-    host: listing.host ?? listing.hostName ?? "Storet Host",
+    bookingMode,
+    availability: listing.availability || (waitlist ? "Waitlist" : "Available"),
+    availabilityStatus: getListingAvailabilityStatus({ ...listing, waitlist, bookingMode }),
+    status: listing.status || LISTING_STATUSES.ACTIVE,
+    host: hostName,
+    hostName,
+    hostId,
+    hostEmail,
+    ownerId: String(listing.ownerId ?? hostId),
+    ownerEmail: listing.ownerEmail ?? hostEmail,
+    createdBy: String(listing.createdBy ?? hostId),
     description:
       listing.description ??
-      "Flexible local storage space for short-term or long-term needs.",
+      DEFAULT_LISTING_MODEL.description,
     tags: Array.isArray(listing.tags) ? listing.tags : [],
     amenities: Array.isArray(listing.amenities)
       ? listing.amenities
-      : ["Flexible rental", "Local storage", "Host managed"],
-    createdAt: listing.createdAt ?? new Date().toISOString(),
+      : DEFAULT_LISTING_MODEL.amenities,
+    images: Array.isArray(listing.images) ? listing.images : [],
+    createdAt,
+    updatedAt,
   };
 }
 
@@ -113,5 +186,26 @@ export function normalizeListingList(listings) {
 
     seenIds.add(listing.id);
     return true;
+  });
+}
+
+export function createListingRecord({ listingData = {}, currentUser = null }) {
+  const now = new Date().toISOString();
+  const hostName = currentUser?.fullName || currentUser?.name || listingData.host || "Storet Host";
+  const hostEmail = currentUser?.email || listingData.hostEmail || "";
+  const hostId = String(currentUser?.id || currentUser?.userId || hostEmail || "demo-host");
+
+  return normalizeListing({
+    ...listingData,
+    id: listingData.id || createModelId(MODEL_PREFIXES.LISTING),
+    host: hostName,
+    hostName,
+    hostEmail,
+    hostId,
+    ownerId: hostId,
+    ownerEmail: hostEmail,
+    createdBy: hostId,
+    createdAt: listingData.createdAt || now,
+    updatedAt: now,
   });
 }

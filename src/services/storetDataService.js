@@ -1,4 +1,5 @@
 import { CURRENT_USER_KEY } from "../constants/storageKeys";
+import { normalizeUserProfile } from "../models/storetModels";
 import {
   getStoredCurrentUser,
   readBookingRequests,
@@ -30,7 +31,7 @@ export const storetDataService = {
   loadState: loadStoretState,
 
   saveCurrentUser(user) {
-    return safeWriteJson(CURRENT_USER_KEY, user);
+    return safeWriteJson(CURRENT_USER_KEY, normalizeUserProfile(user));
   },
 
   clearCurrentUser() {

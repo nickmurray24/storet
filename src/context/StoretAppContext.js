@@ -12,6 +12,8 @@ import { createHostMessage, updateHostMessageStatus } from "../utils/hostMessage
 import { normalizeSavedIds } from "../utils/listingUtils";
 import { getHostMessagesForListings } from "../utils/messageSelectors";
 import { storetDataService } from "../services/storetDataService";
+import { LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
+import { normalizeUserProfile } from "../models/storetModels";
 
 const StoretAppContext = createContext(null);
 
@@ -46,13 +48,11 @@ export function StoretAppProvider({ children }) {
   }, [allHostMessages, allUserListings]);
 
   function login(user) {
-    const loggedInUser = {
+    const loggedInUser = normalizeUserProfile({
       ...user,
       isAuthenticated: true,
-      fullName: user?.fullName || "Demo User",
-      email: user?.email || "",
-      role: user?.role || "Renter",
-    };
+      role: user?.role || USER_ROLES.RENTER,
+    });
 
     storetDataService.saveCurrentUser(loggedInUser);
     setCurrentUser(loggedInUser);
@@ -98,11 +98,14 @@ export function StoretAppProvider({ children }) {
           return listing;
         }
 
-        const currentStatus = listing.status || "active";
+        const currentStatus = listing.status || LISTING_STATUSES.ACTIVE;
 
         return {
           ...listing,
-          status: currentStatus === "paused" ? "active" : "paused",
+          status:
+            currentStatus === LISTING_STATUSES.PAUSED
+              ? LISTING_STATUSES.ACTIVE
+              : LISTING_STATUSES.PAUSED,
           updatedAt: new Date().toISOString(),
         };
       });

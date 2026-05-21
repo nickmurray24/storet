@@ -33,10 +33,10 @@ import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-import { CURRENT_USER_KEY } from "../constants/storageKeys";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
-import { parseNumber } from "../utils/listingUtils";
-import { readUserListings, safeReadJson, writeUserListings } from "../utils/storage";
+import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
+import { DEFAULT_USER_PROFILE } from "../models/storetModels";
+import { createListingRecord, parseNumber } from "../utils/listingUtils";
 
 const storageTypes = [
   "Garage",
@@ -74,11 +74,11 @@ function CreateListingPage({ currentUser, onAddListing }) {
   const navigate = useNavigate();
 
   const storedUser = useMemo(
-    () =>
-      safeReadJson(CURRENT_USER_KEY, {
-        fullName: "Demo Host",
-        role: "Host",
-      }),
+    () => ({
+      ...DEFAULT_USER_PROFILE,
+      fullName: "Demo Host",
+      role: "Host",
+    }),
     []
   );
 
@@ -209,44 +209,44 @@ function CreateListingPage({ currentUser, onAddListing }) {
       return;
     }
 
-    const newListing = {
-      id: `user-${Date.now()}`,
-      title,
-      location,
-      distance: "New listing",
-      price,
-      sqft,
-      storageType: formData.storageType,
-      listingType: formData.listingType,
-      access: formData.access,
-      rating: 4.8,
-      reviews: 0,
-      instantBook: formData.bookingType === "instant",
-      waitlist: formData.bookingType === "waitlist",
-      host: activeUser?.fullName || "Storet Host",
-      description,
-      tags: buildTags(),
-      amenities:
-        selectedAmenities.length > 0
-          ? selectedAmenities
-          : ["Flexible rental", "Local storage", "Host managed"],
-      createdAt: new Date().toISOString(),
-    };
+    const newListing = createListingRecord({
+      currentUser: activeUser,
+      listingData: {
+        title,
+        location,
+        distance: "New listing",
+        price,
+        sqft,
+        storageType: formData.storageType,
+        listingType: formData.listingType,
+        access: formData.access,
+        rating: 4.8,
+        reviews: 0,
+        bookingMode: formData.bookingType,
+        instantBook: formData.bookingType === "instant",
+        waitlist: formData.bookingType === "waitlist",
+        description,
+        tags: buildTags(),
+        amenities:
+          selectedAmenities.length > 0
+            ? selectedAmenities
+            : ["Flexible rental", "Local storage", "Host managed"],
+      },
+    });
 
     const addListingAction = onAddListing || storetApp?.actions?.addListing;
 
-    if (addListingAction) {
-      addListingAction(newListing);
-    } else {
-      const existingListings = readUserListings();
-      const updatedListings = [newListing, ...existingListings];
-      writeUserListings(updatedListings);
+    if (!addListingAction) {
+      setError("We could not save your listing. Please refresh and try again.");
+      return;
     }
+
+    addListingAction(newListing);
 
     setSuccessMessage("Listing created successfully!");
 
     setTimeout(() => {
-      navigate(`/listing/${newListing.id}`);
+      navigate(buildListingPath(newListing.id));
     }, 650);
   }
 
@@ -262,7 +262,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
           <Stack spacing={3}>
             <Button
-              onClick={() => navigate("/explore")}
+              onClick={() => navigate(APP_ROUTES.explore)}
               startIcon={<ArrowBackRoundedIcon />}
               sx={{ alignSelf: "flex-start" }}
             >
@@ -555,7 +555,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
                       <Button
                         type="button"
                         variant="outlined"
-                        onClick={() => navigate("/explore")}
+                        onClick={() => navigate(APP_ROUTES.explore)}
                       >
                         Cancel
                       </Button>
