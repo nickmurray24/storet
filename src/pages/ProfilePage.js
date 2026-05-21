@@ -24,6 +24,7 @@ import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
+import MailRoundedIcon from "@mui/icons-material/MailRounded";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
@@ -32,6 +33,7 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
+import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { getListingCatalog } from "../data/listingCatalog";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import {
@@ -39,6 +41,7 @@ import {
   getRenterBookingRequests,
 } from "../utils/bookingSelectors";
 import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
+import { getRenterHostMessages } from "../utils/messageSelectors";
 import { getStoredCurrentUser, readUserListings } from "../utils/storage";
 
 function getInitials(name) {
@@ -56,12 +59,14 @@ function ProfilePage({
   currentUser,
   listings,
   savedListingIds,
-  bookingRequests = [],
-  paymentRecords = [],
+  bookingRequests,
+  paymentRecords,
+  hostMessages,
   onToggleSave,
   onUpdateBookingLifecycle,
   onLogout,
 }) {
+  const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
 
   const storedUser = getStoredCurrentUser() || {
@@ -71,24 +76,28 @@ function ProfilePage({
     isAuthenticated: true,
   };
 
-  const activeUser = currentUser || storedUser;
+  const activeUser = currentUser || storetApp?.currentUser || storedUser;
 
   const storedUserListings = useMemo(() => readUserListings(), []);
 
   const hostListings = useMemo(() => {
     const sourceListings =
-      Array.isArray(listings) && listings.length > 0
+      Array.isArray(listings)
         ? listings
+        : Array.isArray(storetApp?.userListings)
+        ? storetApp.userListings
         : storedUserListings;
 
     return normalizeListingList(sourceListings);
-  }, [listings, storedUserListings]);
+  }, [listings, storedUserListings, storetApp?.userListings]);
 
   const allListings = useMemo(() => {
     return getListingCatalog(hostListings);
   }, [hostListings]);
 
-  const savedIds = normalizeSavedIds(savedListingIds);
+  const savedIds = normalizeSavedIds(
+    savedListingIds ?? storetApp?.savedListingIds
+  );
 
   const savedListings = useMemo(() => {
     const savedIdSet = new Set(savedIds.map(String));
@@ -105,28 +114,45 @@ function ProfilePage({
   ).length;
 
   const renterBookingRequests = useMemo(() => {
-    return getRenterBookingRequests(bookingRequests, activeUser);
-  }, [activeUser, bookingRequests]);
+    return getRenterBookingRequests(
+      bookingRequests ?? storetApp?.bookingRequests ?? [],
+      activeUser
+    );
+  }, [activeUser, bookingRequests, storetApp?.bookingRequests]);
 
-  const completedPaymentCount = paymentRecords.length;
+  const renterHostMessages = useMemo(() => {
+    return getRenterHostMessages(
+      hostMessages ?? storetApp?.hostMessages ?? [],
+      activeUser
+    );
+  }, [activeUser, hostMessages, storetApp?.hostMessages]);
+
+  const completedPaymentCount = (paymentRecords ?? storetApp?.paymentRecords ?? []).length;
 
   function handleLogoutClick() {
-    if (onLogout) {
-      onLogout();
+    const logoutAction = onLogout || storetApp?.actions?.logout;
+
+    if (logoutAction) {
+      logoutAction();
     }
 
     navigate("/");
   }
 
   function handleUnsave(listingId) {
-    if (onToggleSave) {
-      onToggleSave(listingId);
+    const toggleSaveAction = onToggleSave || storetApp?.actions?.toggleSave;
+
+    if (toggleSaveAction) {
+      toggleSaveAction(listingId);
     }
   }
 
   function handleCancelBookingRequest(requestId) {
-    if (onUpdateBookingLifecycle) {
-      onUpdateBookingLifecycle(requestId, BOOKING_STATUSES.CANCELLED);
+    const updateBookingLifecycleAction =
+      onUpdateBookingLifecycle || storetApp?.actions?.updateBookingLifecycle;
+
+    if (updateBookingLifecycleAction) {
+      updateBookingLifecycleAction(requestId, BOOKING_STATUSES.CANCELLED);
     }
   }
 
@@ -258,6 +284,13 @@ function ProfilePage({
               label="Your listings"
               value={hostListings.length}
               color="secondary"
+            />
+
+            <StatCard
+              icon={<MailRoundedIcon />}
+              label="Messages sent"
+              value={renterHostMessages.length}
+              color="primary"
             />
 
             <StatCard
@@ -396,6 +429,52 @@ function ProfilePage({
                         justifyContent="space-between"
                       >
                         <Box>
+                          <Typography variant="h5">Messages to hosts</Typography>
+                          <Typography color="text.secondary">
+                            Questions you have sent from listing detail pages.
+                          </Typography>
+                        </Box>
+
+                        <Button
+                          component={RouterLink}
+                          to="/notifications"
+                          endIcon={<ArrowForwardRoundedIcon />}
+                        >
+                          View activity
+                        </Button>
+                      </Stack>
+
+                      <Divider />
+
+                      {renterHostMessages.length === 0 ? (
+                        <EmptyState
+                          icon={<MailRoundedIcon />}
+                          title="No host messages yet"
+                          description="Send a question from any listing detail page to see it here."
+                          actionLabel="Browse listings"
+                          actionTo="/explore"
+                        />
+                      ) : (
+                        <Stack spacing={2}>
+                          {renterHostMessages.slice(0, 4).map((message) => (
+                            <HostMessageRow key={message.id} message={message} />
+                          ))}
+                        </Stack>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                    <Stack spacing={2.5}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={2}
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        justifyContent="space-between"
+                      >
+                        <Box>
                           <Typography variant="h5">Your hosted spaces</Typography>
                           <Typography color="text.secondary">
                             Listings you have created for renters to find.
@@ -484,6 +563,12 @@ function ProfilePage({
                         icon={<EventAvailableRoundedIcon />}
                         label="Reservation requests"
                         value={`${renterBookingRequests.length} local`}
+                      />
+
+                      <ProfileInfoRow
+                        icon={<MailRoundedIcon />}
+                        label="Host messages"
+                        value={`${renterHostMessages.length} sent`}
                       />
 
                       <ProfileInfoRow
@@ -718,6 +803,40 @@ function BookingRequestRow({ request, onCancel }) {
                 Cancel
               </Button>
             )}
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HostMessageRow({ message }) {
+  return (
+    <Card variant="outlined" sx={{ boxShadow: "none" }}>
+      <CardContent sx={{ p: 2.25 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          justifyContent="space-between"
+        >
+          <Box>
+            <Typography fontWeight={900}>{message.listingTitle}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              To {message.hostName} · {message.message}
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Chip label={message.status} size="small" variant="outlined" />
+            <Button
+              size="small"
+              component={RouterLink}
+              to={`/listing/${message.listingId}`}
+              endIcon={<ArrowForwardRoundedIcon />}
+            >
+              Open listing
+            </Button>
           </Stack>
         </Stack>
       </CardContent>

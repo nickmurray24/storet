@@ -1,19 +1,33 @@
-import { useState } from 'react';
+import { useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Divider,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+
+import MailRoundedIcon from "@mui/icons-material/MailRounded";
+import SendRoundedIcon from "@mui/icons-material/SendRounded";
 
 function ContactHostForm({
   hostName,
   listingTitle,
   currentUser,
-  onSubmitMessage,
+  onSubmitMessage = () => ({ ok: true }),
 }) {
   const [formData, setFormData] = useState({
-    fullName: currentUser?.isAuthenticated ? currentUser.fullName : '',
-    email: currentUser?.isAuthenticated ? currentUser.email : '',
-    message: '',
+    fullName: currentUser?.isAuthenticated ? currentUser.fullName || "" : "",
+    email: currentUser?.isAuthenticated ? currentUser.email || "" : "",
+    message: "",
   });
 
   const [errors, setErrors] = useState({});
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submissionResult, setSubmissionResult] = useState(null);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -25,7 +39,8 @@ function ContactHostForm({
 
     setErrors((prev) => ({
       ...prev,
-      [name]: '',
+      [name]: "",
+      form: "",
     }));
   }
 
@@ -33,15 +48,17 @@ function ContactHostForm({
     const nextErrors = {};
 
     if (!formData.fullName.trim()) {
-      nextErrors.fullName = 'Please enter your name.';
+      nextErrors.fullName = "Please enter your name.";
     }
 
     if (!formData.email.trim()) {
-      nextErrors.email = 'Please enter your email.';
+      nextErrors.email = "Please enter your email.";
+    } else if (!/^\S+@\S+\.\S+$/.test(formData.email.trim())) {
+      nextErrors.email = "Please enter a valid email.";
     }
 
     if (!formData.message.trim()) {
-      nextErrors.message = 'Please enter a message.';
+      nextErrors.message = "Please enter a message.";
     }
 
     return nextErrors;
@@ -57,96 +74,121 @@ function ContactHostForm({
       return;
     }
 
-    onSubmitMessage({
-      fullName: formData.fullName,
-      email: formData.email,
-      message: formData.message,
+    const result = onSubmitMessage({
+      fullName: formData.fullName.trim(),
+      email: formData.email.trim(),
+      message: formData.message.trim(),
     });
 
-    setIsSubmitted(true);
+    if (result?.ok === false) {
+      setErrors({
+        form: result.error || "We could not send this message. Please try again.",
+      });
+      return;
+    }
+
+    setSubmissionResult(result?.message || {
+      senderName: formData.fullName,
+      senderEmail: formData.email,
+      message: formData.message,
+    });
+    setFormData((prev) => ({ ...prev, message: "" }));
   }
 
-  if (isSubmitted) {
+  if (submissionResult) {
     return (
-      <div className="booking-success-card">
-        <p className="booking-success-tag">Message Sent</p>
-        <h3>Your message is on its way.</h3>
-        <p>
-          We saved your message to <strong>{hostName}</strong> about{' '}
-          <strong>{listingTitle}</strong>. It will now appear in your profile
-          activity and in the host dashboard for that listing.
-        </p>
+      <Card variant="outlined" sx={{ boxShadow: "none", borderRadius: 4 }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Stack spacing={2}>
+            <Alert severity="success" icon={<MailRoundedIcon />}>
+              Message sent. It now appears in the host dashboard inbox.
+            </Alert>
 
-        <div className="booking-summary">
-          <p>
-            <strong>Name:</strong> {formData.fullName}
-          </p>
-          <p>
-            <strong>Email:</strong> {formData.email}
-          </p>
-          <p>
-            <strong>Message:</strong> {formData.message}
-          </p>
-        </div>
-      </div>
+            <Box>
+              <Typography variant="h6">Your message is on its way.</Typography>
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                We saved your message to <strong>{hostName}</strong> about{" "}
+                <strong>{listingTitle}</strong>.
+              </Typography>
+            </Box>
+
+            <Divider />
+
+            <Stack spacing={1}>
+              <Typography variant="body2" color="text.secondary">
+                From {submissionResult.senderName || formData.fullName} ·{" "}
+                {submissionResult.senderEmail || formData.email}
+              </Typography>
+              <Typography>{submissionResult.message}</Typography>
+            </Stack>
+
+            <Button variant="outlined" onClick={() => setSubmissionResult(null)}>
+              Send another message
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
     );
   }
 
   return (
-    <form className="booking-form" onSubmit={handleSubmit}>
-      <h3>Contact Host</h3>
-      <p className="booking-form-copy">
-        Send a message to <strong>{hostName}</strong> about{' '}
-        <strong>{listingTitle}</strong>.
-      </p>
+    <Box component="form" onSubmit={handleSubmit} noValidate>
+      <Stack spacing={2}>
+        <Box>
+          <Typography variant="h6">Contact host</Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            Ask <strong>{hostName}</strong> a question about{" "}
+            <strong>{listingTitle}</strong> before reserving.
+          </Typography>
+        </Box>
 
-      <div className="filter-group">
-        <label htmlFor="contactFullName">Full Name</label>
-        <input
-          id="contactFullName"
+        {errors.form && <Alert severity="error">{errors.form}</Alert>}
+
+        <TextField
+          label="Full name"
           name="fullName"
-          type="text"
           value={formData.fullName}
           onChange={handleChange}
-          placeholder="Your name"
+          error={Boolean(errors.fullName)}
+          helperText={errors.fullName}
+          fullWidth
         />
-        {errors.fullName && (
-          <span className="form-error">{errors.fullName}</span>
-        )}
-      </div>
 
-      <div className="filter-group">
-        <label htmlFor="contactEmail">Email</label>
-        <input
-          id="contactEmail"
+        <TextField
+          label="Email"
           name="email"
           type="email"
           value={formData.email}
           onChange={handleChange}
-          placeholder="you@example.com"
+          error={Boolean(errors.email)}
+          helperText={errors.email}
+          fullWidth
         />
-        {errors.email && <span className="form-error">{errors.email}</span>}
-      </div>
 
-      <div className="filter-group">
-        <label htmlFor="contactMessage">Message</label>
-        <textarea
-          id="contactMessage"
+        <TextField
+          label="Message"
           name="message"
-          rows="5"
           value={formData.message}
           onChange={handleChange}
+          error={Boolean(errors.message)}
+          helperText={errors.message}
           placeholder="Hi, I’m interested in this storage space. Is it still available?"
+          multiline
+          minRows={4}
+          fullWidth
         />
-        {errors.message && (
-          <span className="form-error">{errors.message}</span>
-        )}
-      </div>
 
-      <button type="submit" className="primary-button full-width">
-        Send Message
-      </button>
-    </form>
+        <Button
+          type="submit"
+          variant="contained"
+          size="large"
+          startIcon={<SendRoundedIcon />}
+          fullWidth
+        >
+          Send message
+        </Button>
+      </Stack>
+    </Box>
   );
 }
 

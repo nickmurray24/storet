@@ -1,12 +1,14 @@
 import {
   BOOKING_REQUESTS_KEY,
   CURRENT_USER_KEY,
+  HOST_MESSAGES_KEY,
   LEGACY_USER_LISTINGS_KEY,
   PAYMENT_RECORDS_KEY,
   SAVED_LISTINGS_KEY,
   USER_LISTINGS_KEY,
 } from "../constants/storageKeys";
 import { normalizeBookingRequestList } from "./bookingUtils";
+import { normalizeHostMessageList } from "./hostMessageUtils";
 import { normalizeSavedIds } from "./listingUtils";
 
 function canUseLocalStorage() {
@@ -108,4 +110,15 @@ export function readPaymentRecords() {
 export function writePaymentRecords(paymentRecords) {
   const safePaymentRecords = Array.isArray(paymentRecords) ? paymentRecords : [];
   return safeWriteJson(PAYMENT_RECORDS_KEY, safePaymentRecords);
+}
+
+export function readHostMessages() {
+  return normalizeHostMessageList(safeReadJson(HOST_MESSAGES_KEY, []));
+}
+
+export function writeHostMessages(hostMessages) {
+  return safeWriteJson(
+    HOST_MESSAGES_KEY,
+    normalizeHostMessageList(hostMessages)
+  );
 }

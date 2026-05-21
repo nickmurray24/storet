@@ -23,9 +23,11 @@ import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 
 import { CURRENT_USER_KEY } from "../constants/storageKeys";
+import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { safeWriteJson } from "../utils/storage";
 
 function AuthPage({ onLogin }) {
+  const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
 
   const [authMode, setAuthMode] = useState("login");
@@ -113,10 +115,12 @@ function AuthPage({ onLogin }) {
       role,
     };
 
-    safeWriteJson(CURRENT_USER_KEY, user);
+    const loginAction = onLogin || storetApp?.actions?.login;
 
-    if (onLogin) {
-      onLogin(user);
+    if (loginAction) {
+      loginAction(user);
+    } else {
+      safeWriteJson(CURRENT_USER_KEY, user);
     }
 
     navigate("/explore");

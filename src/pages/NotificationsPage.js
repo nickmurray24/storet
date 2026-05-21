@@ -24,13 +24,16 @@ import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded
 import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
+import MailRoundedIcon from "@mui/icons-material/MailRounded";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { ACTIVITY_FEED_KEY } from "../constants/storageKeys";
+import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { buildBookingActivity } from "../utils/bookingUtils";
+import { buildHostMessageActivity } from "../utils/hostMessageUtils";
 import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
 import {
   getStoredCurrentUser,
@@ -69,6 +72,7 @@ function getActivityIcon(type) {
   if (type === "saved") return <FavoriteRoundedIcon />;
   if (type === "listing") return <HomeWorkRoundedIcon />;
   if (type === "waitlist") return <ScheduleRoundedIcon />;
+  if (type === "message") return <MailRoundedIcon />;
   if (type === "system") return <CheckCircleRoundedIcon />;
   return <NotificationsRoundedIcon />;
 }
@@ -78,6 +82,7 @@ function getActivityColor(type) {
   if (type === "saved") return "primary";
   if (type === "listing") return "secondary";
   if (type === "waitlist") return "warning";
+  if (type === "message") return "info";
   if (type === "system") return "primary";
   return "primary";
 }
@@ -163,7 +168,8 @@ function buildFallbackActivities(activeUser, hostListings, savedIds) {
   );
 }
 
-function NotificationsPage({ currentUser, bookingRequests = [] }) {
+function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
+  const storetApp = useOptionalStoretApp();
   const [filterType, setFilterType] = useState("all");
 
   const storedUser = getStoredCurrentUser() || {
@@ -173,13 +179,21 @@ function NotificationsPage({ currentUser, bookingRequests = [] }) {
     isAuthenticated: true,
   };
 
-  const activeUser = currentUser || storedUser;
+  const activeUser = currentUser || storetApp?.currentUser || storedUser;
 
   const hostListings = useMemo(() => {
-    return normalizeListingList(readUserListings());
-  }, []);
+    if (Array.isArray(storetApp?.userListings)) {
+      return normalizeListingList(storetApp.userListings);
+    }
 
-  const savedIds = useMemo(() => normalizeSavedIds(readSavedListingIds()), []);
+    return normalizeListingList(readUserListings());
+  }, [storetApp?.userListings]);
+
+  const savedIds = useMemo(() => {
+    return normalizeSavedIds(
+      storetApp?.savedListingIds ?? readSavedListingIds()
+    );
+  }, [storetApp?.savedListingIds]);
 
   const activities = useMemo(() => {
     const storedActivities = safeReadJson(ACTIVITY_FEED_KEY, []);
@@ -193,10 +207,25 @@ function NotificationsPage({ currentUser, bookingRequests = [] }) {
       savedIds
     );
 
-    const bookingActivities = bookingRequests.map(buildBookingActivity);
+    const hostListingIds = new Set(hostListings.map((listing) => String(listing.id)));
+    const activeEmail = activeUser?.email?.toLowerCase?.() || "";
+
+    const activeHostMessages = hostMessages ?? storetApp?.hostMessages ?? [];
+
+    const relevantHostMessages = (Array.isArray(activeHostMessages) ? activeHostMessages : []).filter((message) => {
+      const sentByActiveUser = activeEmail && message.senderEmail?.toLowerCase?.() === activeEmail;
+      const sentToActiveHostListing = hostListingIds.has(String(message.listingId));
+
+      return sentByActiveUser || sentToActiveHostListing;
+    });
+
+    const activeBookingRequests = bookingRequests ?? storetApp?.bookingRequests ?? [];
+    const bookingActivities = activeBookingRequests.map(buildBookingActivity);
+    const messageActivities = relevantHostMessages.map(buildHostMessageActivity);
 
     const combinedActivities = [
       ...safeStoredActivities,
+      ...messageActivities,
       ...bookingActivities,
       ...generatedActivities,
     ];
@@ -218,7 +247,7 @@ function NotificationsPage({ currentUser, bookingRequests = [] }) {
 
         return bTime - aTime;
       });
-  }, [activeUser, bookingRequests, hostListings, savedIds]);
+  }, [activeUser, bookingRequests, hostListings, hostMessages, savedIds, storetApp?.bookingRequests, storetApp?.hostMessages]);
 
   const filteredActivities = useMemo(() => {
     if (filterType === "all") {
@@ -236,6 +265,8 @@ function NotificationsPage({ currentUser, bookingRequests = [] }) {
       listings: activities.filter((activity) => activity.type === "listing")
         .length,
       waitlist: activities.filter((activity) => activity.type === "waitlist")
+        .length,
+      messages: activities.filter((activity) => activity.type === "message")
         .length,
     };
   }, [activities]);
@@ -350,6 +381,12 @@ function NotificationsPage({ currentUser, bookingRequests = [] }) {
               value={stats.waitlist}
               color="warning"
             />
+            <StatCard
+              icon={<MailRoundedIcon />}
+              label="Message updates"
+              value={stats.messages}
+              color="info"
+            />
           </Box>
         </Container>
       </Box>
@@ -392,6 +429,7 @@ function NotificationsPage({ currentUser, bookingRequests = [] }) {
                       <ToggleButton value="listing">Listings</ToggleButton>
                       <ToggleButton value="saved">Saved</ToggleButton>
                       <ToggleButton value="waitlist">Waitlist</ToggleButton>
+                      <ToggleButton value="message">Messages</ToggleButton>
                     </ToggleButtonGroup>
                   </Stack>
 
@@ -438,8 +476,8 @@ function NotificationsPage({ currentUser, bookingRequests = [] }) {
                     <Divider />
 
                     <Alert severity="info">
-                      This is still demo/local activity for now. Later, this page
-                      can be powered by real booking, waitlist, and message data.
+                      This activity center now includes local booking, waitlist,
+                      saved-space, listing, and host message updates.
                     </Alert>
                   </Stack>
                 </CardContent>
@@ -504,6 +542,12 @@ function NotificationsPage({ currentUser, bookingRequests = [] }) {
                       icon={<FavoriteRoundedIcon />}
                       title="Saved spaces"
                       description="Saved listing and comparison activity."
+                    />
+
+                    <InfoRow
+                      icon={<MailRoundedIcon />}
+                      title="Host messages"
+                      description="Questions sent to hosts and inbox updates."
                     />
 
                     <InfoRow
