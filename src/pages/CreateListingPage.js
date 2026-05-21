@@ -33,9 +33,9 @@ import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-import { CURRENT_USER_KEY, USER_LISTINGS_KEY } from "../constants/storageKeys";
+import { CURRENT_USER_KEY } from "../constants/storageKeys";
 import { parseNumber } from "../utils/listingUtils";
-import { safeReadJson, safeWriteJson } from "../utils/storage";
+import { readUserListings, safeReadJson, writeUserListings } from "../utils/storage";
 
 const storageTypes = [
   "Garage",
@@ -231,14 +231,10 @@ function CreateListingPage({ currentUser, onAddListing }) {
       createdAt: new Date().toISOString(),
     };
 
-    const existingListings = safeReadJson(USER_LISTINGS_KEY, []);
-    const safeExistingListings = Array.isArray(existingListings)
-      ? existingListings
-      : [];
+    const existingListings = readUserListings();
+    const updatedListings = [newListing, ...existingListings];
 
-    const updatedListings = [newListing, ...safeExistingListings];
-
-    safeWriteJson(USER_LISTINGS_KEY, updatedListings);
+    writeUserListings(updatedListings);
 
     if (onAddListing) {
       onAddListing(newListing);

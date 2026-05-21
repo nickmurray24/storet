@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 
 import Navbar from "./components/Navbar";
+import HostDashboardPanel from "./components/HostDashboardPanel";
 import LandingPage from "./pages/LandingPage";
 import AuthPage from "./pages/AuthPage";
 import ExplorePage from "./pages/ExplorePage";
@@ -11,17 +12,30 @@ import ListingDetailsPage from "./pages/ListingDetailsPage";
 import CreateListingPage from "./pages/CreateListingPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationsPage from "./pages/NotificationsPage";
+import CheckoutPage from "./pages/CheckoutPage";
 import {
   getStoredCurrentUser,
+  readBookingRequests,
+  readPaymentRecords,
   readSavedListingIds,
   readUserListings,
   safeRemoveItem,
   safeWriteJson,
+  writeBookingRequests,
+  writePaymentRecords,
   writeSavedListingIds,
   writeUserListings,
 } from "./utils/storage";
 import { CURRENT_USER_KEY } from "./constants/storageKeys";
 import { normalizeSavedIds } from "./utils/listingUtils";
+import {
+  BOOKING_STATUSES,
+  createBookingRequest,
+  createPaymentRecord,
+  updateBookingLifecycle,
+  updateBookingRequestStatus,
+} from "./utils/bookingUtils";
+import { getHostBookingRequests } from "./utils/bookingSelectors";
 
 function ProtectedRoute({ currentUser, children }) {
   const storedUser = getStoredCurrentUser();
@@ -40,10 +54,28 @@ function App() {
   const [savedListingIds, setSavedListingIds] = useState(() =>
     readSavedListingIds()
   );
+  const [bookingRequests, setBookingRequests] = useState(() =>
+    readBookingRequests()
+  );
+  const [paymentRecords, setPaymentRecords] = useState(() =>
+    readPaymentRecords()
+  );
 
   const allUserListings = useMemo(() => {
     return Array.isArray(userListings) ? userListings : [];
   }, [userListings]);
+
+  const allBookingRequests = useMemo(() => {
+    return Array.isArray(bookingRequests) ? bookingRequests : [];
+  }, [bookingRequests]);
+
+  const allPaymentRecords = useMemo(() => {
+    return Array.isArray(paymentRecords) ? paymentRecords : [];
+  }, [paymentRecords]);
+
+  const hostBookingRequests = useMemo(() => {
+    return getHostBookingRequests(allBookingRequests, allUserListings);
+  }, [allBookingRequests, allUserListings]);
 
   function handleLogin(user) {
     const loggedInUser = {
@@ -97,6 +129,195 @@ function App() {
     });
   }
 
+  function handleToggleListingStatus(listingId) {
+    const normalizedId = String(listingId);
+
+    setUserListings((currentListings) => {
+      const safeCurrentListings = Array.isArray(currentListings)
+        ? currentListings
+        : [];
+
+      const updatedListings = safeCurrentListings.map((listing) => {
+        if (String(listing.id) !== normalizedId) {
+          return listing;
+        }
+
+        const currentStatus = listing.status || "active";
+
+        return {
+          ...listing,
+          status: currentStatus === "paused" ? "active" : "paused",
+          updatedAt: new Date().toISOString(),
+        };
+      });
+
+      writeUserListings(updatedListings);
+      return updatedListings;
+    });
+  }
+
+  function handleDeleteListing(listingId) {
+    const normalizedId = String(listingId);
+
+    setUserListings((currentListings) => {
+      const safeCurrentListings = Array.isArray(currentListings)
+        ? currentListings
+        : [];
+
+      const updatedListings = safeCurrentListings.filter(
+        (listing) => String(listing.id) !== normalizedId
+      );
+
+      writeUserListings(updatedListings);
+      return updatedListings;
+    });
+
+    setSavedListingIds((currentIds) => {
+      const updatedIds = normalizeSavedIds(currentIds).filter(
+        (id) => String(id) !== normalizedId
+      );
+
+      writeSavedListingIds(updatedIds);
+      return updatedIds;
+    });
+
+    setBookingRequests((currentRequests) => {
+      const safeCurrentRequests = Array.isArray(currentRequests)
+        ? currentRequests
+        : [];
+
+      const updatedRequests = safeCurrentRequests.filter(
+        (request) => String(request.listingId) !== normalizedId
+      );
+
+      writeBookingRequests(updatedRequests);
+      return updatedRequests;
+    });
+
+    setPaymentRecords((currentPaymentRecords) => {
+      const safeCurrentPaymentRecords = Array.isArray(currentPaymentRecords)
+        ? currentPaymentRecords
+        : [];
+
+      const updatedPaymentRecords = safeCurrentPaymentRecords.filter(
+        (payment) => String(payment.listingId) !== normalizedId
+      );
+
+      writePaymentRecords(updatedPaymentRecords);
+      return updatedPaymentRecords;
+    });
+  }
+
+  function handleSubmitBookingRequest(listing, requestData = {}) {
+    if (!listing) {
+      return {
+        ok: false,
+        error: "We could not find that listing.",
+      };
+    }
+
+    const request = createBookingRequest({
+      listing,
+      currentUser,
+      requestData,
+    });
+
+    setBookingRequests((currentRequests) => {
+      const safeCurrentRequests = Array.isArray(currentRequests)
+        ? currentRequests
+        : [];
+
+      const updatedRequests = [request, ...safeCurrentRequests];
+      writeBookingRequests(updatedRequests);
+
+      return updatedRequests;
+    });
+
+    return {
+      ok: true,
+      request,
+    };
+  }
+
+  function handleUpdateBookingRequestStatus(requestId, status) {
+    setBookingRequests((currentRequests) => {
+      const safeCurrentRequests = Array.isArray(currentRequests)
+        ? currentRequests
+        : [];
+
+      const updatedRequests = safeCurrentRequests.map((request) =>
+        request.id === requestId
+          ? updateBookingRequestStatus(request, status)
+          : request
+      );
+
+      writeBookingRequests(updatedRequests);
+      return updatedRequests;
+    });
+  }
+
+  function handleUpdateBookingLifecycle(requestId, status) {
+    setBookingRequests((currentRequests) => {
+      const safeCurrentRequests = Array.isArray(currentRequests)
+        ? currentRequests
+        : [];
+
+      const updatedRequests = safeCurrentRequests.map((request) =>
+        request.id === requestId ? updateBookingLifecycle(request, status) : request
+      );
+
+      writeBookingRequests(updatedRequests);
+      return updatedRequests;
+    });
+  }
+
+  function handleCompleteCheckout(requestId, paymentData = {}) {
+    const request = allBookingRequests.find((item) => item.id === requestId);
+
+    if (!request) {
+      return {
+        ok: false,
+        error: "We could not find that booking request.",
+      };
+    }
+
+    const paymentRecord = createPaymentRecord(request, paymentData);
+
+    setPaymentRecords((currentPaymentRecords) => {
+      const safeCurrentPaymentRecords = Array.isArray(currentPaymentRecords)
+        ? currentPaymentRecords
+        : [];
+
+      const updatedPaymentRecords = [paymentRecord, ...safeCurrentPaymentRecords];
+      writePaymentRecords(updatedPaymentRecords);
+
+      return updatedPaymentRecords;
+    });
+
+    setBookingRequests((currentRequests) => {
+      const updatedRequests = currentRequests.map((currentRequest) => {
+        if (currentRequest.id !== requestId) {
+          return currentRequest;
+        }
+
+        return {
+          ...updateBookingLifecycle(currentRequest, BOOKING_STATUSES.CONFIRMED),
+          paymentRecordId: paymentRecord.id,
+          confirmedAt: paymentRecord.paidAt,
+          updatedAt: paymentRecord.paidAt,
+        };
+      });
+
+      writeBookingRequests(updatedRequests);
+      return updatedRequests;
+    });
+
+    return {
+      ok: true,
+      paymentRecord,
+    };
+  }
+
   return (
     <div className="app">
       <Navbar currentUser={currentUser} onLogout={handleLogout} />
@@ -125,7 +346,9 @@ function App() {
               listings={allUserListings}
               currentUser={currentUser}
               savedListingIds={savedListingIds}
+              bookingRequests={allBookingRequests}
               onToggleSave={handleToggleSave}
+              onSubmitBookingRequest={handleSubmitBookingRequest}
             />
           }
         />
@@ -150,8 +373,43 @@ function App() {
                 currentUser={currentUser}
                 listings={allUserListings}
                 savedListingIds={savedListingIds}
+                bookingRequests={allBookingRequests}
+                paymentRecords={allPaymentRecords}
                 onToggleSave={handleToggleSave}
+                onUpdateBookingRequestStatus={handleUpdateBookingRequestStatus}
+                onUpdateBookingLifecycle={handleUpdateBookingLifecycle}
                 onLogout={handleLogout}
+              />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/host-dashboard"
+          element={
+            <ProtectedRoute currentUser={currentUser}>
+              <HostDashboardPanel
+                myListings={allUserListings}
+                bookingRequests={hostBookingRequests}
+                hostMessages={[]}
+                onDeleteListing={handleDeleteListing}
+                onToggleListingStatus={handleToggleListingStatus}
+                onUpdateBookingRequestStatus={handleUpdateBookingRequestStatus}
+                onUpdateBookingLifecycle={handleUpdateBookingLifecycle}
+              />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/checkout/:requestId"
+          element={
+            <ProtectedRoute currentUser={currentUser}>
+              <CheckoutPage
+                currentUser={currentUser}
+                bookingRequests={allBookingRequests}
+                paymentRecords={allPaymentRecords}
+                onCompleteCheckout={handleCompleteCheckout}
               />
             </ProtectedRoute>
           }
@@ -161,7 +419,10 @@ function App() {
           path="/notifications"
           element={
             <ProtectedRoute currentUser={currentUser}>
-              <NotificationsPage currentUser={currentUser} />
+              <NotificationsPage
+                currentUser={currentUser}
+                bookingRequests={allBookingRequests}
+              />
             </ProtectedRoute>
           }
         />

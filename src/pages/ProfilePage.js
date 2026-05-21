@@ -32,87 +32,14 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-import { CURRENT_USER_KEY, USER_LISTINGS_KEY } from "../constants/storageKeys";
-import { normalizeListing, normalizeSavedIds } from "../utils/listingUtils";
-import { safeReadJson } from "../utils/storage";
-
-const fallbackListings = [
-  {
-    id: "1",
-    title: "Oakley Garage Space",
-    location: "Oakley, Cincinnati, OH",
-    distance: "6 miles away",
-    price: 85,
-    sqft: 120,
-    storageType: "Garage",
-    listingType: "Private host",
-    access: "By appointment",
-    rating: 4.9,
-    reviews: 18,
-    instantBook: true,
-    waitlist: false,
-    host: "Maya",
-    description:
-      "Clean indoor garage space for boxes, bikes, dorm items, and small furniture.",
-    tags: ["Indoor", "Private", "Instant book"],
-  },
-  {
-    id: "2",
-    title: "Clifton Basement Corner",
-    location: "Clifton, Cincinnati, OH",
-    distance: "2 miles away",
-    price: 55,
-    sqft: 75,
-    storageType: "Basement",
-    listingType: "Private host",
-    access: "Weekly access",
-    rating: 4.7,
-    reviews: 11,
-    instantBook: false,
-    waitlist: true,
-    host: "Evan",
-    description:
-      "Affordable basement storage close to campus and apartment-heavy neighborhoods.",
-    tags: ["Budget", "Student friendly", "Waitlist"],
-  },
-  {
-    id: "3",
-    title: "Downtown Storage Locker",
-    location: "Downtown Cincinnati, OH",
-    distance: "4 miles away",
-    price: 110,
-    sqft: 100,
-    storageType: "Storage unit",
-    listingType: "Commercial",
-    access: "Daily access",
-    rating: 4.8,
-    reviews: 32,
-    instantBook: true,
-    waitlist: false,
-    host: "Storet Partner",
-    description: "Traditional storage-style locker with flexible monthly availability.",
-    tags: ["Commercial", "Daily access", "Secure"],
-  },
-  {
-    id: "4",
-    title: "Mason Spare Room Storage",
-    location: "Mason, OH",
-    distance: "18 miles away",
-    price: 70,
-    sqft: 90,
-    storageType: "Spare room",
-    listingType: "Private host",
-    access: "By appointment",
-    rating: 4.6,
-    reviews: 9,
-    instantBook: false,
-    waitlist: false,
-    host: "Jordan",
-    description:
-      "Climate-friendly spare room space for bins, seasonal items, and dorm storage.",
-    tags: ["Climate friendly", "Residential", "Flexible"],
-  },
-];
+import { getListingCatalog } from "../data/listingCatalog";
+import { BOOKING_STATUSES } from "../utils/bookingUtils";
+import {
+  getBookingRequestPrimaryAction,
+  getRenterBookingRequests,
+} from "../utils/bookingSelectors";
+import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
+import { getStoredCurrentUser, readUserListings } from "../utils/storage";
 
 function getInitials(name) {
   if (!name) return "S";
@@ -129,24 +56,24 @@ function ProfilePage({
   currentUser,
   listings,
   savedListingIds,
+  bookingRequests = [],
+  paymentRecords = [],
   onToggleSave,
+  onUpdateBookingLifecycle,
   onLogout,
 }) {
   const navigate = useNavigate();
 
-  const storedUser = safeReadJson(CURRENT_USER_KEY, {
+  const storedUser = getStoredCurrentUser() || {
     fullName: "Demo User",
     email: "demo@storet.com",
     role: "Renter",
     isAuthenticated: true,
-  });
+  };
 
   const activeUser = currentUser || storedUser;
 
-  const storedUserListings = useMemo(() => {
-    const storedListings = safeReadJson(USER_LISTINGS_KEY, []);
-    return Array.isArray(storedListings) ? storedListings : [];
-  }, []);
+  const storedUserListings = useMemo(() => readUserListings(), []);
 
   const hostListings = useMemo(() => {
     const sourceListings =
@@ -154,26 +81,11 @@ function ProfilePage({
         ? listings
         : storedUserListings;
 
-    const normalizedListings = sourceListings.map(normalizeListing);
-    const seenIds = new Set();
-
-    return normalizedListings.filter((listing) => {
-      if (seenIds.has(listing.id)) return false;
-      seenIds.add(listing.id);
-      return true;
-    });
+    return normalizeListingList(sourceListings);
   }, [listings, storedUserListings]);
 
   const allListings = useMemo(() => {
-    const combinedListings = [...fallbackListings, ...hostListings];
-    const normalizedListings = combinedListings.map(normalizeListing);
-    const seenIds = new Set();
-
-    return normalizedListings.filter((listing) => {
-      if (seenIds.has(listing.id)) return false;
-      seenIds.add(listing.id);
-      return true;
-    });
+    return getListingCatalog(hostListings);
   }, [hostListings]);
 
   const savedIds = normalizeSavedIds(savedListingIds);
@@ -192,6 +104,12 @@ function ProfilePage({
     (listing) => listing.waitlist
   ).length;
 
+  const renterBookingRequests = useMemo(() => {
+    return getRenterBookingRequests(bookingRequests, activeUser);
+  }, [activeUser, bookingRequests]);
+
+  const completedPaymentCount = paymentRecords.length;
+
   function handleLogoutClick() {
     if (onLogout) {
       onLogout();
@@ -203,6 +121,12 @@ function ProfilePage({
   function handleUnsave(listingId) {
     if (onToggleSave) {
       onToggleSave(listingId);
+    }
+  }
+
+  function handleCancelBookingRequest(requestId) {
+    if (onUpdateBookingLifecycle) {
+      onUpdateBookingLifecycle(requestId, BOOKING_STATUSES.CANCELLED);
     }
   }
 
@@ -281,6 +205,15 @@ function ProfilePage({
               </Button>
 
               <Button
+                component={RouterLink}
+                to="/host-dashboard"
+                variant="outlined"
+                startIcon={<HomeWorkRoundedIcon />}
+              >
+                Host dashboard
+              </Button>
+
+              <Button
                 variant="text"
                 color="inherit"
                 startIcon={<LogoutRoundedIcon />}
@@ -311,6 +244,13 @@ function ProfilePage({
               label="Saved spaces"
               value={savedListings.length}
               color="primary"
+            />
+
+            <StatCard
+              icon={<EventAvailableRoundedIcon />}
+              label="Reservations"
+              value={renterBookingRequests.length}
+              color="info"
             />
 
             <StatCard
@@ -388,6 +328,56 @@ function ProfilePage({
                                   Unsave
                                 </Button>
                               }
+                            />
+                          ))}
+                        </Stack>
+                      )}
+                    </Stack>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                    <Stack spacing={2.5}>
+                      <Stack
+                        direction={{ xs: "column", sm: "row" }}
+                        spacing={2}
+                        alignItems={{ xs: "flex-start", sm: "center" }}
+                        justifyContent="space-between"
+                      >
+                        <Box>
+                          <Typography variant="h5">Reservation activity</Typography>
+                          <Typography color="text.secondary">
+                            Local booking requests created from listing details.
+                          </Typography>
+                        </Box>
+
+                        <Button
+                          component={RouterLink}
+                          to="/notifications"
+                          endIcon={<ArrowForwardRoundedIcon />}
+                        >
+                          View activity
+                        </Button>
+                      </Stack>
+
+                      <Divider />
+
+                      {renterBookingRequests.length === 0 ? (
+                        <EmptyState
+                          icon={<EventAvailableRoundedIcon />}
+                          title="No reservation activity yet"
+                          description="Reserve, request, or join the waitlist for a listing to see it here."
+                          actionLabel="Browse listings"
+                          actionTo="/explore"
+                        />
+                      ) : (
+                        <Stack spacing={2}>
+                          {renterBookingRequests.slice(0, 4).map((request) => (
+                            <BookingRequestRow
+                              key={request.id}
+                              request={request}
+                              onCancel={handleCancelBookingRequest}
                             />
                           ))}
                         </Stack>
@@ -491,6 +481,18 @@ function ProfilePage({
                       />
 
                       <ProfileInfoRow
+                        icon={<EventAvailableRoundedIcon />}
+                        label="Reservation requests"
+                        value={`${renterBookingRequests.length} local`}
+                      />
+
+                      <ProfileInfoRow
+                        icon={<BoltRoundedIcon />}
+                        label="Mock payments"
+                        value={`${completedPaymentCount} completed`}
+                      />
+
+                      <ProfileInfoRow
                         icon={<HomeWorkRoundedIcon />}
                         label="Hosted listings"
                         value={`${hostListings.length} active`}
@@ -537,6 +539,16 @@ function ProfilePage({
                         startIcon={<NotificationsRoundedIcon />}
                       >
                         View activity
+                      </Button>
+
+                      <Button
+                        component={RouterLink}
+                        to="/host-dashboard"
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<HomeWorkRoundedIcon />}
+                      >
+                        Host dashboard
                       </Button>
                     </Stack>
                   </CardContent>
@@ -649,6 +661,66 @@ function ListingRow({ listing, action }) {
           </Stack>
         </CardContent>
       </CardActionArea>
+    </Card>
+  );
+}
+
+function BookingRequestRow({ request, onCancel }) {
+  const primaryAction = getBookingRequestPrimaryAction(request);
+  const canCancel = [
+    BOOKING_STATUSES.PENDING,
+    BOOKING_STATUSES.APPROVED,
+    BOOKING_STATUSES.WAITLISTED,
+    BOOKING_STATUSES.CONFIRMED,
+    BOOKING_STATUSES.ACTIVE,
+  ].includes(request.status);
+
+  return (
+    <Card variant="outlined" sx={{ boxShadow: "none" }}>
+      <CardContent sx={{ p: 2.25 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          justifyContent="space-between"
+        >
+          <Box>
+            <Typography fontWeight={900}>{request.listingTitle}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              {request.duration} · {request.moveInDate} to {request.moveOutDate}
+            </Typography>
+          </Box>
+
+          <Stack
+            direction="row"
+            spacing={1}
+            alignItems="center"
+            flexWrap="wrap"
+            useFlexGap
+          >
+            <Chip label={request.status} size="small" variant="outlined" />
+
+            <Button
+              size="small"
+              component={RouterLink}
+              to={primaryAction.to}
+              endIcon={<ArrowForwardRoundedIcon />}
+            >
+              {primaryAction.label}
+            </Button>
+
+            {canCancel && (
+              <Button
+                size="small"
+                color="error"
+                onClick={() => onCancel?.(request.id)}
+              >
+                Cancel
+              </Button>
+            )}
+          </Stack>
+        </Stack>
+      </CardContent>
     </Card>
   );
 }

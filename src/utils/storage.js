@@ -1,9 +1,12 @@
 import {
+  BOOKING_REQUESTS_KEY,
   CURRENT_USER_KEY,
   LEGACY_USER_LISTINGS_KEY,
+  PAYMENT_RECORDS_KEY,
   SAVED_LISTINGS_KEY,
   USER_LISTINGS_KEY,
 } from "../constants/storageKeys";
+import { normalizeBookingRequestList } from "./bookingUtils";
 import { normalizeSavedIds } from "./listingUtils";
 
 function canUseLocalStorage() {
@@ -84,4 +87,25 @@ export function readSavedListingIds() {
 
 export function writeSavedListingIds(savedListingIds) {
   return safeWriteJson(SAVED_LISTINGS_KEY, normalizeSavedIds(savedListingIds));
+}
+
+export function readBookingRequests() {
+  return normalizeBookingRequestList(safeReadJson(BOOKING_REQUESTS_KEY, []));
+}
+
+export function writeBookingRequests(bookingRequests) {
+  return safeWriteJson(
+    BOOKING_REQUESTS_KEY,
+    normalizeBookingRequestList(bookingRequests)
+  );
+}
+
+export function readPaymentRecords() {
+  const storedPayments = safeReadJson(PAYMENT_RECORDS_KEY, []);
+  return Array.isArray(storedPayments) ? storedPayments : [];
+}
+
+export function writePaymentRecords(paymentRecords) {
+  const safePaymentRecords = Array.isArray(paymentRecords) ? paymentRecords : [];
+  return safeWriteJson(PAYMENT_RECORDS_KEY, safePaymentRecords);
 }

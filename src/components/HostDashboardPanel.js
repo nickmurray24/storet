@@ -1,112 +1,938 @@
-import { Link } from 'react-router-dom';
+import React from "react";
+import { Link as RouterLink } from "react-router-dom";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  Container,
+  Divider,
+  LinearProgress,
+  Stack,
+  Typography,
+} from "@mui/material";
+import { alpha } from "@mui/material/styles";
+
+import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
+import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
+import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
+import HourglassTopRoundedIcon from "@mui/icons-material/HourglassTopRounded";
+import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
+import MailRoundedIcon from "@mui/icons-material/MailRounded";
+import PauseCircleRoundedIcon from "@mui/icons-material/PauseCircleRounded";
+import PendingActionsRoundedIcon from "@mui/icons-material/PendingActionsRounded";
+import PlayCircleRoundedIcon from "@mui/icons-material/PlayCircleRounded";
+import QueryStatsRoundedIcon from "@mui/icons-material/QueryStatsRounded";
+import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
+import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
+import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
+import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
+
+import { BOOKING_STATUSES } from "../utils/bookingUtils";
+import {
+  getBookingRequestPrimaryAction,
+  getBookingTimestamp,
+  sortBookingRequestsByNewest,
+} from "../utils/bookingSelectors";
+
+const APPROVED_OR_BETTER_STATUSES = [
+  BOOKING_STATUSES.APPROVED,
+  BOOKING_STATUSES.CONFIRMED,
+  BOOKING_STATUSES.ACTIVE,
+  BOOKING_STATUSES.COMPLETED,
+];
+
+const BOOKED_STATUSES = [
+  BOOKING_STATUSES.CONFIRMED,
+  BOOKING_STATUSES.ACTIVE,
+  BOOKING_STATUSES.COMPLETED,
+];
 
 function formatDateTime(dateValue) {
-  return new Date(dateValue).toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
+  if (!dateValue) {
+    return "Recently";
+  }
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Recently";
+  }
+
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
   });
 }
 
-function getStatusClass(status) {
-  return status.toLowerCase().replace(/\s+/g, '-');
-}
-
 function getPriceValue(price) {
-  const numeric = Number(String(price).replace(/[^0-9.]/g, ''));
+  const numeric = Number(String(price).replace(/[^0-9.]/g, ""));
   return Number.isNaN(numeric) ? 0 : numeric;
 }
 
 function formatMoney(value) {
-  return `$${value.toFixed(0)}`;
+  return `$${Number(value || 0).toFixed(0)}`;
 }
 
 function formatPercent(value) {
-  return `${value.toFixed(0)}%`;
+  return `${Number(value || 0).toFixed(0)}%`;
+}
+
+function getStatusChipProps(status = "") {
+  const statusMap = {
+    [BOOKING_STATUSES.PENDING]: {
+      color: "warning",
+      icon: <PendingActionsRoundedIcon />,
+    },
+    [BOOKING_STATUSES.APPROVED]: {
+      color: "success",
+      icon: <CheckCircleRoundedIcon />,
+    },
+    [BOOKING_STATUSES.WAITLISTED]: {
+      color: "info",
+      icon: <HourglassTopRoundedIcon />,
+    },
+    [BOOKING_STATUSES.DECLINED]: {
+      color: "error",
+      icon: <CancelRoundedIcon />,
+    },
+    [BOOKING_STATUSES.CONFIRMED]: {
+      color: "success",
+      icon: <TaskAltRoundedIcon />,
+    },
+    [BOOKING_STATUSES.ACTIVE]: {
+      color: "primary",
+      icon: <PlayCircleRoundedIcon />,
+    },
+    [BOOKING_STATUSES.COMPLETED]: {
+      color: "default",
+      icon: <TaskAltRoundedIcon />,
+    },
+    [BOOKING_STATUSES.CANCELLED]: {
+      color: "default",
+      icon: <CancelRoundedIcon />,
+    },
+  };
+
+  return statusMap[status] || { color: "default", icon: null };
+}
+
+function getListingRating(listing = {}) {
+  return Number(listing.averageRating || listing.rating || 0);
+}
+
+function getListingReviewCount(listing = {}) {
+  return Number(listing.reviewCount || listing.reviews || 0);
+}
+
+function SectionHeader({ eyebrow, title, description, action }) {
+  return (
+    <Stack
+      direction={{ xs: "column", sm: "row" }}
+      spacing={2}
+      alignItems={{ xs: "flex-start", sm: "center" }}
+      justifyContent="space-between"
+      sx={{ mb: 2.5 }}
+    >
+      <Box>
+        {eyebrow && (
+          <Typography
+            variant="overline"
+            color="primary"
+            sx={{ fontWeight: 900, letterSpacing: 1.2 }}
+          >
+            {eyebrow}
+          </Typography>
+        )}
+
+        <Typography variant="h4" sx={{ fontSize: { xs: "1.45rem", md: "1.8rem" } }}>
+          {title}
+        </Typography>
+
+        {description && (
+          <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 720 }}>
+            {description}
+          </Typography>
+        )}
+      </Box>
+
+      {action}
+    </Stack>
+  );
+}
+
+function StatCard({ icon, label, value, helper, tone = "primary" }) {
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        height: "100%",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 4,
+        bgcolor: "background.paper",
+      }}
+    >
+      <CardContent sx={{ p: 2.5 }}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Box
+            sx={(theme) => ({
+              width: 42,
+              height: 42,
+              borderRadius: 3,
+              display: "grid",
+              placeItems: "center",
+              color: `${tone}.main`,
+              bgcolor: alpha(theme.palette[tone]?.main || theme.palette.primary.main, 0.1),
+              flexShrink: 0,
+            })}
+          >
+            {icon}
+          </Box>
+
+          <Box>
+            <Typography variant="h4" sx={{ lineHeight: 1, fontWeight: 900 }}>
+              {value}
+            </Typography>
+            <Typography sx={{ mt: 0.5, fontWeight: 800 }}>{label}</Typography>
+            {helper && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                {helper}
+              </Typography>
+            )}
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyState({ icon, title, description, action }) {
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        border: "1px dashed",
+        borderColor: "divider",
+        borderRadius: 4,
+        bgcolor: "background.default",
+      }}
+    >
+      <CardContent sx={{ p: { xs: 3, md: 4 }, textAlign: "center" }}>
+        <Box
+          sx={{
+            width: 58,
+            height: 58,
+            borderRadius: "50%",
+            bgcolor: "background.paper",
+            display: "grid",
+            placeItems: "center",
+            mx: "auto",
+            mb: 1.5,
+            color: "primary.main",
+            border: "1px solid",
+            borderColor: "divider",
+          }}
+        >
+          {icon}
+        </Box>
+
+        <Typography variant="h5">{title}</Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.75, mb: action ? 2 : 0 }}>
+          {description}
+        </Typography>
+        {action}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MetricPill({ label, value }) {
+  return (
+    <Box
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 3,
+        px: 1.5,
+        py: 1.15,
+        bgcolor: "background.default",
+      }}
+    >
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+        {label}
+      </Typography>
+      <Typography sx={{ fontWeight: 900 }}>{value}</Typography>
+    </Box>
+  );
+}
+
+function DetailRow({ label, value }) {
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 800 }}>
+        {label}
+      </Typography>
+      <Typography sx={{ fontWeight: 800 }}>{value || "Not provided"}</Typography>
+    </Box>
+  );
+}
+
+function BookingActionButtons({ request, onUpdateBookingRequestStatus, onUpdateBookingLifecycle }) {
+  const primaryAction = getBookingRequestPrimaryAction(request);
+
+  return (
+    <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 2 }}>
+      {request.status === BOOKING_STATUSES.PENDING && (
+        <>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<CheckCircleRoundedIcon />}
+            onClick={() => onUpdateBookingRequestStatus(request.id, BOOKING_STATUSES.APPROVED)}
+          >
+            Approve
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<HourglassTopRoundedIcon />}
+            onClick={() => onUpdateBookingRequestStatus(request.id, BOOKING_STATUSES.WAITLISTED)}
+          >
+            Waitlist
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            startIcon={<CancelRoundedIcon />}
+            onClick={() => onUpdateBookingRequestStatus(request.id, BOOKING_STATUSES.DECLINED)}
+          >
+            Decline
+          </Button>
+        </>
+      )}
+
+      {request.status === BOOKING_STATUSES.WAITLISTED && (
+        <>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<CheckCircleRoundedIcon />}
+            onClick={() => onUpdateBookingRequestStatus(request.id, BOOKING_STATUSES.APPROVED)}
+          >
+            Approve
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => onUpdateBookingRequestStatus(request.id, BOOKING_STATUSES.PENDING)}
+          >
+            Move to pending
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            startIcon={<CancelRoundedIcon />}
+            onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.CANCELLED)}
+          >
+            Cancel
+          </Button>
+        </>
+      )}
+
+      {request.status === BOOKING_STATUSES.APPROVED && (
+        <>
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => onUpdateBookingRequestStatus(request.id, BOOKING_STATUSES.PENDING)}
+          >
+            Move to pending
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            onClick={() => onUpdateBookingRequestStatus(request.id, BOOKING_STATUSES.WAITLISTED)}
+          >
+            Move to waitlist
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            startIcon={<CancelRoundedIcon />}
+            onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.CANCELLED)}
+          >
+            Cancel
+          </Button>
+        </>
+      )}
+
+      {request.status === BOOKING_STATUSES.CONFIRMED && (
+        <>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<PlayCircleRoundedIcon />}
+            onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.ACTIVE)}
+          >
+            Mark active
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            startIcon={<CancelRoundedIcon />}
+            onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.CANCELLED)}
+          >
+            Cancel
+          </Button>
+        </>
+      )}
+
+      {request.status === BOOKING_STATUSES.ACTIVE && (
+        <>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<TaskAltRoundedIcon />}
+            onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.COMPLETED)}
+          >
+            Mark completed
+          </Button>
+
+          <Button
+            variant="outlined"
+            size="small"
+            color="error"
+            startIcon={<CancelRoundedIcon />}
+            onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.CANCELLED)}
+          >
+            Cancel
+          </Button>
+        </>
+      )}
+
+      <Button
+        component={RouterLink}
+        to={primaryAction.to}
+        variant="text"
+        size="small"
+        endIcon={<ArrowForwardRoundedIcon />}
+      >
+        {primaryAction.label}
+      </Button>
+    </Stack>
+  );
+}
+
+function BookingRequestCard({ request, onUpdateBookingRequestStatus, onUpdateBookingLifecycle }) {
+  const chipProps = getStatusChipProps(request.status);
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 4,
+        overflow: "hidden",
+      }}
+    >
+      <CardContent sx={{ p: { xs: 2.25, md: 3 } }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          justifyContent="space-between"
+          sx={{ mb: 1.5 }}
+        >
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            <Chip
+              icon={chipProps.icon}
+              label={request.status}
+              color={chipProps.color}
+              size="small"
+              sx={{ fontWeight: 800 }}
+            />
+            <Chip
+              icon={<ScheduleRoundedIcon />}
+              label={formatDateTime(getBookingTimestamp(request))}
+              variant="outlined"
+              size="small"
+              sx={{ fontWeight: 700 }}
+            />
+          </Stack>
+
+          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
+            {formatMoney(request.listingPrice)} / month
+          </Typography>
+        </Stack>
+
+        <Typography variant="h5" sx={{ mb: 0.5 }}>
+          {request.listingTitle}
+        </Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Request from {request.renterName || "Renter"}
+        </Typography>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(4, 1fr)" },
+            gap: 1.5,
+            mb: request.notes || request.waitlistReason ? 2 : 0,
+          }}
+        >
+          <DetailRow label="Renter email" value={request.renterEmail} />
+          <DetailRow label="Move-in" value={request.moveInDate} />
+          <DetailRow label="Move-out" value={request.moveOutDate} />
+          <DetailRow label="Duration" value={request.duration} />
+        </Box>
+
+        {(request.waitlistReason || request.notes) && (
+          <Stack spacing={1.25} sx={{ mb: 0.5 }}>
+            {request.waitlistReason && (
+              <Alert severity="info" variant="outlined" sx={{ borderRadius: 3 }}>
+                <strong>Waitlist reason:</strong> {request.waitlistReason}
+              </Alert>
+            )}
+
+            {request.notes && (
+              <Alert severity="info" variant="outlined" sx={{ borderRadius: 3 }}>
+                <strong>Renter notes:</strong> {request.notes}
+              </Alert>
+            )}
+          </Stack>
+        )}
+
+        <BookingActionButtons
+          request={request}
+          onUpdateBookingRequestStatus={onUpdateBookingRequestStatus}
+          onUpdateBookingLifecycle={onUpdateBookingLifecycle}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function AttentionItem({ listing }) {
+  const chips = [
+    listing.pending > 0 && { label: `${listing.pending} pending`, color: "warning" },
+    listing.waitlisted > 0 && { label: `${listing.waitlisted} waitlisted`, color: "info" },
+    listing.unreadMessages > 0 && { label: `${listing.unreadMessages} unread`, color: "error" },
+    listing.status === "paused" && { label: "Paused", color: "default" },
+  ].filter(Boolean);
+
+  return (
+    <Card
+      elevation={0}
+      sx={{ border: "1px solid", borderColor: "divider", borderRadius: 4 }}
+    >
+      <CardContent sx={{ p: 2.25 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          justifyContent="space-between"
+        >
+          <Box>
+            <Typography variant="h6">{listing.title}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {listing.location}
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+            {chips.map((chip) => (
+              <Chip
+                key={chip.label}
+                label={chip.label}
+                color={chip.color}
+                size="small"
+                sx={{ fontWeight: 800 }}
+              />
+            ))}
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ListingPerformanceCard({ listing }) {
+  const requestProgress = Math.min(100, listing.totalRequests * 20);
+  const bookedProgress = listing.totalRequests > 0 ? (listing.confirmed / listing.totalRequests) * 100 : 0;
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        height: "100%",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 4,
+      }}
+    >
+      <CardContent sx={{ p: 2.5 }}>
+        <Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
+          <Box>
+            <Typography variant="h6">{listing.title}</Typography>
+            <Typography variant="body2" color="text.secondary">
+              {listing.location}
+            </Typography>
+          </Box>
+
+          <Chip
+            icon={<StarRoundedIcon />}
+            label={
+              getListingReviewCount(listing) > 0
+                ? `${getListingRating(listing).toFixed(1)} (${getListingReviewCount(listing)})`
+                : "No reviews"
+            }
+            variant="outlined"
+            size="small"
+            sx={{ fontWeight: 800 }}
+          />
+        </Stack>
+
+        <Box sx={{ my: 2.5 }}>
+          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
+              Request activity
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 900 }}>
+              {listing.totalRequests} total
+            </Typography>
+          </Stack>
+          <LinearProgress
+            variant="determinate"
+            value={requestProgress}
+            sx={{ height: 8, borderRadius: 999, mb: 1.5 }}
+          />
+
+          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75 }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
+              Confirmed bookings
+            </Typography>
+            <Typography variant="body2" sx={{ fontWeight: 900 }}>
+              {listing.confirmed}
+            </Typography>
+          </Stack>
+          <LinearProgress
+            color="success"
+            variant="determinate"
+            value={bookedProgress}
+            sx={{ height: 8, borderRadius: 999 }}
+          />
+        </Box>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gap: 1,
+          }}
+        >
+          <MetricPill label="Pending" value={listing.pending} />
+          <MetricPill label="Waitlisted" value={listing.waitlisted} />
+          <MetricPill label="Messages" value={listing.messageCount} />
+          <MetricPill label="Booked est." value={formatMoney(listing.bookedEstimate)} />
+        </Box>
+
+        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+          <Button
+            component={RouterLink}
+            to={`/listing/${listing.id}`}
+            variant="outlined"
+            size="small"
+            startIcon={<VisibilityRoundedIcon />}
+          >
+            View
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/create-listing"
+            variant="text"
+            size="small"
+            endIcon={<ArrowForwardRoundedIcon />}
+          >
+            Create similar
+          </Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function MessageCard({ message, onUpdateHostMessageStatus }) {
+  const isRead = message.status === "Read";
+
+  return (
+    <Card
+      elevation={0}
+      sx={{ border: "1px solid", borderColor: "divider", borderRadius: 4 }}
+    >
+      <CardContent sx={{ p: 2.5 }}>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          justifyContent="space-between"
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          sx={{ mb: 1 }}
+        >
+          <Chip
+            icon={<MailRoundedIcon />}
+            label={message.status}
+            color={isRead ? "default" : "primary"}
+            size="small"
+            sx={{ fontWeight: 800 }}
+          />
+          <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
+            {formatDateTime(message.submittedAt)}
+          </Typography>
+        </Stack>
+
+        <Typography variant="h6">{message.listingTitle}</Typography>
+        <Typography color="text.secondary" sx={{ mb: 1 }}>
+          From {message.senderName || "Renter"} · {message.senderEmail || "No email"}
+        </Typography>
+        <Typography sx={{ mb: 2 }}>{message.message}</Typography>
+
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Button
+            variant={isRead ? "outlined" : "contained"}
+            size="small"
+            startIcon={<MailRoundedIcon />}
+            onClick={() => onUpdateHostMessageStatus(message.id, isRead ? "Unread" : "Read")}
+          >
+            Mark {isRead ? "unread" : "read"}
+          </Button>
+          <Button
+            component={RouterLink}
+            to={`/listing/${message.listingId}`}
+            variant="text"
+            size="small"
+            endIcon={<ArrowForwardRoundedIcon />}
+          >
+            Open listing
+          </Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
+  const isPaused = listing.status === "paused";
+
+  function handleDelete() {
+    const shouldDelete = window.confirm(
+      `Delete "${listing.title}"? This will remove the listing and its related activity.`
+    );
+
+    if (shouldDelete) {
+      onDeleteListing(listing.id);
+    }
+  }
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        height: "100%",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 4,
+      }}
+    >
+      <CardContent sx={{ p: 2.5 }}>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
+          <Chip
+            label={listing.listingType || listing.type || "Private host"}
+            color="primary"
+            variant="outlined"
+            size="small"
+            sx={{ fontWeight: 800 }}
+          />
+          <Chip
+            label={isPaused ? "Paused" : "Active"}
+            color={isPaused ? "default" : "success"}
+            size="small"
+            sx={{ fontWeight: 800 }}
+          />
+        </Stack>
+
+        <Typography variant="h6">{listing.title}</Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.25 }}>
+          {listing.location}
+        </Typography>
+
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: "repeat(2, 1fr)",
+            gap: 1,
+            my: 2,
+          }}
+        >
+          <MetricPill label="Price" value={listing.price || "$0/month"} />
+          <MetricPill
+            label="Booking"
+            value={listing.instantBook ? "Instant" : listing.waitlist ? "Waitlist" : "Approval"}
+          />
+          <MetricPill label="Waitlist" value={listing.waitlist ? "Enabled" : "Disabled"} />
+          <MetricPill label="Status" value={isPaused ? "Paused" : "Live"} />
+        </Box>
+
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+          <Button
+            component={RouterLink}
+            to={`/listing/${listing.id}`}
+            variant="outlined"
+            size="small"
+            startIcon={<VisibilityRoundedIcon />}
+          >
+            View
+          </Button>
+
+          <Button
+            component={RouterLink}
+            to="/create-listing"
+            variant="text"
+            size="small"
+          >
+            Create similar
+          </Button>
+
+          <Button
+            variant="outlined"
+            color={isPaused ? "success" : "warning"}
+            size="small"
+            startIcon={isPaused ? <PlayCircleRoundedIcon /> : <PauseCircleRoundedIcon />}
+            onClick={() => onToggleListingStatus(listing.id)}
+          >
+            {isPaused ? "Resume" : "Pause"}
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<DeleteRoundedIcon />}
+            onClick={handleDelete}
+          >
+            Delete
+          </Button>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
 }
 
 function HostDashboardPanel({
-  myListings,
+  myListings = [],
   bookingRequests = [],
   hostMessages = [],
-  onDeleteListing,
-  onToggleListingStatus,
-  onUpdateBookingRequestStatus,
-  onUpdateBookingLifecycle,
-  onUpdateHostMessageStatus,
+  onDeleteListing = () => {},
+  onToggleListingStatus = () => {},
+  onUpdateBookingRequestStatus = () => {},
+  onUpdateBookingLifecycle = () => {},
+  onUpdateHostMessageStatus = () => {},
 }) {
-  const activeCount = myListings.filter((listing) => listing.status !== 'paused').length;
-  const pausedCount = myListings.filter((listing) => listing.status === 'paused').length;
-  const pendingRequestCount = bookingRequests.filter(
-    (request) => request.status === 'Pending'
+  const safeMyListings = Array.isArray(myListings) ? myListings : [];
+  const sortedBookingRequests = sortBookingRequestsByNewest(bookingRequests);
+  const safeHostMessages = Array.isArray(hostMessages) ? hostMessages : [];
+
+  const activeCount = safeMyListings.filter((listing) => listing.status !== "paused").length;
+  const pausedCount = safeMyListings.filter((listing) => listing.status === "paused").length;
+  const pendingRequestCount = sortedBookingRequests.filter(
+    (request) => request.status === BOOKING_STATUSES.PENDING
   ).length;
-  const waitlistedCount = bookingRequests.filter(
-    (request) => request.status === 'Waitlisted'
+  const waitlistedCount = sortedBookingRequests.filter(
+    (request) => request.status === BOOKING_STATUSES.WAITLISTED
   ).length;
-  const unreadMessageCount = hostMessages.filter(
-    (message) => message.status === 'Unread'
+  const unreadMessageCount = safeHostMessages.filter((message) => message.status === "Unread").length;
+  const confirmedCount = sortedBookingRequests.filter(
+    (request) => request.status === BOOKING_STATUSES.CONFIRMED
   ).length;
-  const confirmedCount = bookingRequests.filter(
-    (request) => request.status === 'Confirmed'
+  const activeBookingCount = sortedBookingRequests.filter(
+    (request) => request.status === BOOKING_STATUSES.ACTIVE
   ).length;
-  const activeBookingCount = bookingRequests.filter(
-    (request) => request.status === 'Active'
-  ).length;
-  const completedCount = bookingRequests.filter(
-    (request) => request.status === 'Completed'
+  const completedCount = sortedBookingRequests.filter(
+    (request) => request.status === BOOKING_STATUSES.COMPLETED
   ).length;
 
-  const approvedLikeCount = bookingRequests.filter((request) =>
-    ['Approved', 'Confirmed', 'Active', 'Completed'].includes(request.status)
+  const approvedLikeCount = sortedBookingRequests.filter((request) =>
+    APPROVED_OR_BETTER_STATUSES.includes(request.status)
   ).length;
 
   const conversionRate =
-    bookingRequests.length > 0
-      ? (approvedLikeCount / bookingRequests.length) * 100
+    sortedBookingRequests.length > 0
+      ? (approvedLikeCount / sortedBookingRequests.length) * 100
       : 0;
 
-  const bookedVolumeEstimate = bookingRequests.reduce((total, request) => {
-    if (!['Confirmed', 'Active', 'Completed'].includes(request.status)) {
+  const bookedVolumeEstimate = sortedBookingRequests.reduce((total, request) => {
+    if (!BOOKED_STATUSES.includes(request.status)) {
       return total;
     }
 
     return total + getPriceValue(request.listingPrice);
   }, 0);
 
-  const listingAnalytics = myListings
+  const averageRating =
+    safeMyListings.length > 0
+      ? safeMyListings.reduce((sum, listing) => sum + getListingRating(listing), 0) /
+        safeMyListings.length
+      : 0;
+
+  const listingAnalytics = safeMyListings
     .map((listing) => {
-      const listingRequests = bookingRequests.filter(
-        (request) => request.listingId === listing.id
+      const listingRequests = sortedBookingRequests.filter(
+        (request) => String(request.listingId) === String(listing.id)
       );
-      const listingMessages = hostMessages.filter(
-        (message) => message.listingId === listing.id
+      const listingMessages = safeHostMessages.filter(
+        (message) => String(message.listingId) === String(listing.id)
       );
 
       const pending = listingRequests.filter(
-        (request) => request.status === 'Pending'
+        (request) => request.status === BOOKING_STATUSES.PENDING
       ).length;
 
       const waitlisted = listingRequests.filter(
-        (request) => request.status === 'Waitlisted'
+        (request) => request.status === BOOKING_STATUSES.WAITLISTED
       ).length;
 
       const approved = listingRequests.filter((request) =>
-        ['Approved', 'Confirmed', 'Active', 'Completed'].includes(request.status)
+        APPROVED_OR_BETTER_STATUSES.includes(request.status)
       ).length;
 
       const confirmed = listingRequests.filter((request) =>
-        ['Confirmed', 'Active', 'Completed'].includes(request.status)
+        BOOKED_STATUSES.includes(request.status)
       ).length;
 
       const completed = listingRequests.filter(
-        (request) => request.status === 'Completed'
+        (request) => request.status === BOOKING_STATUSES.COMPLETED
       ).length;
 
-      const unreadMessages = listingMessages.filter(
-        (message) => message.status === 'Unread'
-      ).length;
-
+      const unreadMessages = listingMessages.filter((message) => message.status === "Unread").length;
       const bookedEstimate = confirmed * getPriceValue(listing.price);
 
       return {
@@ -131,7 +957,7 @@ function HostDashboardPanel({
         return b.totalRequests - a.totalRequests;
       }
 
-      return b.averageRating - a.averageRating;
+      return getListingRating(b) - getListingRating(a);
     });
 
   const attentionListings = listingAnalytics.filter(
@@ -139,618 +965,329 @@ function HostDashboardPanel({
       listing.pending > 0 ||
       listing.waitlisted > 0 ||
       listing.unreadMessages > 0 ||
-      listing.status === 'paused'
+      listing.status === "paused"
   );
 
-  function handleDelete(listing) {
-    const shouldDelete = window.confirm(
-      `Delete "${listing.title}"? This will remove the listing and its related activity.`
-    );
-
-    if (!shouldDelete) {
-      return;
-    }
-
-    onDeleteListing(listing.id);
-  }
+  const actionNeededCount = pendingRequestCount + waitlistedCount + unreadMessageCount + pausedCount;
 
   return (
-    <div className="host-dashboard">
-      <section className="host-hero-card">
-        <div>
-          <p className="host-eyebrow">Host Mode</p>
-          <h2>Manage the full booking lifecycle.</h2>
-          <p className="host-copy">
-            Review booking activity, track listing performance, and spot where
-            host attention is needed most.
-          </p>
-        </div>
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", pb: 6 }}>
+      <Box
+        sx={(theme) => ({
+          borderBottom: "1px solid",
+          borderColor: "divider",
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${theme.palette.background.paper} 55%, ${alpha(theme.palette.success.main, 0.1)} 100%)`,
+        })}
+      >
+        <Container maxWidth="lg" sx={{ py: { xs: 4, md: 5 } }}>
+          <Stack
+            direction={{ xs: "column", md: "row" }}
+            spacing={3}
+            alignItems={{ xs: "flex-start", md: "center" }}
+            justifyContent="space-between"
+          >
+            <Box>
+              <Chip
+                icon={<StorefrontRoundedIcon />}
+                label="Host Dashboard"
+                color="primary"
+                sx={{ mb: 1.5, fontWeight: 900 }}
+              />
 
-        <div className="host-hero-actions">
-          <Link to="/create-listing" className="primary-button">
-            Create Listing
-          </Link>
-          <Link to="/profile" className="secondary-button">
-            View Profile
-          </Link>
-        </div>
-      </section>
+              <Typography
+                variant="h2"
+                sx={{ fontSize: { xs: "2.25rem", md: "3.25rem" }, lineHeight: 1 }}
+              >
+                Manage your spaces with less guesswork.
+              </Typography>
 
-      <section className="host-stats-grid">
-        <div className="host-stat-card">
-          <h3>{myListings.length}</h3>
-          <p>My Listings</p>
-        </div>
+              <Typography color="text.secondary" sx={{ mt: 1.5, maxWidth: 720, fontSize: "1.05rem" }}>
+                Review renter requests, monitor listing performance, and quickly see what needs your attention next.
+              </Typography>
+            </Box>
 
-        <div className="host-stat-card">
-          <h3>{activeCount}</h3>
-          <p>Active Listings</p>
-        </div>
+            <Stack direction={{ xs: "column", sm: "row", md: "column" }} spacing={1.25} sx={{ width: { xs: "100%", sm: "auto" } }}>
+              <Button
+                component={RouterLink}
+                to="/create-listing"
+                variant="contained"
+                size="large"
+                startIcon={<AddHomeWorkRoundedIcon />}
+              >
+                Create listing
+              </Button>
+              <Button
+                component={RouterLink}
+                to="/profile"
+                variant="outlined"
+                size="large"
+                startIcon={<Inventory2RoundedIcon />}
+                sx={{ bgcolor: "background.paper" }}
+              >
+                View profile
+              </Button>
+            </Stack>
+          </Stack>
+        </Container>
+      </Box>
 
-        <div className="host-stat-card">
-          <h3>{pendingRequestCount}</h3>
-          <p>Pending Requests</p>
-        </div>
+      <Container maxWidth="lg" sx={{ mt: { xs: 3, md: 4 } }}>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, 1fr)",
+              lg: "repeat(4, 1fr)",
+            },
+            gap: 2,
+            mb: 4,
+          }}
+        >
+          <StatCard
+            icon={<WarningAmberRoundedIcon />}
+            label="Needs attention"
+            value={actionNeededCount}
+            helper="Pending, waitlisted, unread, or paused"
+            tone={actionNeededCount > 0 ? "warning" : "success"}
+          />
+          <StatCard
+            icon={<Inventory2RoundedIcon />}
+            label="Hosted listings"
+            value={safeMyListings.length}
+            helper={`${activeCount} active · ${pausedCount} paused`}
+          />
+          <StatCard
+            icon={<PendingActionsRoundedIcon />}
+            label="Open requests"
+            value={pendingRequestCount + waitlistedCount}
+            helper={`${pendingRequestCount} pending · ${waitlistedCount} waitlisted`}
+            tone="warning"
+          />
+          <StatCard
+            icon={<TaskAltRoundedIcon />}
+            label="Confirmed / active"
+            value={confirmedCount + activeBookingCount}
+            helper={`${completedCount} completed rentals`}
+            tone="success"
+          />
+        </Box>
 
-        <div className="host-stat-card">
-          <h3>{waitlistedCount}</h3>
-          <p>Waitlisted</p>
-        </div>
+        <Card
+          elevation={0}
+          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
+        >
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <SectionHeader
+              eyebrow="Overview"
+              title="Host performance snapshot"
+              description="A simple summary of conversion, estimated booking volume, ratings, and inbox activity."
+            />
 
-        <div className="host-stat-card">
-          <h3>{confirmedCount}</h3>
-          <p>Confirmed Bookings</p>
-        </div>
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(4, 1fr)" },
+                gap: 1.5,
+              }}
+            >
+              <MetricPill label="Booking conversion" value={formatPercent(conversionRate)} />
+              <MetricPill label="Booked volume estimate" value={formatMoney(bookedVolumeEstimate)} />
+              <MetricPill label="Average listing rating" value={averageRating.toFixed(1)} />
+              <MetricPill label="Unread messages" value={unreadMessageCount} />
+            </Box>
+          </CardContent>
+        </Card>
 
-        <div className="host-stat-card">
-          <h3>{activeBookingCount}</h3>
-          <p>Active Rentals</p>
-        </div>
+        <Card
+          elevation={0}
+          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
+        >
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <SectionHeader
+              eyebrow="Focus area"
+              title="Needs attention"
+              description="These listings have open requests, waitlisted renters, unread messages, or are currently paused."
+            />
 
-        <div className="host-stat-card">
-          <h3>{completedCount}</h3>
-          <p>Completed Rentals</p>
-        </div>
+            {attentionListings.length > 0 ? (
+              <Stack spacing={1.5}>
+                {attentionListings.map((listing) => (
+                  <AttentionItem key={listing.id} listing={listing} />
+                ))}
+              </Stack>
+            ) : (
+              <EmptyState
+                icon={<CheckCircleRoundedIcon />}
+                title="No urgent host items right now"
+                description="Your hosted spaces currently look caught up."
+              />
+            )}
+          </CardContent>
+        </Card>
 
-        <div className="host-stat-card">
-          <h3>{unreadMessageCount}</h3>
-          <p>Unread Messages</p>
-        </div>
+        <Card
+          elevation={0}
+          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
+        >
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <SectionHeader
+              eyebrow="Requests"
+              title="Reservation requests & bookings"
+              description="Move renters through the booking lifecycle: approve, waitlist, activate, complete, or cancel."
+            />
 
-        <div className="host-stat-card">
-          <h3>{pausedCount}</h3>
-          <p>Paused Listings</p>
-        </div>
-      </section>
+            {sortedBookingRequests.length > 0 ? (
+              <Stack spacing={2}>
+                {sortedBookingRequests.map((request) => (
+                  <BookingRequestCard
+                    key={request.id}
+                    request={request}
+                    onUpdateBookingRequestStatus={onUpdateBookingRequestStatus}
+                    onUpdateBookingLifecycle={onUpdateBookingLifecycle}
+                  />
+                ))}
+              </Stack>
+            ) : (
+              <EmptyState
+                icon={<PendingActionsRoundedIcon />}
+                title="No reservation requests yet"
+                description="When renters reserve your spaces, requests will show up here."
+              />
+            )}
+          </CardContent>
+        </Card>
 
-      <section className="host-analytics-grid">
-        <div className="analytics-card">
-          <p className="analytics-label">Booking Conversion</p>
-          <h3>{formatPercent(conversionRate)}</h3>
-          <p className="results-subtext">
-            Based on approved, confirmed, active, and completed bookings.
-          </p>
-        </div>
+        <Card
+          elevation={0}
+          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
+        >
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <SectionHeader
+              eyebrow="Analytics"
+              title="Listing performance"
+              description="See which spaces are generating activity and where renters are getting stuck."
+            />
 
-        <div className="analytics-card">
-          <p className="analytics-label">Booked Volume Estimate</p>
-          <h3>{formatMoney(bookedVolumeEstimate)}</h3>
-          <p className="results-subtext">
-            Based on confirmed, active, and completed booking totals.
-          </p>
-        </div>
+            {listingAnalytics.length > 0 ? (
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                  gap: 2,
+                }}
+              >
+                {listingAnalytics.map((listing) => (
+                  <ListingPerformanceCard key={listing.id} listing={listing} />
+                ))}
+              </Box>
+            ) : (
+              <EmptyState
+                icon={<QueryStatsRoundedIcon />}
+                title="No listing analytics yet"
+                description="Create listings and collect renter activity to populate analytics."
+              />
+            )}
+          </CardContent>
+        </Card>
 
-        <div className="analytics-card">
-          <p className="analytics-label">Average Listing Rating</p>
-          <h3>
-            {myListings.length > 0
-              ? (
-                  myListings.reduce(
-                    (sum, listing) => sum + (listing.averageRating || 0),
-                    0
-                  ) / myListings.length
-                ).toFixed(1)
-              : '0.0'}
-          </h3>
-          <p className="results-subtext">
-            Includes listings with no reviews as zero-rated.
-          </p>
-        </div>
-      </section>
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", lg: "0.95fr 1.05fr" },
+            gap: 4,
+          }}
+        >
+          <Card
+            elevation={0}
+            sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5 }}
+          >
+            <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+              <SectionHeader
+                eyebrow="Inbox"
+                title="Message inbox"
+                description="Renter questions will appear here once we wire message storage in the next structural phase."
+              />
 
-      <section className="host-section-card">
-        <div className="section-header">
-          <div>
-            <h2>Needs Attention</h2>
-            <p className="results-subtext">
-              Listings with pending requests, waitlisted renters, unread messages, or paused status.
-            </p>
-          </div>
-        </div>
+              {safeHostMessages.length > 0 ? (
+                <Stack spacing={2}>
+                  {safeHostMessages.map((message) => (
+                    <MessageCard
+                      key={message.id}
+                      message={message}
+                      onUpdateHostMessageStatus={onUpdateHostMessageStatus}
+                    />
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState
+                  icon={<MailRoundedIcon />}
+                  title="No messages yet"
+                  description="Phase 5 will connect ContactHostForm messages to this inbox."
+                />
+              )}
+            </CardContent>
+          </Card>
 
-        {attentionListings.length > 0 ? (
-          <div className="analytics-list">
-            {attentionListings.map((listing) => (
-              <div key={listing.id} className="analytics-list-item">
-                <div>
-                  <h3>{listing.title}</h3>
-                  <p className="results-subtext">{listing.location}</p>
-                </div>
-
-                <div className="attention-badges">
-                  {listing.pending > 0 && (
-                    <span className="analytics-badge pending">
-                      {listing.pending} pending
-                    </span>
-                  )}
-                  {listing.waitlisted > 0 && (
-                    <span className="analytics-badge waitlisted">
-                      {listing.waitlisted} waitlisted
-                    </span>
-                  )}
-                  {listing.unreadMessages > 0 && (
-                    <span className="analytics-badge unread">
-                      {listing.unreadMessages} unread
-                    </span>
-                  )}
-                  {listing.status === 'paused' && (
-                    <span className="analytics-badge paused">
-                      paused
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No urgent host items right now</h3>
-            <p>Your listings currently look caught up.</p>
-          </div>
-        )}
-      </section>
-
-      <section className="host-section-card">
-        <div className="section-header">
-          <div>
-            <h2>Listing Performance</h2>
-            <p className="results-subtext">
-              Per-listing request volume, bookings, messages, and review performance.
-            </p>
-          </div>
-        </div>
-
-        {listingAnalytics.length > 0 ? (
-          <div className="analytics-performance-grid">
-            {listingAnalytics.map((listing) => (
-              <div key={listing.id} className="analytics-performance-card">
-                <div className="analytics-performance-top">
-                  <div>
-                    <h3>{listing.title}</h3>
-                    <p className="results-subtext">{listing.location}</p>
-                  </div>
-
-                  <span className="rating-summary">
-                    {listing.reviewCount > 0
-                      ? `⭐ ${listing.averageRating.toFixed(1)} (${listing.reviewCount})`
-                      : 'No reviews'}
-                  </span>
-                </div>
-
-                <div className="analytics-metrics-grid">
-                  <p><strong>Requests:</strong> {listing.totalRequests}</p>
-                  <p><strong>Approved+:</strong> {listing.approved}</p>
-                  <p><strong>Confirmed+:</strong> {listing.confirmed}</p>
-                  <p><strong>Completed:</strong> {listing.completed}</p>
-                  <p><strong>Messages:</strong> {listing.messageCount}</p>
-                  <p><strong>Unread:</strong> {listing.unreadMessages}</p>
-                  <p><strong>Waitlisted:</strong> {listing.waitlisted}</p>
-                  <p><strong>Booked est.:</strong> {formatMoney(listing.bookedEstimate)}</p>
-                </div>
-
-                <div className="host-listing-controls">
-                  <Link
-                    to={`/listing/${listing.id}`}
-                    className="secondary-button"
-                  >
-                    View
-                  </Link>
-
-                  <Link
-                    to={`/edit-listing/${listing.id}`}
-                    className="primary-button"
-                  >
-                    Edit
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No listing analytics yet</h3>
-            <p>Create listings and collect activity to populate analytics.</p>
-          </div>
-        )}
-      </section>
-
-      <section className="host-section-card">
-        <div className="section-header">
-          <div>
-            <h2>Reservation Requests & Bookings</h2>
-            <p className="results-subtext">
-              Approve, decline, waitlist, activate, complete, or cancel bookings.
-            </p>
-          </div>
-        </div>
-
-        {bookingRequests.length > 0 ? (
-          <div className="host-listings-grid">
-            {bookingRequests.map((request) => (
-              <div key={request.id} className="host-listing-preview">
-                <div className="activity-card-header">
-                  <span className={`activity-status ${getStatusClass(request.status)}`}>
-                    {request.status}
-                  </span>
-                  <span className="results-subtext">
-                    {formatDateTime(request.submittedAt)}
-                  </span>
-                </div>
-
-                <h3>{request.listingTitle}</h3>
-
-                <div className="activity-meta-grid">
-                  <p><strong>From:</strong> {request.requesterName}</p>
-                  <p><strong>Email:</strong> {request.requesterEmail}</p>
-                  <p><strong>Move-in:</strong> {request.moveInDate}</p>
-                  <p><strong>Move-out:</strong> {request.moveOutDate}</p>
-                  <p><strong>Duration:</strong> {request.duration}</p>
-                </div>
-
-                {request.waitlistReason && (
-                  <p className="activity-note">
-                    <strong>Waitlist reason:</strong> {request.waitlistReason}
-                  </p>
-                )}
-
-                {request.notes && (
-                  <p className="activity-note">
-                    <strong>Notes:</strong> {request.notes}
-                  </p>
-                )}
-
-                <div className="activity-action-row">
-                  {request.status === 'Pending' && (
-                    <>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() =>
-                          onUpdateBookingRequestStatus(request.id, 'Approved')
-                        }
-                      >
-                        Approve
-                      </button>
-
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() =>
-                          onUpdateBookingRequestStatus(request.id, 'Waitlisted')
-                        }
-                      >
-                        Waitlist
-                      </button>
-
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() =>
-                          onUpdateBookingRequestStatus(request.id, 'Declined')
-                        }
-                      >
-                        Decline
-                      </button>
-                    </>
-                  )}
-
-                  {request.status === 'Waitlisted' && (
-                    <>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() =>
-                          onUpdateBookingRequestStatus(request.id, 'Approved')
-                        }
-                      >
-                        Approve from Waitlist
-                      </button>
-
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() =>
-                          onUpdateBookingRequestStatus(request.id, 'Pending')
-                        }
-                      >
-                        Mark Pending
-                      </button>
-
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() =>
-                          onUpdateBookingLifecycle(request.id, 'Cancelled')
-                        }
-                      >
-                        Cancel Waitlist
-                      </button>
-                    </>
-                  )}
-
-                  {request.status === 'Approved' && (
-                    <>
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() =>
-                          onUpdateBookingRequestStatus(request.id, 'Pending')
-                        }
-                      >
-                        Mark Pending
-                      </button>
-
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={() =>
-                          onUpdateBookingRequestStatus(request.id, 'Waitlisted')
-                        }
-                      >
-                        Move to Waitlist
-                      </button>
-
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() =>
-                          onUpdateBookingLifecycle(request.id, 'Cancelled')
-                        }
-                      >
-                        Cancel Booking
-                      </button>
-                    </>
-                  )}
-
-                  {request.status === 'Confirmed' && (
-                    <>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() =>
-                          onUpdateBookingLifecycle(request.id, 'Active')
-                        }
-                      >
-                        Mark Active
-                      </button>
-
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() =>
-                          onUpdateBookingLifecycle(request.id, 'Cancelled')
-                        }
-                      >
-                        Cancel Booking
-                      </button>
-                    </>
-                  )}
-
-                  {request.status === 'Active' && (
-                    <>
-                      <button
-                        type="button"
-                        className="primary-button"
-                        onClick={() =>
-                          onUpdateBookingLifecycle(request.id, 'Completed')
-                        }
-                      >
-                        Mark Completed
-                      </button>
-
-                      <button
-                        type="button"
-                        className="danger-button"
-                        onClick={() =>
-                          onUpdateBookingLifecycle(request.id, 'Cancelled')
-                        }
-                      >
-                        Cancel Booking
-                      </button>
-                    </>
-                  )}
-
-                  <Link
-                    to={`/listing/${request.listingId}`}
-                    className="secondary-button"
-                  >
-                    View Listing
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No reservation requests yet</h3>
-            <p>When renters reserve your spaces, requests will show up here.</p>
-          </div>
-        )}
-      </section>
-
-      <section className="host-section-card">
-        <div className="section-header">
-          <div>
-            <h2>Message Inbox</h2>
-            <p className="results-subtext">
-              Mark messages read or unread as you work through renter questions.
-            </p>
-          </div>
-        </div>
-
-        {hostMessages.length > 0 ? (
-          <div className="host-listings-grid">
-            {hostMessages.map((message) => (
-              <div key={message.id} className="host-listing-preview">
-                <div className="activity-card-header">
-                  <span className={`activity-status ${getStatusClass(message.status)}`}>
-                    {message.status}
-                  </span>
-                  <span className="results-subtext">
-                    {formatDateTime(message.submittedAt)}
-                  </span>
-                </div>
-
-                <h3>{message.listingTitle}</h3>
-
-                <div className="activity-meta-grid">
-                  <p><strong>From:</strong> {message.senderName}</p>
-                  <p><strong>Email:</strong> {message.senderEmail}</p>
-                </div>
-
-                <p className="activity-note">{message.message}</p>
-
-                {message.readAt && (
-                  <p className="results-subtext">
-                    Marked read: {formatDateTime(message.readAt)}
-                  </p>
-                )}
-
-                <div className="activity-action-row">
-                  {message.status !== 'Read' ? (
-                    <button
-                      type="button"
-                      className="primary-button"
-                      onClick={() =>
-                        onUpdateHostMessageStatus(message.id, 'Read')
-                      }
+          <Card
+            elevation={0}
+            sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5 }}
+          >
+            <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+              <SectionHeader
+                eyebrow="Listings"
+                title="Manage my listings"
+                description="Pause, resume, view, duplicate, or remove your hosted spaces."
+                action={
+                  safeMyListings.length > 0 ? (
+                    <Button
+                      component={RouterLink}
+                      to="/create-listing"
+                      variant="contained"
+                      size="small"
+                      startIcon={<AddHomeWorkRoundedIcon />}
                     >
-                      Mark Read
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() =>
-                        onUpdateHostMessageStatus(message.id, 'Unread')
-                      }
+                      Add listing
+                    </Button>
+                  ) : null
+                }
+              />
+
+              {safeMyListings.length > 0 ? (
+                <Stack spacing={2}>
+                  {safeMyListings.map((listing) => (
+                    <React.Fragment key={listing.id}>
+                      <HostListingCard
+                        listing={listing}
+                        onDeleteListing={onDeleteListing}
+                        onToggleListingStatus={onToggleListingStatus}
+                      />
+                      <Divider sx={{ display: { xs: "none", sm: "none" } }} />
+                    </React.Fragment>
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState
+                  icon={<AddHomeWorkRoundedIcon />}
+                  title="No listings yet"
+                  description="Create your first storage listing to start the host side of Storet."
+                  action={
+                    <Button
+                      component={RouterLink}
+                      to="/create-listing"
+                      variant="contained"
+                      startIcon={<AddHomeWorkRoundedIcon />}
                     >
-                      Mark Unread
-                    </button>
-                  )}
-
-                  <Link
-                    to={`/listing/${message.listingId}`}
-                    className="secondary-button"
-                  >
-                    Open Listing
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No messages yet</h3>
-            <p>When renters message you from listing pages, they will show up here.</p>
-          </div>
-        )}
-      </section>
-
-      <section className="host-section-card">
-        <div className="section-header">
-          <div>
-            <h2>Manage My Listings</h2>
-            <p className="results-subtext">
-              Edit, pause, resume, or delete your storage spaces.
-            </p>
-          </div>
-        </div>
-
-        {myListings.length > 0 ? (
-          <div className="host-listings-grid">
-            {myListings.map((listing) => (
-              <div key={listing.id} className="host-listing-preview">
-                <div className="host-listing-top">
-                  <span className={`listing-badge ${listing.type.toLowerCase()}`}>
-                    {listing.type}
-                  </span>
-
-                  <span
-                    className={`status-pill ${
-                      listing.status === 'paused' ? 'paused' : 'active'
-                    }`}
-                  >
-                    {listing.status === 'paused' ? 'Paused' : 'Active'}
-                  </span>
-                </div>
-
-                <h3>{listing.title}</h3>
-                <p>{listing.location}</p>
-                <p>Price: {listing.price}</p>
-                <p>
-                  <strong>Booking:</strong>{' '}
-                  {listing.bookingMode === 'instant' ? 'Instant Book' : 'Request Approval'}
-                </p>
-                <p>
-                  <strong>Waitlist:</strong> {listing.allowWaitlist ? 'Enabled' : 'Disabled'}
-                </p>
-
-                <div className="host-listing-controls">
-                  <Link
-                    to={`/listing/${listing.id}`}
-                    className="secondary-button"
-                  >
-                    View
-                  </Link>
-
-                  <Link
-                    to={`/edit-listing/${listing.id}`}
-                    className="primary-button"
-                  >
-                    Edit
-                  </Link>
-
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={() => onToggleListingStatus(listing.id)}
-                  >
-                    {listing.status === 'paused' ? 'Resume' : 'Pause'}
-                  </button>
-
-                  <button
-                    type="button"
-                    className="danger-button"
-                    onClick={() => handleDelete(listing)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-state-card">
-            <h3>No listings yet</h3>
-            <p>Create your first storage listing to start the host side of the app.</p>
-            <Link to="/create-listing" className="primary-button">
-              Create My First Listing
-            </Link>
-          </div>
-        )}
-      </section>
-    </div>
+                      Create my first listing
+                    </Button>
+                  }
+                />
+              )}
+            </CardContent>
+          </Card>
+        </Box>
+      </Container>
+    </Box>
   );
 }
 

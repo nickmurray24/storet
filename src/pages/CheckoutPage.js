@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { BOOKING_STATUSES } from '../utils/bookingUtils';
+import {
+  getBookingRequestById,
+  getCheckoutBlockedReason,
+  getPaymentRecordForRequest,
+} from '../utils/bookingSelectors';
+
 function getMonthlyPrice(price) {
   const parsed = Number(String(price).replace(/[^0-9.]/g, ''));
   return Number.isNaN(parsed) ? 0 : parsed;
@@ -31,16 +38,15 @@ function formatDateTime(value) {
 }
 
 function CheckoutPage({
-  currentUser,
-  bookingRequests,
-  paymentRecords,
-  onCompleteCheckout,
+  currentUser = {},
+  bookingRequests = [],
+  paymentRecords = [],
+  onCompleteCheckout = () => null,
 }) {
   const { requestId } = useParams();
 
-  const request = bookingRequests.find((item) => item.id === requestId) || null;
-  const existingPayment =
-    paymentRecords.find((payment) => payment.requestId === requestId) || null;
+  const request = getBookingRequestById(bookingRequests, requestId);
+  const existingPayment = getPaymentRecordForRequest(paymentRecords, requestId);
 
   const pricing = useMemo(() => {
     const storageCharge = getMonthlyPrice(request?.listingPrice || 0);
@@ -63,6 +69,7 @@ function CheckoutPage({
   });
 
   const [errors, setErrors] = useState({});
+  const [submitError, setSubmitError] = useState('');
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -76,6 +83,8 @@ function CheckoutPage({
       ...prev,
       [name]: '',
     }));
+
+    setSubmitError('');
   }
 
   function validateForm() {
@@ -118,7 +127,7 @@ function CheckoutPage({
 
     const sanitizedCard = formData.cardNumber.replace(/\s+/g, '');
 
-    onCompleteCheckout(request.id, {
+    const result = onCompleteCheckout(request.id, {
       cardholderName: formData.cardholderName,
       billingZip: formData.billingZip,
       last4: sanitizedCard.slice(-4),
@@ -127,73 +136,29 @@ function CheckoutPage({
       serviceFee: pricing.serviceFee,
       totalAmount: pricing.totalAmount,
     });
+
+    if (result?.ok === false) {
+      setSubmitError(result.error || 'We could not complete checkout.');
+    }
   }
 
-  if (!request) {
+  const blockedCheckout = getCheckoutBlockedReason(request);
+
+  if (blockedCheckout) {
     return (
       <div className="checkout-page">
         <div className="page-header-block">
-          <h1>Checkout not available</h1>
-          <p>We couldn’t find that booking request for your account.</p>
-          <Link to="/profile" className="primary-button">
-            Back to Profile
+          <h1>{blockedCheckout.title}</h1>
+          <p>{blockedCheckout.description}</p>
+          <Link to={blockedCheckout.actionTo} className="primary-button">
+            {blockedCheckout.actionLabel}
           </Link>
         </div>
       </div>
     );
   }
 
-  if (request.status === 'Pending') {
-    return (
-      <div className="checkout-page">
-        <div className="page-header-block">
-          <h1>Checkout is not ready yet</h1>
-          <p>
-            Your booking request is still pending. Checkout becomes available
-            after the host approves your request.
-          </p>
-          <Link to="/profile" className="primary-button">
-            Back to Profile
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (request.status === 'Waitlisted') {
-    return (
-      <div className="checkout-page">
-        <div className="page-header-block">
-          <h1>You’re currently waitlisted</h1>
-          <p>
-            This booking is on the waitlist, so checkout is not available yet.
-          </p>
-          <Link to="/profile" className="primary-button">
-            Back to Profile
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (request.status === 'Declined') {
-    return (
-      <div className="checkout-page">
-        <div className="page-header-block">
-          <h1>Request declined</h1>
-          <p>
-            This booking request was declined, so checkout is no longer
-            available for it.
-          </p>
-          <Link to="/explore" className="primary-button">
-            Browse Other Listings
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  if (request.status === 'Cancelled') {
+  if (request.status === BOOKING_STATUSES.CANCELLED) {
     return (
       <div className="checkout-page">
         <div className="page-header-block">
@@ -243,18 +208,18 @@ function CheckoutPage({
   }
 
   if (
-    (request.status === 'Confirmed' ||
-      request.status === 'Active' ||
-      request.status === 'Completed') &&
+    (request.status === BOOKING_STATUSES.CONFIRMED ||
+      request.status === BOOKING_STATUSES.ACTIVE ||
+      request.status === BOOKING_STATUSES.COMPLETED) &&
     existingPayment
   ) {
     return (
       <div className="checkout-page">
         <div className="page-header-block">
           <h1>
-            {request.status === 'Completed'
+            {request.status === BOOKING_STATUSES.COMPLETED
               ? 'Booking completed'
-              : request.status === 'Active'
+              : request.status === BOOKING_STATUSES.ACTIVE
               ? 'Rental active'
               : 'Booking confirmed'}
           </h1>
@@ -420,6 +385,10 @@ function CheckoutPage({
             <div className="mock-payment-note">
               This is a mock checkout flow. No real payment is processed.
             </div>
+
+            {submitError && (
+              <div className="form-submit-error">{submitError}</div>
+            )}
 
             <div className="activity-action-row">
               <button type="submit" className="primary-button">
