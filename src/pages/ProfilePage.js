@@ -35,6 +35,7 @@ import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { getListingCatalog } from "../data/listingCatalog";
+import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import {
   getBookingRequestPrimaryAction,
@@ -136,7 +137,7 @@ function ProfilePage({
       logoutAction();
     }
 
-    navigate("/");
+    navigate(APP_ROUTES.home);
   }
 
   function handleUnsave(listingId) {
@@ -213,7 +214,7 @@ function ProfilePage({
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
               <Button
                 component={RouterLink}
-                to="/notifications"
+                to={APP_ROUTES.notifications}
                 variant="outlined"
                 startIcon={<NotificationsRoundedIcon />}
                 sx={{ bgcolor: "background.paper" }}
@@ -223,7 +224,7 @@ function ProfilePage({
 
               <Button
                 component={RouterLink}
-                to="/create-listing"
+                to={APP_ROUTES.createListing}
                 variant="contained"
                 startIcon={<AddHomeWorkRoundedIcon />}
               >
@@ -232,7 +233,7 @@ function ProfilePage({
 
               <Button
                 component={RouterLink}
-                to="/host-dashboard"
+                to={APP_ROUTES.hostDashboard}
                 variant="outlined"
                 startIcon={<HomeWorkRoundedIcon />}
               >
@@ -329,7 +330,7 @@ function ProfilePage({
 
                         <Button
                           component={RouterLink}
-                          to="/explore"
+                          to={APP_ROUTES.explore}
                           endIcon={<ArrowForwardRoundedIcon />}
                         >
                           Explore more
@@ -344,7 +345,7 @@ function ProfilePage({
                           title="No saved spaces yet"
                           description="Save listings from Explore so you can compare them later."
                           actionLabel="Browse listings"
-                          actionTo="/explore"
+                          actionTo={APP_ROUTES.explore}
                         />
                       ) : (
                         <Stack spacing={2}>
@@ -387,7 +388,7 @@ function ProfilePage({
 
                         <Button
                           component={RouterLink}
-                          to="/notifications"
+                          to={APP_ROUTES.notifications}
                           endIcon={<ArrowForwardRoundedIcon />}
                         >
                           View activity
@@ -402,7 +403,7 @@ function ProfilePage({
                           title="No reservation activity yet"
                           description="Reserve, request, or join the waitlist for a listing to see it here."
                           actionLabel="Browse listings"
-                          actionTo="/explore"
+                          actionTo={APP_ROUTES.explore}
                         />
                       ) : (
                         <Stack spacing={2}>
@@ -437,7 +438,7 @@ function ProfilePage({
 
                         <Button
                           component={RouterLink}
-                          to="/notifications"
+                          to={APP_ROUTES.notifications}
                           endIcon={<ArrowForwardRoundedIcon />}
                         >
                           View activity
@@ -452,7 +453,7 @@ function ProfilePage({
                           title="No host messages yet"
                           description="Send a question from any listing detail page to see it here."
                           actionLabel="Browse listings"
-                          actionTo="/explore"
+                          actionTo={APP_ROUTES.explore}
                         />
                       ) : (
                         <Stack spacing={2}>
@@ -483,7 +484,7 @@ function ProfilePage({
 
                         <Button
                           component={RouterLink}
-                          to="/create-listing"
+                          to={APP_ROUTES.createListing}
                           variant="contained"
                           startIcon={<AddHomeWorkRoundedIcon />}
                         >
@@ -499,7 +500,7 @@ function ProfilePage({
                           title="No hosted spaces yet"
                           description="Create your first listing to start offering storage through Storet."
                           actionLabel="Create listing"
-                          actionTo="/create-listing"
+                          actionTo={APP_ROUTES.createListing}
                         />
                       ) : (
                         <Stack spacing={2}>
@@ -511,7 +512,7 @@ function ProfilePage({
                                 <Button
                                   size="small"
                                   component={RouterLink}
-                                  to={`/listing/${listing.id}`}
+                                  to={buildListingPath(listing.id)}
                                   endIcon={<ArrowForwardRoundedIcon />}
                                 >
                                   View
@@ -598,7 +599,7 @@ function ProfilePage({
 
                       <Button
                         component={RouterLink}
-                        to="/explore"
+                        to={APP_ROUTES.explore}
                         variant="outlined"
                         fullWidth
                         startIcon={<WarehouseRoundedIcon />}
@@ -608,7 +609,7 @@ function ProfilePage({
 
                       <Button
                         component={RouterLink}
-                        to="/create-listing"
+                        to={APP_ROUTES.createListing}
                         variant="outlined"
                         fullWidth
                         startIcon={<AddHomeWorkRoundedIcon />}
@@ -618,7 +619,7 @@ function ProfilePage({
 
                       <Button
                         component={RouterLink}
-                        to="/notifications"
+                        to={APP_ROUTES.notifications}
                         variant="outlined"
                         fullWidth
                         startIcon={<NotificationsRoundedIcon />}
@@ -628,7 +629,7 @@ function ProfilePage({
 
                       <Button
                         component={RouterLink}
-                        to="/host-dashboard"
+                        to={APP_ROUTES.hostDashboard}
                         variant="outlined"
                         fullWidth
                         startIcon={<HomeWorkRoundedIcon />}
@@ -674,7 +675,7 @@ function StatCard({ icon, label, value, color }) {
 function ListingRow({ listing, action }) {
   return (
     <Card variant="outlined" sx={{ boxShadow: "none" }}>
-      <CardActionArea component={RouterLink} to={`/listing/${listing.id}`}>
+      <CardActionArea component={RouterLink} to={buildListingPath(listing.id)}>
         <CardContent sx={{ p: 2.25 }}>
           <Stack
             direction={{ xs: "column", sm: "row" }}
@@ -832,7 +833,7 @@ function HostMessageRow({ message }) {
             <Button
               size="small"
               component={RouterLink}
-              to={`/listing/${message.listingId}`}
+              to={buildListingPath(message.listingId)}
               endIcon={<ArrowForwardRoundedIcon />}
             >
               Open listing

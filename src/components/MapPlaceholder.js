@@ -1,5 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+
+import { buildListingPath } from '../routes/appRoutes';
 import L from 'leaflet';
 import {
   Circle,
@@ -207,7 +209,7 @@ function MapPlaceholder({
                         )}
                       <p className="map-popup-copy">{listing.description}</p>
                       <Link
-                        to={`/listing/${listing.id}`}
+                        to={buildListingPath(listing.id)}
                         className="secondary-button map-popup-link"
                       >
                         View Details

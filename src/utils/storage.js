@@ -9,7 +9,9 @@ import {
 } from "../constants/storageKeys";
 import { normalizeBookingRequestList } from "./bookingUtils";
 import { normalizeHostMessageList } from "./hostMessageUtils";
-import { normalizeSavedIds } from "./listingUtils";
+import { normalizeListingList, normalizeSavedIds } from "./listingUtils";
+import { normalizePaymentRecordList } from "./paymentUtils";
+import { normalizeUserProfile } from "../models/storetModels";
 
 function canUseLocalStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -56,31 +58,22 @@ export function safeRemoveItem(key) {
 
 export function getStoredCurrentUser() {
   const storedUser = safeReadJson(CURRENT_USER_KEY, null);
-
-  if (!storedUser) {
-    return null;
-  }
-
-  return {
-    ...storedUser,
-    isAuthenticated: Boolean(storedUser.isAuthenticated),
-  };
+  return storedUser ? normalizeUserProfile(storedUser) : null;
 }
 
 export function readUserListings() {
   const storedListings = safeReadJson(USER_LISTINGS_KEY, null);
 
   if (Array.isArray(storedListings)) {
-    return storedListings;
+    return normalizeListingList(storedListings);
   }
 
   const legacyListings = safeReadJson(LEGACY_USER_LISTINGS_KEY, []);
-  return Array.isArray(legacyListings) ? legacyListings : [];
+  return normalizeListingList(legacyListings);
 }
 
 export function writeUserListings(listings) {
-  const safeListings = Array.isArray(listings) ? listings : [];
-  return safeWriteJson(USER_LISTINGS_KEY, safeListings);
+  return safeWriteJson(USER_LISTINGS_KEY, normalizeListingList(listings));
 }
 
 export function readSavedListingIds() {
@@ -103,13 +96,11 @@ export function writeBookingRequests(bookingRequests) {
 }
 
 export function readPaymentRecords() {
-  const storedPayments = safeReadJson(PAYMENT_RECORDS_KEY, []);
-  return Array.isArray(storedPayments) ? storedPayments : [];
+  return normalizePaymentRecordList(safeReadJson(PAYMENT_RECORDS_KEY, []));
 }
 
 export function writePaymentRecords(paymentRecords) {
-  const safePaymentRecords = Array.isArray(paymentRecords) ? paymentRecords : [];
-  return safeWriteJson(PAYMENT_RECORDS_KEY, safePaymentRecords);
+  return safeWriteJson(PAYMENT_RECORDS_KEY, normalizePaymentRecordList(paymentRecords));
 }
 
 export function readHostMessages() {

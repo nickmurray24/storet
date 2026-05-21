@@ -35,6 +35,7 @@ import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
+import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import {
   getBookingRequestPrimaryAction,
@@ -661,7 +662,7 @@ function ListingPerformanceCard({ listing }) {
         <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
           <Button
             component={RouterLink}
-            to={`/listing/${listing.id}`}
+            to={buildListingPath(listing.id)}
             variant="outlined"
             size="small"
             startIcon={<VisibilityRoundedIcon />}
@@ -670,7 +671,7 @@ function ListingPerformanceCard({ listing }) {
           </Button>
           <Button
             component={RouterLink}
-            to="/create-listing"
+            to={APP_ROUTES.createListing}
             variant="text"
             size="small"
             endIcon={<ArrowForwardRoundedIcon />}
@@ -728,7 +729,7 @@ function MessageCard({ message, onUpdateHostMessageStatus }) {
           </Button>
           <Button
             component={RouterLink}
-            to={`/listing/${message.listingId}`}
+            to={buildListingPath(message.listingId)}
             variant="text"
             size="small"
             endIcon={<ArrowForwardRoundedIcon />}
@@ -806,7 +807,7 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
           <Button
             component={RouterLink}
-            to={`/listing/${listing.id}`}
+            to={buildListingPath(listing.id)}
             variant="outlined"
             size="small"
             startIcon={<VisibilityRoundedIcon />}
@@ -816,7 +817,7 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
 
           <Button
             component={RouterLink}
-            to="/create-listing"
+            to={APP_ROUTES.createListing}
             variant="text"
             size="small"
           >
@@ -1035,7 +1036,7 @@ function HostDashboardPanel({
             <Stack direction={{ xs: "column", sm: "row", md: "column" }} spacing={1.25} sx={{ width: { xs: "100%", sm: "auto" } }}>
               <Button
                 component={RouterLink}
-                to="/create-listing"
+                to={APP_ROUTES.createListing}
                 variant="contained"
                 size="large"
                 startIcon={<AddHomeWorkRoundedIcon />}
@@ -1044,7 +1045,7 @@ function HostDashboardPanel({
               </Button>
               <Button
                 component={RouterLink}
-                to="/profile"
+                to={APP_ROUTES.profile}
                 variant="outlined"
                 size="large"
                 startIcon={<Inventory2RoundedIcon />}
@@ -1268,7 +1269,7 @@ function HostDashboardPanel({
                   safeMyListings.length > 0 ? (
                     <Button
                       component={RouterLink}
-                      to="/create-listing"
+                      to={APP_ROUTES.createListing}
                       variant="contained"
                       size="small"
                       startIcon={<AddHomeWorkRoundedIcon />}
@@ -1300,7 +1301,7 @@ function HostDashboardPanel({
                   action={
                     <Button
                       component={RouterLink}
-                      to="/create-listing"
+                      to={APP_ROUTES.createListing}
                       variant="contained"
                       startIcon={<AddHomeWorkRoundedIcon />}
                     >

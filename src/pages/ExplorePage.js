@@ -40,6 +40,7 @@ import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { getPageListings } from "../data/listingCatalog";
+import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { normalizeSavedIds } from "../utils/listingUtils";
 import {
@@ -254,7 +255,7 @@ function ExplorePage({
 
             <Button
               component={RouterLink}
-              to="/create-listing"
+              to={APP_ROUTES.createListing}
               variant="contained"
               size="large"
               startIcon={<AddHomeWorkRoundedIcon />}
@@ -491,7 +492,7 @@ function ExplorePage({
               >
                 {filteredListings.map((listing) => {
                   const isSaved = savedIdSet.has(String(listing.id));
-                  const listingPath = `/listing/${listing.id}`;
+                  const listingPath = buildListingPath(listing.id);
 
                   return (
                     <Card key={listing.id} sx={{ overflow: "hidden" }}>

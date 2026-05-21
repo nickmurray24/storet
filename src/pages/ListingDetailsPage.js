@@ -41,6 +41,7 @@ import {
   hasOpenBookingRequest,
 } from "../utils/bookingSelectors";
 import { getPageListings } from "../data/listingCatalog";
+import { APP_ROUTES } from "../routes/appRoutes";
 import { normalizeSavedIds } from "../utils/listingUtils";
 import {
   getStoredCurrentUser,
@@ -177,7 +178,7 @@ function ListingDetailsPage({
     }
 
     if (!activeUser?.isAuthenticated) {
-      navigate("/auth");
+      navigate(APP_ROUTES.auth, { state: { from: `/listing/${routeListingId}` } });
       return;
     }
 
@@ -231,7 +232,7 @@ function ListingDetailsPage({
                 <Button
                   variant="contained"
                   component={RouterLink}
-                  to="/explore"
+                  to={APP_ROUTES.explore}
                   startIcon={<ArrowBackRoundedIcon />}
                 >
                   Back to Explore
@@ -273,7 +274,7 @@ function ListingDetailsPage({
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
           <Stack spacing={3}>
             <Button
-              onClick={() => navigate("/explore")}
+              onClick={() => navigate(APP_ROUTES.explore)}
               startIcon={<ArrowBackRoundedIcon />}
               sx={{ alignSelf: "flex-start" }}
             >

@@ -1,9 +1,14 @@
+import { HOST_MESSAGE_STATUSES } from "../constants/appEnums";
+import { buildListingPath } from "../routes/appRoutes";
+import {
+  DEFAULT_HOST_MESSAGE_MODEL,
+  MODEL_PREFIXES,
+  createModelId,
+  getIsoTimestamp,
+} from "../models/storetModels";
 import { normalizeListing } from "./listingUtils";
 
-export const HOST_MESSAGE_STATUSES = {
-  UNREAD: "Unread",
-  READ: "Read",
-};
+export { HOST_MESSAGE_STATUSES };
 
 function normalizeStatus(status) {
   return status === HOST_MESSAGE_STATUSES.READ
@@ -12,31 +17,35 @@ function normalizeStatus(status) {
 }
 
 export function normalizeHostMessage(message = {}, index = 0) {
-  const createdAt = message.createdAt || message.submittedAt || new Date().toISOString();
+  const now = new Date().toISOString();
+  const createdAt = getIsoTimestamp(message.createdAt || message.submittedAt, now);
+  const updatedAt = getIsoTimestamp(message.updatedAt || createdAt, createdAt);
+  const senderEmail = message.senderEmail || message.email || message.renterEmail || "";
 
   return {
+    ...DEFAULT_HOST_MESSAGE_MODEL,
+    ...message,
     id: String(message.id || `host-message-${index + 1}`),
-    listingId: String(message.listingId || ""),
-    listingTitle: message.listingTitle || "Storage space",
-    listingLocation: message.listingLocation || "",
-    hostName: message.hostName || message.host || "Storet Host",
+    listingId: String(message.listingId || DEFAULT_HOST_MESSAGE_MODEL.listingId),
+    listingTitle: message.listingTitle || DEFAULT_HOST_MESSAGE_MODEL.listingTitle,
+    listingLocation: message.listingLocation || message.location || DEFAULT_HOST_MESSAGE_MODEL.listingLocation,
+    hostName: message.hostName || message.host || DEFAULT_HOST_MESSAGE_MODEL.hostName,
+    hostId: String(message.hostId || message.ownerId || DEFAULT_HOST_MESSAGE_MODEL.hostId),
+    hostEmail: message.hostEmail || message.ownerEmail || DEFAULT_HOST_MESSAGE_MODEL.hostEmail,
     senderName:
       message.senderName ||
       message.fullName ||
       message.name ||
       message.renterName ||
-      "Demo User",
-    senderEmail:
-      message.senderEmail ||
-      message.email ||
-      message.renterEmail ||
-      "",
-    subject: message.subject || "Listing question",
-    message: message.message || message.body || "",
+      DEFAULT_HOST_MESSAGE_MODEL.senderName,
+    senderEmail,
+    senderId: String(message.senderId || message.renterId || senderEmail || DEFAULT_HOST_MESSAGE_MODEL.senderId),
+    subject: message.subject || DEFAULT_HOST_MESSAGE_MODEL.subject,
+    message: message.message || message.body || DEFAULT_HOST_MESSAGE_MODEL.message,
     status: normalizeStatus(message.status),
-    submittedAt: message.submittedAt || createdAt,
+    submittedAt: getIsoTimestamp(message.submittedAt || createdAt, createdAt),
     createdAt,
-    updatedAt: message.updatedAt || createdAt,
+    updatedAt,
     readAt: message.readAt || null,
   };
 }
@@ -58,19 +67,25 @@ export function normalizeHostMessageList(messages) {
 export function createHostMessage({ listing, currentUser, messageData = {} }) {
   const normalizedListing = normalizeListing(listing);
   const now = new Date().toISOString();
+  const senderName =
+    messageData.fullName ||
+    currentUser?.fullName ||
+    currentUser?.name ||
+    DEFAULT_HOST_MESSAGE_MODEL.senderName;
+  const senderEmail = messageData.email || currentUser?.email || "";
+  const senderId = String(currentUser?.id || currentUser?.userId || senderEmail || "demo-renter");
 
   return normalizeHostMessage({
-    id: `host-message-${Date.now()}`,
+    id: createModelId(MODEL_PREFIXES.HOST_MESSAGE),
     listingId: normalizedListing.id,
     listingTitle: normalizedListing.title,
     listingLocation: normalizedListing.location,
     hostName: normalizedListing.host,
-    senderName:
-      messageData.fullName ||
-      currentUser?.fullName ||
-      currentUser?.name ||
-      "Demo User",
-    senderEmail: messageData.email || currentUser?.email || "",
+    hostId: normalizedListing.hostId,
+    hostEmail: normalizedListing.hostEmail,
+    senderName,
+    senderEmail,
+    senderId,
     subject: messageData.subject || `Question about ${normalizedListing.title}`,
     message: messageData.message || "",
     status: HOST_MESSAGE_STATUSES.UNREAD,
@@ -103,7 +118,7 @@ export function buildHostMessageActivity(message = {}) {
     time: normalizedMessage.updatedAt || normalizedMessage.submittedAt,
     status: normalizedMessage.status,
     actionLabel: "Open listing",
-    actionTo: `/listing/${normalizedMessage.listingId}`,
+    actionTo: buildListingPath(normalizedMessage.listingId),
     userName: normalizedMessage.senderName,
   };
 }

@@ -12,22 +12,17 @@ import {
 } from "@mui/material";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
-
-const navItems = [
-  { label: "Home", to: "/" },
-  { label: "Explore", to: "/explore" },
-  { label: "Notifications", to: "/notifications" },
-  { label: "Host", to: "/host-dashboard" },
-  { label: "Profile", to: "/profile" },
-];
+import {
+  APP_ROUTES,
+  NAV_ITEMS,
+  getRouteIsHiddenFromGlobalNav,
+} from "../routes/appRoutes";
 
 function Navbar({ currentUser, onLogout }) {
   const storetApp = useOptionalStoretApp();
   const location = useLocation();
 
-  const hideGlobalNav = location.pathname === "/" || location.pathname === "/auth";
-
-  if (hideGlobalNav) {
+  if (getRouteIsHiddenFromGlobalNav(location.pathname)) {
     return null;
   }
 
@@ -38,9 +33,13 @@ function Navbar({ currentUser, onLogout }) {
   const userName = activeUser?.fullName || "Demo User";
   const userRole = activeUser?.role || "Renter";
 
+  const visibleNavItems = NAV_ITEMS.filter(
+    (item) => !item.requiresAuth || isLoggedIn
+  );
+
   function isActiveRoute(to) {
-    if (to === "/") {
-      return location.pathname === "/";
+    if (to === APP_ROUTES.home) {
+      return location.pathname === APP_ROUTES.home;
     }
 
     return location.pathname === to || location.pathname.startsWith(`${to}/`);
@@ -70,7 +69,7 @@ function Navbar({ currentUser, onLogout }) {
         >
           <Box
             component={NavLink}
-            to="/explore"
+            to={APP_ROUTES.explore}
             sx={{
               color: "inherit",
               textDecoration: "none",
@@ -110,7 +109,7 @@ function Navbar({ currentUser, onLogout }) {
               flexWrap: "wrap",
             }}
           >
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const active = isActiveRoute(item.to);
 
               return (
@@ -148,7 +147,7 @@ function Navbar({ currentUser, onLogout }) {
                 )}
               </>
             ) : (
-              <Button component={NavLink} to="/auth" variant="contained">
+              <Button component={NavLink} to={APP_ROUTES.auth} variant="contained">
                 Log In
               </Button>
             )}

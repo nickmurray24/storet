@@ -31,6 +31,7 @@ import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { ACTIVITY_FEED_KEY } from "../constants/storageKeys";
+import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { buildBookingActivity } from "../utils/bookingUtils";
 import { buildHostMessageActivity } from "../utils/hostMessageUtils";
@@ -100,7 +101,7 @@ function buildFallbackActivities(activeUser, hostListings, savedIds) {
       time: new Date(now.getTime() - 1000 * 60 * 12).toISOString(),
       status: "New",
       actionLabel: "Explore spaces",
-      actionTo: "/explore",
+      actionTo: APP_ROUTES.explore,
     },
     {
       id: "fallback-booking-1",
@@ -111,7 +112,7 @@ function buildFallbackActivities(activeUser, hostListings, savedIds) {
       time: new Date(now.getTime() - 1000 * 60 * 45).toISOString(),
       status: "Demo",
       actionLabel: "Browse listings",
-      actionTo: "/explore",
+      actionTo: APP_ROUTES.explore,
     },
     {
       id: "fallback-waitlist-1",
@@ -122,7 +123,7 @@ function buildFallbackActivities(activeUser, hostListings, savedIds) {
       time: new Date(now.getTime() - 1000 * 60 * 60 * 4).toISOString(),
       status: "Planned",
       actionLabel: "View listings",
-      actionTo: "/explore",
+      actionTo: APP_ROUTES.explore,
     },
   ];
 
@@ -138,7 +139,7 @@ function buildFallbackActivities(activeUser, hostListings, savedIds) {
       ? "Waitlist"
       : "Request",
     actionLabel: "View listing",
-    actionTo: `/listing/${listing.id}`,
+    actionTo: buildListingPath(listing.id),
   }));
 
   const savedActivity =
@@ -155,7 +156,7 @@ function buildFallbackActivities(activeUser, hostListings, savedIds) {
             time: new Date(now.getTime() - 1000 * 60 * 90).toISOString(),
             status: "Saved",
             actionLabel: "View profile",
-            actionTo: "/profile",
+            actionTo: APP_ROUTES.profile,
           },
         ]
       : [];
@@ -326,7 +327,7 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
               <Button
                 component={RouterLink}
-                to="/explore"
+                to={APP_ROUTES.explore}
                 variant="outlined"
                 startIcon={<WarehouseRoundedIcon />}
                 sx={{ bgcolor: "background.paper" }}
@@ -336,7 +337,7 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
 
               <Button
                 component={RouterLink}
-                to="/create-listing"
+                to={APP_ROUTES.createListing}
                 variant="contained"
                 startIcon={<AddHomeWorkRoundedIcon />}
               >
@@ -490,7 +491,7 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
 
                     <Button
                       component={RouterLink}
-                      to="/profile"
+                      to={APP_ROUTES.profile}
                       variant="outlined"
                       fullWidth
                       startIcon={<PersonRoundedIcon />}
@@ -500,7 +501,7 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
 
                     <Button
                       component={RouterLink}
-                      to="/explore"
+                      to={APP_ROUTES.explore}
                       variant="outlined"
                       fullWidth
                       startIcon={<Inventory2RoundedIcon />}
@@ -510,7 +511,7 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
 
                     <Button
                       component={RouterLink}
-                      to="/create-listing"
+                      to={APP_ROUTES.createListing}
                       variant="outlined"
                       fullWidth
                       startIcon={<AddHomeWorkRoundedIcon />}
@@ -720,7 +721,7 @@ function EmptyActivityState() {
 
         <Button
           component={RouterLink}
-          to="/explore"
+          to={APP_ROUTES.explore}
           variant="contained"
           endIcon={<ArrowForwardRoundedIcon />}
         >

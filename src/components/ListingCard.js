@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 
+import { buildListingPath } from '../routes/appRoutes';
+
 function ListingCard({
   listing,
   isSaved,
@@ -60,7 +62,7 @@ function ListingCard({
           {isSelected ? 'Selected on Map' : 'Show on Map'}
         </button>
 
-        <Link to={`/listing/${listing.id}`} className="secondary-button details-link">
+        <Link to={buildListingPath(listing.id)} className="secondary-button details-link">
           View Details
         </Link>
 
