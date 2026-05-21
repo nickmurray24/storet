@@ -31,6 +31,8 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
+import ContactHostForm from "../components/ContactHostForm";
+import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import {
   canCheckoutBookingRequest,
@@ -51,11 +53,13 @@ function ListingDetailsPage({
   listings,
   currentUser,
   savedListingIds,
-  bookingRequests = [],
+  bookingRequests,
   onToggleSave,
   onSaveToggle,
   onSubmitBookingRequest,
+  onSubmitHostMessage,
 }) {
+  const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
   const params = useParams();
   const routeListingId = String(params.id || params.listingId || "");
@@ -65,8 +69,14 @@ function ListingDetailsPage({
     role: "Renter",
   };
 
-  const activeUser = currentUser || storedUser;
-  const userListings = useMemo(() => readUserListings(), []);
+  const activeUser = currentUser || storetApp?.currentUser || storedUser;
+  const userListings = useMemo(() => {
+    if (Array.isArray(storetApp?.userListings)) {
+      return storetApp.userListings;
+    }
+
+    return readUserListings();
+  }, [storetApp?.userListings]);
 
   const allListings = useMemo(() => {
     return getPageListings(listings, userListings);
@@ -76,14 +86,19 @@ function ListingDetailsPage({
     return allListings.find((item) => String(item.id) === routeListingId);
   }, [allListings, routeListingId]);
 
-  const savedIdsFromProps = normalizeSavedIds(savedListingIds);
+  const hasExternalSavedIds =
+    savedListingIds !== undefined || storetApp?.savedListingIds !== undefined;
+  const savedIdsFromProps = normalizeSavedIds(
+    savedListingIds ?? storetApp?.savedListingIds
+  );
 
   const [localSavedIds, setLocalSavedIds] = useState(() =>
     readSavedListingIds()
   );
 
-  const activeSavedIds =
-    savedIdsFromProps.length > 0 ? savedIdsFromProps : localSavedIds;
+  const activeSavedIds = hasExternalSavedIds
+    ? savedIdsFromProps
+    : localSavedIds;
 
   const isSaved = listing
     ? activeSavedIds.includes(String(listing.id))
@@ -92,28 +107,28 @@ function ListingDetailsPage({
   const [bookingStatus, setBookingStatus] = useState("");
   const [submittedBookingRequest, setSubmittedBookingRequest] = useState(null);
 
+  const activeBookingRequests = bookingRequests ?? storetApp?.bookingRequests ?? [];
+
   const latestListingRequest = useMemo(() => {
     if (!listing) {
       return null;
     }
 
     return getLatestBookingRequestForListing(
-      bookingRequests,
+      activeBookingRequests,
       listing.id,
       activeUser
     );
-  }, [activeUser, bookingRequests, listing]);
+  }, [activeBookingRequests, activeUser, listing]);
 
   function handleSaveClick() {
     if (!listing) return;
 
-    if (onToggleSave) {
-      onToggleSave(listing.id);
-      return;
-    }
+    const toggleSaveAction =
+      onToggleSave || onSaveToggle || storetApp?.actions?.toggleSave;
 
-    if (onSaveToggle) {
-      onSaveToggle(listing.id);
+    if (toggleSaveAction) {
+      toggleSaveAction(listing.id);
       return;
     }
 
@@ -126,6 +141,24 @@ function ListingDetailsPage({
       writeSavedListingIds(nextIds);
       return nextIds;
     });
+  }
+
+  function handleSubmitHostMessage(messageData) {
+    if (!listing) {
+      return {
+        ok: false,
+        error: "We could not find that listing.",
+      };
+    }
+
+    const submitHostMessageAction =
+      onSubmitHostMessage || storetApp?.actions?.submitHostMessage;
+
+    if (submitHostMessageAction) {
+      return submitHostMessageAction(listing, messageData);
+    }
+
+    return { ok: true };
   }
 
   function handleBookingAction() {
@@ -148,8 +181,11 @@ function ListingDetailsPage({
       return;
     }
 
-    if (onSubmitBookingRequest) {
-      const result = onSubmitBookingRequest(listing, {
+    const submitBookingRequestAction =
+      onSubmitBookingRequest || storetApp?.actions?.submitBookingRequest;
+
+    if (submitBookingRequestAction) {
+      const result = submitBookingRequestAction(listing, {
         fullName: activeUser.fullName || "Demo User",
         email: activeUser.email || "",
         duration: "Month-to-month",
@@ -520,6 +556,17 @@ function ListingDetailsPage({
                       />
                     </Stack>
                   </Stack>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                  <ContactHostForm
+                    hostName={listing.host}
+                    listingTitle={listing.title}
+                    currentUser={activeUser}
+                    onSubmitMessage={handleSubmitHostMessage}
+                  />
                 </CardContent>
               </Card>
             </Stack>

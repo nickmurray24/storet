@@ -11,6 +11,8 @@ import {
   Typography,
 } from "@mui/material";
 
+import { useOptionalStoretApp } from "../context/StoretAppContext";
+
 const navItems = [
   { label: "Home", to: "/" },
   { label: "Explore", to: "/explore" },
@@ -20,6 +22,7 @@ const navItems = [
 ];
 
 function Navbar({ currentUser, onLogout }) {
+  const storetApp = useOptionalStoretApp();
   const location = useLocation();
 
   const hideGlobalNav = location.pathname === "/" || location.pathname === "/auth";
@@ -28,9 +31,12 @@ function Navbar({ currentUser, onLogout }) {
     return null;
   }
 
-  const isLoggedIn = currentUser?.isAuthenticated;
-  const userName = currentUser?.fullName || "Demo User";
-  const userRole = currentUser?.role || "Renter";
+  const activeUser = currentUser || storetApp?.currentUser;
+  const logoutAction = onLogout || storetApp?.actions?.logout;
+
+  const isLoggedIn = activeUser?.isAuthenticated;
+  const userName = activeUser?.fullName || "Demo User";
+  const userRole = activeUser?.role || "Renter";
 
   function isActiveRoute(to) {
     if (to === "/") {
@@ -135,8 +141,8 @@ function Navbar({ currentUser, onLogout }) {
                   }}
                 />
 
-                {onLogout && (
-                  <Button variant="outlined" color="primary" onClick={onLogout}>
+                {logoutAction && (
+                  <Button variant="outlined" color="primary" onClick={logoutAction}>
                     Log Out
                   </Button>
                 )}

@@ -34,6 +34,7 @@ import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 
+import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import {
   getBookingRequestPrimaryAction,
@@ -848,18 +849,43 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
 }
 
 function HostDashboardPanel({
-  myListings = [],
-  bookingRequests = [],
-  hostMessages = [],
-  onDeleteListing = () => {},
-  onToggleListingStatus = () => {},
-  onUpdateBookingRequestStatus = () => {},
-  onUpdateBookingLifecycle = () => {},
-  onUpdateHostMessageStatus = () => {},
+  myListings,
+  bookingRequests,
+  hostMessages,
+  onDeleteListing,
+  onToggleListingStatus,
+  onUpdateBookingRequestStatus,
+  onUpdateBookingLifecycle,
+  onUpdateHostMessageStatus,
 }) {
-  const safeMyListings = Array.isArray(myListings) ? myListings : [];
-  const sortedBookingRequests = sortBookingRequestsByNewest(bookingRequests);
-  const safeHostMessages = Array.isArray(hostMessages) ? hostMessages : [];
+  const storetApp = useOptionalStoretApp();
+
+  const safeMyListings = Array.isArray(myListings)
+    ? myListings
+    : storetApp?.userListings ?? [];
+  const sortedBookingRequests = sortBookingRequestsByNewest(
+    bookingRequests ?? storetApp?.hostBookingRequests ?? []
+  );
+  const safeHostMessages = Array.isArray(hostMessages)
+    ? hostMessages
+    : storetApp?.hostDashboardMessages ?? [];
+
+  const deleteListingAction =
+    onDeleteListing || storetApp?.actions?.deleteListing || (() => {});
+  const toggleListingStatusAction =
+    onToggleListingStatus || storetApp?.actions?.toggleListingStatus || (() => {});
+  const updateBookingRequestStatusAction =
+    onUpdateBookingRequestStatus ||
+    storetApp?.actions?.updateBookingRequestStatus ||
+    (() => {});
+  const updateBookingLifecycleAction =
+    onUpdateBookingLifecycle ||
+    storetApp?.actions?.updateBookingLifecycle ||
+    (() => {});
+  const updateHostMessageStatusAction =
+    onUpdateHostMessageStatus ||
+    storetApp?.actions?.updateHostMessageStatus ||
+    (() => {});
 
   const activeCount = safeMyListings.filter((listing) => listing.status !== "paused").length;
   const pausedCount = safeMyListings.filter((listing) => listing.status === "paused").length;
@@ -1143,8 +1169,8 @@ function HostDashboardPanel({
                   <BookingRequestCard
                     key={request.id}
                     request={request}
-                    onUpdateBookingRequestStatus={onUpdateBookingRequestStatus}
-                    onUpdateBookingLifecycle={onUpdateBookingLifecycle}
+                    onUpdateBookingRequestStatus={updateBookingRequestStatusAction}
+                    onUpdateBookingLifecycle={updateBookingLifecycleAction}
                   />
                 ))}
               </Stack>
@@ -1206,7 +1232,7 @@ function HostDashboardPanel({
               <SectionHeader
                 eyebrow="Inbox"
                 title="Message inbox"
-                description="Renter questions will appear here once we wire message storage in the next structural phase."
+                description="Renter questions sent from listing detail pages appear here as local host inbox records."
               />
 
               {safeHostMessages.length > 0 ? (
@@ -1215,7 +1241,7 @@ function HostDashboardPanel({
                     <MessageCard
                       key={message.id}
                       message={message}
-                      onUpdateHostMessageStatus={onUpdateHostMessageStatus}
+                      onUpdateHostMessageStatus={updateHostMessageStatusAction}
                     />
                   ))}
                 </Stack>
@@ -1223,7 +1249,7 @@ function HostDashboardPanel({
                 <EmptyState
                   icon={<MailRoundedIcon />}
                   title="No messages yet"
-                  description="Phase 5 will connect ContactHostForm messages to this inbox."
+                  description="Messages from renters will appear here after they contact you from a listing."
                 />
               )}
             </CardContent>
@@ -1259,8 +1285,8 @@ function HostDashboardPanel({
                     <React.Fragment key={listing.id}>
                       <HostListingCard
                         listing={listing}
-                        onDeleteListing={onDeleteListing}
-                        onToggleListingStatus={onToggleListingStatus}
+                        onDeleteListing={deleteListingAction}
+                        onToggleListingStatus={toggleListingStatusAction}
                       />
                       <Divider sx={{ display: { xs: "none", sm: "none" } }} />
                     </React.Fragment>

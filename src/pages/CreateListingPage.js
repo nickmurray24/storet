@@ -34,6 +34,7 @@ import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { CURRENT_USER_KEY } from "../constants/storageKeys";
+import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { parseNumber } from "../utils/listingUtils";
 import { readUserListings, safeReadJson, writeUserListings } from "../utils/storage";
 
@@ -69,6 +70,7 @@ const amenityOptions = [
 ];
 
 function CreateListingPage({ currentUser, onAddListing }) {
+  const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
 
   const storedUser = useMemo(
@@ -80,7 +82,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
     []
   );
 
-  const activeUser = currentUser || storedUser;
+  const activeUser = currentUser || storetApp?.currentUser || storedUser;
 
   const [formData, setFormData] = useState({
     title: "",
@@ -231,13 +233,14 @@ function CreateListingPage({ currentUser, onAddListing }) {
       createdAt: new Date().toISOString(),
     };
 
-    const existingListings = readUserListings();
-    const updatedListings = [newListing, ...existingListings];
+    const addListingAction = onAddListing || storetApp?.actions?.addListing;
 
-    writeUserListings(updatedListings);
-
-    if (onAddListing) {
-      onAddListing(newListing);
+    if (addListingAction) {
+      addListingAction(newListing);
+    } else {
+      const existingListings = readUserListings();
+      const updatedListings = [newListing, ...existingListings];
+      writeUserListings(updatedListings);
     }
 
     setSuccessMessage("Listing created successfully!");

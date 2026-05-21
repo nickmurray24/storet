@@ -40,6 +40,7 @@ import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { getPageListings } from "../data/listingCatalog";
+import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { normalizeSavedIds } from "../utils/listingUtils";
 import {
   getStoredCurrentUser,
@@ -55,26 +56,39 @@ function ExplorePage({
   onToggleSave,
   onSaveToggle,
 }) {
+  const storetApp = useOptionalStoretApp();
+
   const storedUser = getStoredCurrentUser() || {
     fullName: "Demo User",
     role: "Renter",
   };
 
-  const activeUser = currentUser || storedUser;
-  const userListings = useMemo(() => readUserListings(), []);
+  const activeUser = currentUser || storetApp?.currentUser || storedUser;
+  const userListings = useMemo(() => {
+    if (Array.isArray(storetApp?.userListings)) {
+      return storetApp.userListings;
+    }
+
+    return readUserListings();
+  }, [storetApp?.userListings]);
 
   const allListings = useMemo(() => {
     return getPageListings(listings, userListings);
   }, [listings, userListings]);
 
-  const savedIdsFromProps = normalizeSavedIds(savedListingIds);
+  const hasExternalSavedIds =
+    savedListingIds !== undefined || storetApp?.savedListingIds !== undefined;
+  const savedIdsFromProps = normalizeSavedIds(
+    savedListingIds ?? storetApp?.savedListingIds
+  );
 
   const [localSavedIds, setLocalSavedIds] = useState(() =>
     readSavedListingIds()
   );
 
-  const activeSavedIds =
-    savedIdsFromProps.length > 0 ? savedIdsFromProps : localSavedIds;
+  const activeSavedIds = hasExternalSavedIds
+    ? savedIdsFromProps
+    : localSavedIds;
 
   const savedIdSet = useMemo(
     () => new Set(activeSavedIds.map(String)),
@@ -173,13 +187,11 @@ function ExplorePage({
     event.preventDefault();
     event.stopPropagation();
 
-    if (onToggleSave) {
-      onToggleSave(listingId);
-      return;
-    }
+    const toggleSaveAction =
+      onToggleSave || onSaveToggle || storetApp?.actions?.toggleSave;
 
-    if (onSaveToggle) {
-      onSaveToggle(listingId);
+    if (toggleSaveAction) {
+      toggleSaveAction(listingId);
       return;
     }
 

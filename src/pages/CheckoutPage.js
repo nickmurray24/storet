@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import { useOptionalStoretApp } from '../context/StoretAppContext';
 import { BOOKING_STATUSES } from '../utils/bookingUtils';
 import {
   getBookingRequestById,
@@ -38,15 +39,20 @@ function formatDateTime(value) {
 }
 
 function CheckoutPage({
-  currentUser = {},
-  bookingRequests = [],
-  paymentRecords = [],
-  onCompleteCheckout = () => null,
+  currentUser,
+  bookingRequests,
+  paymentRecords,
+  onCompleteCheckout,
 }) {
+  const storetApp = useOptionalStoretApp();
   const { requestId } = useParams();
 
-  const request = getBookingRequestById(bookingRequests, requestId);
-  const existingPayment = getPaymentRecordForRequest(paymentRecords, requestId);
+  const activeCurrentUser = currentUser || storetApp?.currentUser || {};
+  const activeBookingRequests = bookingRequests ?? storetApp?.bookingRequests ?? [];
+  const activePaymentRecords = paymentRecords ?? storetApp?.paymentRecords ?? [];
+
+  const request = getBookingRequestById(activeBookingRequests, requestId);
+  const existingPayment = getPaymentRecordForRequest(activePaymentRecords, requestId);
 
   const pricing = useMemo(() => {
     const storageCharge = getMonthlyPrice(request?.listingPrice || 0);
@@ -61,7 +67,7 @@ function CheckoutPage({
   }, [request]);
 
   const [formData, setFormData] = useState({
-    cardholderName: currentUser.fullName || '',
+    cardholderName: activeCurrentUser.fullName || '',
     cardNumber: '',
     expiry: '',
     cvc: '',
@@ -127,7 +133,10 @@ function CheckoutPage({
 
     const sanitizedCard = formData.cardNumber.replace(/\s+/g, '');
 
-    const result = onCompleteCheckout(request.id, {
+    const completeCheckoutAction =
+      onCompleteCheckout || storetApp?.actions?.completeCheckout || (() => null);
+
+    const result = completeCheckoutAction(request.id, {
       cardholderName: formData.cardholderName,
       billingZip: formData.billingZip,
       last4: sanitizedCard.slice(-4),
