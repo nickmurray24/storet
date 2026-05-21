@@ -31,131 +31,45 @@ import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
+import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import {
-  CURRENT_USER_KEY,
-  SAVED_LISTINGS_KEY,
-  USER_LISTINGS_KEY,
-} from "../constants/storageKeys";
-import { normalizeListing, normalizeSavedIds } from "../utils/listingUtils";
-import { safeReadJson, safeWriteJson } from "../utils/storage";
-
-const fallbackListings = [
-  {
-    id: "1",
-    title: "Oakley Garage Space",
-    location: "Oakley, Cincinnati, OH",
-    distance: "6 miles away",
-    price: 85,
-    sqft: 120,
-    storageType: "Garage",
-    listingType: "Private host",
-    access: "By appointment",
-    rating: 4.9,
-    reviews: 18,
-    instantBook: true,
-    waitlist: false,
-    host: "Maya",
-    description:
-      "Clean indoor garage space for boxes, bikes, dorm items, seasonal storage, and small furniture.",
-    tags: ["Indoor", "Private", "Instant book"],
-    amenities: ["Indoor space", "Private access", "Flexible monthly rental"],
-  },
-  {
-    id: "2",
-    title: "Clifton Basement Corner",
-    location: "Clifton, Cincinnati, OH",
-    distance: "2 miles away",
-    price: 55,
-    sqft: 75,
-    storageType: "Basement",
-    listingType: "Private host",
-    access: "Weekly access",
-    rating: 4.7,
-    reviews: 11,
-    instantBook: false,
-    waitlist: true,
-    host: "Evan",
-    description:
-      "Affordable basement storage close to campus and apartment-heavy neighborhoods.",
-    tags: ["Budget", "Student friendly", "Waitlist"],
-    amenities: ["Student friendly", "Budget pricing", "Short-term friendly"],
-  },
-  {
-    id: "3",
-    title: "Downtown Storage Locker",
-    location: "Downtown Cincinnati, OH",
-    distance: "4 miles away",
-    price: 110,
-    sqft: 100,
-    storageType: "Storage unit",
-    listingType: "Commercial",
-    access: "Daily access",
-    rating: 4.8,
-    reviews: 32,
-    instantBook: true,
-    waitlist: false,
-    host: "Storet Partner",
-    description:
-      "Traditional storage-style locker with flexible monthly availability.",
-    tags: ["Commercial", "Daily access", "Secure"],
-    amenities: ["Daily access", "Secure facility", "Commercial partner"],
-  },
-  {
-    id: "4",
-    title: "Mason Spare Room Storage",
-    location: "Mason, OH",
-    distance: "18 miles away",
-    price: 70,
-    sqft: 90,
-    storageType: "Spare room",
-    listingType: "Private host",
-    access: "By appointment",
-    rating: 4.6,
-    reviews: 9,
-    instantBook: false,
-    waitlist: false,
-    host: "Jordan",
-    description:
-      "Climate-friendly spare room space for bins, seasonal items, and dorm storage.",
-    tags: ["Climate friendly", "Residential", "Flexible"],
-    amenities: ["Residential space", "Flexible access", "Good for bins"],
-  },
-];
+  canCheckoutBookingRequest,
+  getBookingRequestCheckoutPath,
+  getLatestBookingRequestForListing,
+  hasOpenBookingRequest,
+} from "../utils/bookingSelectors";
+import { getPageListings } from "../data/listingCatalog";
+import { normalizeSavedIds } from "../utils/listingUtils";
+import {
+  getStoredCurrentUser,
+  readSavedListingIds,
+  readUserListings,
+  writeSavedListingIds,
+} from "../utils/storage";
 
 function ListingDetailsPage({
   listings,
+  currentUser,
   savedListingIds,
+  bookingRequests = [],
   onToggleSave,
   onSaveToggle,
+  onSubmitBookingRequest,
 }) {
   const navigate = useNavigate();
   const params = useParams();
   const routeListingId = String(params.id || params.listingId || "");
 
-  const storedUser = safeReadJson(CURRENT_USER_KEY, {
+  const storedUser = getStoredCurrentUser() || {
     fullName: "Demo User",
     role: "Renter",
-  });
+  };
 
-  const userListings = useMemo(() => {
-    const storedListings = safeReadJson(USER_LISTINGS_KEY, []);
-    return Array.isArray(storedListings) ? storedListings : [];
-  }, []);
+  const activeUser = currentUser || storedUser;
+  const userListings = useMemo(() => readUserListings(), []);
 
   const allListings = useMemo(() => {
-    const sourceListings =
-      Array.isArray(listings) && listings.length > 0
-        ? listings
-        : [...fallbackListings, ...userListings];
-
-    const normalizedListings = sourceListings.map(normalizeListing);
-    const seenIds = new Set();
-
-    return normalizedListings.filter((listing) => {
-      if (seenIds.has(listing.id)) return false;
-      seenIds.add(listing.id);
-      return true;
-    });
+    return getPageListings(listings, userListings);
   }, [listings, userListings]);
 
   const listing = useMemo(() => {
@@ -165,7 +79,7 @@ function ListingDetailsPage({
   const savedIdsFromProps = normalizeSavedIds(savedListingIds);
 
   const [localSavedIds, setLocalSavedIds] = useState(() =>
-    normalizeSavedIds(safeReadJson(SAVED_LISTINGS_KEY, []))
+    readSavedListingIds()
   );
 
   const activeSavedIds =
@@ -176,6 +90,19 @@ function ListingDetailsPage({
     : false;
 
   const [bookingStatus, setBookingStatus] = useState("");
+  const [submittedBookingRequest, setSubmittedBookingRequest] = useState(null);
+
+  const latestListingRequest = useMemo(() => {
+    if (!listing) {
+      return null;
+    }
+
+    return getLatestBookingRequestForListing(
+      bookingRequests,
+      listing.id,
+      activeUser
+    );
+  }, [activeUser, bookingRequests, listing]);
 
   function handleSaveClick() {
     if (!listing) return;
@@ -196,7 +123,7 @@ function ListingDetailsPage({
         ? currentIds.filter((id) => id !== normalizedId)
         : [...currentIds, normalizedId];
 
-      safeWriteJson(SAVED_LISTINGS_KEY, nextIds);
+      writeSavedListingIds(nextIds);
       return nextIds;
     });
   }
@@ -204,12 +131,47 @@ function ListingDetailsPage({
   function handleBookingAction() {
     if (!listing) return;
 
-    if (listing.waitlist && !listing.instantBook) {
-      setBookingStatus("waitlist");
+    const activeBookingRequest = submittedBookingRequest || latestListingRequest;
+
+    if (canCheckoutBookingRequest(activeBookingRequest)) {
+      navigate(getBookingRequestCheckoutPath(activeBookingRequest));
       return;
     }
 
-    setBookingStatus("reserved");
+    if (hasOpenBookingRequest(activeBookingRequest)) {
+      setBookingStatus(activeBookingRequest.status);
+      return;
+    }
+
+    if (!activeUser?.isAuthenticated) {
+      navigate("/auth");
+      return;
+    }
+
+    if (onSubmitBookingRequest) {
+      const result = onSubmitBookingRequest(listing, {
+        fullName: activeUser.fullName || "Demo User",
+        email: activeUser.email || "",
+        duration: "Month-to-month",
+        notes: "Quick reservation request from the listing details page.",
+      });
+
+      if (result?.ok === false) {
+        setBookingStatus("error");
+        return;
+      }
+
+      setSubmittedBookingRequest(result?.request || null);
+      setBookingStatus(result?.request?.status || BOOKING_STATUSES.PENDING);
+      return;
+    }
+
+    if (listing.waitlist && !listing.instantBook) {
+      setBookingStatus(BOOKING_STATUSES.WAITLISTED);
+      return;
+    }
+
+    setBookingStatus(BOOKING_STATUSES.APPROVED);
   }
 
   if (!listing) {
@@ -252,6 +214,16 @@ function ListingDetailsPage({
       : listing.instantBook
       ? "Reserve instantly"
       : "Request reservation";
+
+  const activeBookingRequest = submittedBookingRequest || latestListingRequest;
+  const canContinueToCheckout = canCheckoutBookingRequest(activeBookingRequest);
+  const hasExistingOpenRequest = hasOpenBookingRequest(activeBookingRequest);
+  const shouldDisableReservation = hasExistingOpenRequest && !canContinueToCheckout;
+  const activeActionLabel = canContinueToCheckout
+    ? "Continue to checkout"
+    : shouldDisableReservation
+    ? `${activeBookingRequest.status} request`
+    : primaryActionLabel;
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
@@ -580,16 +552,35 @@ function ListingDetailsPage({
 
                   <Divider />
 
-                  {bookingStatus === "reserved" && (
+                  {bookingStatus === BOOKING_STATUSES.APPROVED && (
                     <Alert severity="success">
-                      Reservation started. This can later connect to your full
-                      booking flow.
+                      Booking request approved. You can continue to checkout now
+                      or open it later from your profile.
                     </Alert>
                   )}
 
-                  {bookingStatus === "waitlist" && (
+                  {bookingStatus === BOOKING_STATUSES.PENDING && (
+                    <Alert severity="info">
+                      Reservation request sent. The host can approve, waitlist,
+                      or decline it in a later dashboard phase.
+                    </Alert>
+                  )}
+
+                  {bookingStatus === BOOKING_STATUSES.WAITLISTED && (
                     <Alert severity="warning">
                       You joined the waitlist for this space.
+                    </Alert>
+                  )}
+
+                  {bookingStatus === "error" && (
+                    <Alert severity="error">
+                      We could not create that booking request. Please try again.
+                    </Alert>
+                  )}
+
+                  {activeBookingRequest && !bookingStatus && (
+                    <Alert severity="info">
+                      Latest local request for this listing: {activeBookingRequest.status}.
                     </Alert>
                   )}
 
@@ -621,8 +612,9 @@ function ListingDetailsPage({
                       )
                     }
                     onClick={handleBookingAction}
+                    disabled={shouldDisableReservation}
                   >
-                    {primaryActionLabel}
+                    {activeActionLabel}
                   </Button>
 
                   <Button
@@ -640,7 +632,7 @@ function ListingDetailsPage({
                     color="text.secondary"
                     textAlign="center"
                   >
-                    You are browsing as {storedUser.fullName || "Demo User"}.
+                    You are browsing as {activeUser.fullName || "Demo User"}.
                   </Typography>
                 </Stack>
               </CardContent>

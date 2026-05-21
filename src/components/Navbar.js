@@ -15,6 +15,7 @@ const navItems = [
   { label: "Home", to: "/" },
   { label: "Explore", to: "/explore" },
   { label: "Notifications", to: "/notifications" },
+  { label: "Host", to: "/host-dashboard" },
   { label: "Profile", to: "/profile" },
 ];
 

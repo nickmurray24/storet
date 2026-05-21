@@ -39,88 +39,14 @@ import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
+import { getPageListings } from "../data/listingCatalog";
+import { normalizeSavedIds } from "../utils/listingUtils";
 import {
-  CURRENT_USER_KEY,
-  SAVED_LISTINGS_KEY,
-  USER_LISTINGS_KEY,
-} from "../constants/storageKeys";
-import { normalizeListing, normalizeSavedIds } from "../utils/listingUtils";
-import { safeReadJson, safeWriteJson } from "../utils/storage";
-
-const fallbackListings = [
-  {
-    id: "1",
-    title: "Oakley Garage Space",
-    location: "Oakley, Cincinnati, OH",
-    distance: "6 miles away",
-    price: 85,
-    sqft: 120,
-    storageType: "Garage",
-    listingType: "Private host",
-    access: "By appointment",
-    rating: 4.9,
-    reviews: 18,
-    instantBook: true,
-    waitlist: false,
-    host: "Maya",
-    description: "Clean indoor garage space for boxes, bikes, dorm items, and small furniture.",
-    tags: ["Indoor", "Private", "Instant book"],
-  },
-  {
-    id: "2",
-    title: "Clifton Basement Corner",
-    location: "Clifton, Cincinnati, OH",
-    distance: "2 miles away",
-    price: 55,
-    sqft: 75,
-    storageType: "Basement",
-    listingType: "Private host",
-    access: "Weekly access",
-    rating: 4.7,
-    reviews: 11,
-    instantBook: false,
-    waitlist: true,
-    host: "Evan",
-    description: "Affordable basement storage close to campus and apartment-heavy neighborhoods.",
-    tags: ["Budget", "Student friendly", "Waitlist"],
-  },
-  {
-    id: "3",
-    title: "Downtown Storage Locker",
-    location: "Downtown Cincinnati, OH",
-    distance: "4 miles away",
-    price: 110,
-    sqft: 100,
-    storageType: "Storage unit",
-    listingType: "Commercial",
-    access: "Daily access",
-    rating: 4.8,
-    reviews: 32,
-    instantBook: true,
-    waitlist: false,
-    host: "Storet Partner",
-    description: "Traditional storage-style locker with flexible monthly availability.",
-    tags: ["Commercial", "Daily access", "Secure"],
-  },
-  {
-    id: "4",
-    title: "Mason Spare Room Storage",
-    location: "Mason, OH",
-    distance: "18 miles away",
-    price: 70,
-    sqft: 90,
-    storageType: "Spare room",
-    listingType: "Private host",
-    access: "By appointment",
-    rating: 4.6,
-    reviews: 9,
-    instantBook: false,
-    waitlist: false,
-    host: "Jordan",
-    description: "Climate-friendly spare room space for bins, seasonal items, and dorm storage.",
-    tags: ["Climate friendly", "Residential", "Flexible"],
-  },
-];
+  getStoredCurrentUser,
+  readSavedListingIds,
+  readUserListings,
+  writeSavedListingIds,
+} from "../utils/storage";
 
 function ExplorePage({
   listings,
@@ -129,34 +55,22 @@ function ExplorePage({
   onToggleSave,
   onSaveToggle,
 }) {
-  const storedUser = safeReadJson(CURRENT_USER_KEY, {
+  const storedUser = getStoredCurrentUser() || {
     fullName: "Demo User",
     role: "Renter",
-  });
+  };
 
   const activeUser = currentUser || storedUser;
-  const userListings = useMemo(() => safeReadJson(USER_LISTINGS_KEY, []), []);
+  const userListings = useMemo(() => readUserListings(), []);
 
   const allListings = useMemo(() => {
-    const sourceListings =
-      Array.isArray(listings) && listings.length > 0
-        ? listings
-        : [...fallbackListings, ...userListings];
-
-    const normalizedListings = sourceListings.map(normalizeListing);
-    const seenIds = new Set();
-
-    return normalizedListings.filter((listing) => {
-      if (seenIds.has(listing.id)) return false;
-      seenIds.add(listing.id);
-      return true;
-    });
+    return getPageListings(listings, userListings);
   }, [listings, userListings]);
 
   const savedIdsFromProps = normalizeSavedIds(savedListingIds);
 
   const [localSavedIds, setLocalSavedIds] = useState(() =>
-  normalizeSavedIds(safeReadJson(SAVED_LISTINGS_KEY, []))
+    readSavedListingIds()
   );
 
   const activeSavedIds =
@@ -275,7 +189,7 @@ function ExplorePage({
         ? currentIds.filter((id) => id !== normalizedId)
         : [...currentIds, normalizedId];
 
-      safeWriteJson(SAVED_LISTINGS_KEY, nextIds);
+      writeSavedListingIds(nextIds);
       return nextIds;
     });
   }

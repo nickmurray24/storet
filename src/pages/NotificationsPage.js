@@ -29,14 +29,15 @@ import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
+import { ACTIVITY_FEED_KEY } from "../constants/storageKeys";
+import { buildBookingActivity } from "../utils/bookingUtils";
+import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
 import {
-  ACTIVITY_FEED_KEY,
-  CURRENT_USER_KEY,
-  SAVED_LISTINGS_KEY,
-  USER_LISTINGS_KEY,
-} from "../constants/storageKeys";
-import { normalizeListing, normalizeSavedIds } from "../utils/listingUtils";
-import { safeReadJson } from "../utils/storage";
+  getStoredCurrentUser,
+  readSavedListingIds,
+  readUserListings,
+  safeReadJson,
+} from "../utils/storage";
 
 function formatActivityTime(value) {
   if (!value) {
@@ -162,28 +163,23 @@ function buildFallbackActivities(activeUser, hostListings, savedIds) {
   );
 }
 
-function NotificationsPage({ currentUser }) {
+function NotificationsPage({ currentUser, bookingRequests = [] }) {
   const [filterType, setFilterType] = useState("all");
 
-  const storedUser = safeReadJson(CURRENT_USER_KEY, {
+  const storedUser = getStoredCurrentUser() || {
     fullName: "Demo User",
     email: "demo@storet.com",
     role: "Renter",
     isAuthenticated: true,
-  });
+  };
 
   const activeUser = currentUser || storedUser;
 
   const hostListings = useMemo(() => {
-    const storedListings = safeReadJson(USER_LISTINGS_KEY, []);
-    const safeListings = Array.isArray(storedListings) ? storedListings : [];
-    return safeListings.map(normalizeListing);
+    return normalizeListingList(readUserListings());
   }, []);
 
-  const savedIds = useMemo(
-    () => normalizeSavedIds(safeReadJson(SAVED_LISTINGS_KEY, [])),
-    []
-  );
+  const savedIds = useMemo(() => normalizeSavedIds(readSavedListingIds()), []);
 
   const activities = useMemo(() => {
     const storedActivities = safeReadJson(ACTIVITY_FEED_KEY, []);
@@ -197,7 +193,13 @@ function NotificationsPage({ currentUser }) {
       savedIds
     );
 
-    const combinedActivities = [...safeStoredActivities, ...generatedActivities];
+    const bookingActivities = bookingRequests.map(buildBookingActivity);
+
+    const combinedActivities = [
+      ...safeStoredActivities,
+      ...bookingActivities,
+      ...generatedActivities,
+    ];
 
     const seenIds = new Set();
 
@@ -216,7 +218,7 @@ function NotificationsPage({ currentUser }) {
 
         return bTime - aTime;
       });
-  }, [activeUser, hostListings, savedIds]);
+  }, [activeUser, bookingRequests, hostListings, savedIds]);
 
   const filteredActivities = useMemo(() => {
     if (filterType === "all") {
