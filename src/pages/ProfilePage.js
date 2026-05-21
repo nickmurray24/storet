@@ -733,7 +733,7 @@ function ListingRow({ listing, action }) {
               alignItems="center"
               onClick={(event) => event.preventDefault()}
             >
-              <Chip label={`$${listing.price}/mo`} size="small" />
+              <Chip label={listing.startingPriceDisplay || listing.priceDisplay} size="small" />
 
               <Chip
                 icon={<StarRoundedIcon />}
@@ -773,7 +773,7 @@ function BookingRequestRow({ request, onCancel }) {
           <Box>
             <Typography fontWeight={900}>{request.listingTitle}</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {request.duration} · {request.moveInDate} to {request.moveOutDate}
+              {request.rateDisplay} · {request.duration} · {request.moveInDate} to {request.moveOutDate}
             </Typography>
           </Box>
 

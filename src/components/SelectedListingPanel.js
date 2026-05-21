@@ -43,7 +43,7 @@ function SelectedListingPanel({
         </div>
 
         <div className="selected-listing-price-box">
-          <span className="selected-listing-price">{listing.price}</span>
+          <span className="selected-listing-price">{listing.startingPriceDisplay || listing.priceDisplay}</span>
           <span className="selected-listing-availability">
             {listing.availability}
           </span>

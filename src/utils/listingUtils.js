@@ -3,6 +3,7 @@ import {
   BOOKING_MODES,
   LISTING_STATUSES,
   LISTING_TYPES,
+  PRICING_PERIODS,
 } from "../constants/appEnums";
 import {
   DEFAULT_LISTING_MODEL,
@@ -10,24 +11,26 @@ import {
   createModelId,
   getIsoTimestamp,
 } from "../models/storetModels";
+import {
+  formatPricingSummary,
+  formatStartingPrice,
+  getAvailablePricingOptions,
+  getMonthlyEquivalentAmount,
+  getPreferredPricingOption,
+  normalizePricing,
+  parsePositiveNumber,
+} from "./pricingUtils";
 
-export { AVAILABILITY_STATUSES, BOOKING_MODES, LISTING_STATUSES, LISTING_TYPES };
+export {
+  AVAILABILITY_STATUSES,
+  BOOKING_MODES,
+  LISTING_STATUSES,
+  LISTING_TYPES,
+  PRICING_PERIODS,
+};
 
 export function parseNumber(value, fallbackValue) {
-  if (typeof value === "number" && !Number.isNaN(value)) {
-    return value;
-  }
-
-  if (typeof value === "string") {
-    const cleanedValue = value.replace(/[^0-9.]/g, "");
-    const parsedValue = Number(cleanedValue);
-
-    if (!Number.isNaN(parsedValue) && parsedValue > 0) {
-      return parsedValue;
-    }
-  }
-
-  return fallbackValue;
+  return parsePositiveNumber(value, fallbackValue);
 }
 
 export function normalizeSavedIds(value) {
@@ -84,19 +87,50 @@ export function getListingAvailabilityStatus(listing = {}) {
   return AVAILABILITY_STATUSES.AVAILABLE;
 }
 
+export function getListingPricing(listing = {}) {
+  return normalizePricing(
+    listing.pricing,
+    listing.price ??
+      listing.monthlyPrice ??
+      listing.monthlyRate ??
+      listing.pricePerMonth ??
+      listing.rate
+  );
+}
+
+export function getListingPricingOptions(listing = {}) {
+  return getAvailablePricingOptions(getListingPricing(listing));
+}
+
+export function getListingPriceSummary(listing = {}, options = {}) {
+  return formatPricingSummary(getListingPricing(listing), options);
+}
+
+export function getListingStartingPrice(listing = {}) {
+  return formatStartingPrice(getListingPricing(listing));
+}
+
+export function getListingMonthlyEquivalentPrice(listing = {}) {
+  return getMonthlyEquivalentAmount(getListingPricing(listing));
+}
+
 export function normalizeListing(listing = {}, index = 0) {
   const now = new Date().toISOString();
   const createdAt = getIsoTimestamp(listing.createdAt, now);
   const updatedAt = getIsoTimestamp(listing.updatedAt || listing.createdAt, createdAt);
 
-  const price = parseNumber(
-    listing.price ??
-      listing.monthlyPrice ??
-      listing.monthlyRate ??
-      listing.pricePerMonth ??
-      listing.rate,
-    DEFAULT_LISTING_MODEL.price
+  const legacyMonthlyPrice =
+    listing.monthlyPrice ??
+    listing.monthlyRate ??
+    listing.pricePerMonth ??
+    listing.rate ??
+    listing.price;
+  const pricing = normalizePricing(listing.pricing, legacyMonthlyPrice);
+  const preferredPricingOption = getPreferredPricingOption(
+    pricing,
+    listing.pricePeriod || PRICING_PERIODS.MONTHLY
   );
+  const price = preferredPricingOption?.amount || DEFAULT_LISTING_MODEL.price;
 
   const sqft = parseNumber(
     listing.sqft ??
@@ -139,6 +173,14 @@ export function normalizeListing(listing = {}, index = 0) {
     location: listing.location ?? listing.address ?? DEFAULT_LISTING_MODEL.location,
     distance: listing.distance ?? DEFAULT_LISTING_MODEL.distance,
     price,
+    pricePeriod: preferredPricingOption?.period || PRICING_PERIODS.MONTHLY,
+    priceLabel: preferredPricingOption?.label || "Monthly",
+    priceDisplay: preferredPricingOption?.display || DEFAULT_LISTING_MODEL.priceDisplay,
+    pricing,
+    pricingOptions: getAvailablePricingOptions(pricing),
+    pricingSummary: formatPricingSummary(pricing),
+    startingPriceDisplay: formatStartingPrice(pricing),
+    monthlyEquivalentPrice: getMonthlyEquivalentAmount(pricing),
     sqft,
     size: listing.size ?? `${sqft} sq ft`,
     storageType: listing.storageType ?? listing.type ?? DEFAULT_LISTING_MODEL.storageType,

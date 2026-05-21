@@ -37,6 +37,7 @@ import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { DEFAULT_USER_PROFILE } from "../models/storetModels";
 import { createListingRecord, parseNumber } from "../utils/listingUtils";
+import { formatPricingSummary, normalizePricing, hasAnyPricing } from "../utils/pricingUtils";
 
 const storageTypes = [
   "Garage",
@@ -89,7 +90,9 @@ function CreateListingPage({ currentUser, onAddListing }) {
     location: "",
     storageType: "Garage",
     listingType: "Private host",
-    price: "",
+    dailyRate: "",
+    monthlyRate: "",
+    yearlyRate: "",
     sqft: "",
     access: "By appointment",
     bookingType: "instant",
@@ -107,7 +110,11 @@ function CreateListingPage({ currentUser, onAddListing }) {
   const [successMessage, setSuccessMessage] = useState("");
 
   const previewListing = useMemo(() => {
-    const price = parseNumber(formData.price, 85);
+    const pricing = normalizePricing({
+      daily: formData.dailyRate,
+      monthly: formData.monthlyRate,
+      yearly: formData.yearlyRate,
+    });
     const sqft = parseNumber(formData.sqft, 100);
 
     return {
@@ -115,7 +122,9 @@ function CreateListingPage({ currentUser, onAddListing }) {
       location: formData.location.trim() || "Cincinnati, OH",
       storageType: formData.storageType,
       listingType: formData.listingType,
-      price,
+      pricing,
+      price: pricing.monthly || pricing.daily || pricing.yearly || 85,
+      priceDisplay: formatPricingSummary(pricing),
       sqft,
       access: formData.access,
       instantBook: formData.bookingType === "instant",
@@ -181,7 +190,11 @@ function CreateListingPage({ currentUser, onAddListing }) {
     const title = formData.title.trim();
     const location = formData.location.trim();
     const description = formData.description.trim();
-    const price = parseNumber(formData.price, null);
+    const pricing = normalizePricing({
+      daily: formData.dailyRate,
+      monthly: formData.monthlyRate,
+      yearly: formData.yearlyRate,
+    });
     const sqft = parseNumber(formData.sqft, null);
 
     if (!title) {
@@ -194,8 +207,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
       return;
     }
 
-    if (!price) {
-      setError("Please enter a valid monthly price.");
+    if (!hasAnyPricing(pricing)) {
+      setError("Please enter at least one valid daily, monthly, or yearly rate.");
       return;
     }
 
@@ -215,7 +228,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
         title,
         location,
         distance: "New listing",
-        price,
+        pricing,
+        price: pricing.monthly || pricing.daily || pricing.yearly,
         sqft,
         storageType: formData.storageType,
         listingType: formData.listingType,
@@ -405,21 +419,67 @@ function CreateListingPage({ currentUser, onAddListing }) {
                     <Stack spacing={1}>
                       <Typography variant="h5">Pricing and size</Typography>
                       <Typography color="text.secondary">
-                        Keep the monthly rate and square footage easy to compare.
+                        Add any rates you want to offer. Empty rates stay hidden from renters.
                       </Typography>
                     </Stack>
 
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: {
+                          xs: "1fr",
+                          sm: "repeat(2, minmax(0, 1fr))",
+                        },
+                        gap: 2,
+                      }}
+                    >
                       <TextField
-                        label="Monthly price"
-                        name="price"
-                        value={formData.price}
+                        label="Daily rate"
+                        name="dailyRate"
+                        value={formData.dailyRate}
+                        onChange={handleInputChange}
+                        placeholder="12"
+                        fullWidth
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">$</InputAdornment>
+                          ),
+                          endAdornment: (
+                            <InputAdornment position="end">/day</InputAdornment>
+                          ),
+                        }}
+                      />
+
+                      <TextField
+                        label="Monthly rate"
+                        name="monthlyRate"
+                        value={formData.monthlyRate}
                         onChange={handleInputChange}
                         placeholder="85"
                         fullWidth
                         InputProps={{
                           startAdornment: (
                             <InputAdornment position="start">$</InputAdornment>
+                          ),
+                          endAdornment: (
+                            <InputAdornment position="end">/mo</InputAdornment>
+                          ),
+                        }}
+                      />
+
+                      <TextField
+                        label="Yearly rate"
+                        name="yearlyRate"
+                        value={formData.yearlyRate}
+                        onChange={handleInputChange}
+                        placeholder="900"
+                        fullWidth
+                        InputProps={{
+                          startAdornment: (
+                            <InputAdornment position="start">$</InputAdornment>
+                          ),
+                          endAdornment: (
+                            <InputAdornment position="end">/yr</InputAdornment>
                           ),
                         }}
                       />
@@ -439,7 +499,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
                           ),
                         }}
                       />
-                    </Stack>
+                    </Box>
 
                     <FormControl fullWidth>
                       <InputLabel>Access style</InputLabel>
@@ -637,8 +697,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
                     />
                     <PreviewRow
                       icon={<PaymentsRoundedIcon />}
-                      label="Monthly price"
-                      value={`$${previewListing.price}/mo`}
+                      label="Available rates"
+                      value={previewListing.priceDisplay}
                     />
                     <PreviewRow
                       icon={<StraightenRoundedIcon />}

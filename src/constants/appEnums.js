@@ -37,6 +37,13 @@ export const BOOKING_STATUSES = {
   CANCELLED: "Cancelled",
 };
 
+
+export const PRICING_PERIODS = {
+  DAILY: "daily",
+  MONTHLY: "monthly",
+  YEARLY: "yearly",
+};
+
 export const PAYMENT_STATUSES = {
   PAID: "Paid",
   REFUNDED: "Refunded",

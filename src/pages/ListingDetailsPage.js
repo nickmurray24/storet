@@ -34,6 +34,7 @@ import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 import ContactHostForm from "../components/ContactHostForm";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
+import { PRICING_PERIODS } from "../constants/appEnums";
 import {
   canCheckoutBookingRequest,
   getBookingRequestCheckoutPath,
@@ -43,6 +44,7 @@ import {
 import { getPageListings } from "../data/listingCatalog";
 import { APP_ROUTES } from "../routes/appRoutes";
 import { normalizeSavedIds } from "../utils/listingUtils";
+import { getAvailablePricingOptions, getPricingOptionByPeriod } from "../utils/pricingUtils";
 import {
   getStoredCurrentUser,
   readSavedListingIds,
@@ -107,6 +109,7 @@ function ListingDetailsPage({
 
   const [bookingStatus, setBookingStatus] = useState("");
   const [submittedBookingRequest, setSubmittedBookingRequest] = useState(null);
+  const [selectedRatePeriod, setSelectedRatePeriod] = useState("");
 
   const activeBookingRequests = bookingRequests ?? storetApp?.bookingRequests ?? [];
 
@@ -121,6 +124,20 @@ function ListingDetailsPage({
       activeUser
     );
   }, [activeBookingRequests, activeUser, listing]);
+
+  const pricingOptions = useMemo(() => {
+    return listing ? getAvailablePricingOptions(listing.pricing) : [];
+  }, [listing]);
+
+  const defaultRatePeriod =
+    pricingOptions.find((option) => option.period === PRICING_PERIODS.MONTHLY)?.period ||
+    pricingOptions[0]?.period ||
+    "";
+
+  const selectedPricingOption = getPricingOptionByPeriod(
+    listing?.pricing,
+    selectedRatePeriod || defaultRatePeriod
+  );
 
   function handleSaveClick() {
     if (!listing) return;
@@ -182,6 +199,11 @@ function ListingDetailsPage({
       return;
     }
 
+    if (!selectedPricingOption) {
+      setBookingStatus("error");
+      return;
+    }
+
     const submitBookingRequestAction =
       onSubmitBookingRequest || storetApp?.actions?.submitBookingRequest;
 
@@ -189,7 +211,10 @@ function ListingDetailsPage({
       const result = submitBookingRequestAction(listing, {
         fullName: activeUser.fullName || "Demo User",
         email: activeUser.email || "",
-        duration: "Month-to-month",
+        ratePeriod: selectedPricingOption?.period,
+        rateLabel: selectedPricingOption?.label,
+        rateDisplay: selectedPricingOption?.display,
+        duration: selectedPricingOption?.durationLabel || "Month-to-month",
         notes: "Quick reservation request from the listing details page.",
       });
 
@@ -461,10 +486,23 @@ function ListingDetailsPage({
                         />
                         <DetailItem
                           icon={<PaymentsRoundedIcon />}
-                          label="Monthly price"
-                          value={`$${listing.price}/mo`}
+                          label="Primary rate"
+                          value={listing.priceDisplay}
                         />
                       </Box>
+
+                      {pricingOptions.length > 0 && (
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
+                          {pricingOptions.map((option) => (
+                            <Chip
+                              key={option.period}
+                              label={option.chipLabel}
+                              variant="outlined"
+                              sx={{ fontWeight: 700 }}
+                            />
+                          ))}
+                        </Stack>
+                      )}
                     </Box>
 
                     <Divider />
@@ -584,19 +622,36 @@ function ListingDetailsPage({
                 <Stack spacing={2.5}>
                   <Box>
                     <Typography variant="h4">
-                      ${listing.price}
-                      <Typography
-                        component="span"
-                        color="text.secondary"
-                        fontSize="1rem"
-                      >
-                        /mo
-                      </Typography>
+                      {selectedPricingOption?.display || listing.priceDisplay}
                     </Typography>
                     <Typography color="text.secondary">
                       {listing.sqft} sq ft · {listing.access}
                     </Typography>
                   </Box>
+
+                  {pricingOptions.length > 0 && (
+                    <Stack spacing={1}>
+                      <Typography fontWeight={800}>Choose a rate</Typography>
+                      <Stack spacing={1}>
+                        {pricingOptions.map((option) => (
+                          <Button
+                            key={option.period}
+                            type="button"
+                            variant={
+                              (selectedPricingOption?.period || defaultRatePeriod) === option.period
+                                ? "contained"
+                                : "outlined"
+                            }
+                            onClick={() => setSelectedRatePeriod(option.period)}
+                            sx={{ justifyContent: "space-between" }}
+                          >
+                            <span>{option.label}</span>
+                            <span>{option.display}</span>
+                          </Button>
+                        ))}
+                      </Stack>
+                    </Stack>
+                  )}
 
                   <Divider />
 

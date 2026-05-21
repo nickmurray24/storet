@@ -115,7 +115,7 @@ function MapPlaceholder({
           <h2>{selectedListing ? selectedListing.title : 'Browse nearby storage'}</h2>
           <p>
             {selectedListing
-              ? `${selectedListing.location} • ${selectedListing.price} • ${selectedListing.type}`
+              ? `${selectedListing.location} • ${selectedListing.startingPriceDisplay || selectedListing.priceDisplay} • ${selectedListing.type}`
               : 'Select a listing card or click a marker to connect the map and results.'}
           </p>
         </div>
@@ -199,7 +199,7 @@ function MapPlaceholder({
                     <div className="map-popup-card">
                       <h3>{listing.title}</h3>
                       <p className="map-popup-meta">
-                        {listing.location} • {listing.price}
+                        {listing.location} • {listing.startingPriceDisplay || listing.priceDisplay}
                       </p>
                       {listing.distanceMiles !== null &&
                         listing.distanceMiles !== undefined && (

@@ -10,11 +10,6 @@ import {
   getPaymentRecordForRequest,
 } from '../utils/bookingSelectors';
 
-function getMonthlyPrice(price) {
-  const parsed = Number(String(price).replace(/[^0-9.]/g, ''));
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
-
 function inferCardBrand(cardNumber) {
   if (/^4/.test(cardNumber)) {
     return 'Visa';
@@ -56,7 +51,7 @@ function CheckoutPage({
   const existingPayment = getPaymentRecordForRequest(activePaymentRecords, requestId);
 
   const pricing = useMemo(() => {
-    const storageCharge = getMonthlyPrice(request?.listingPrice || 0);
+    const storageCharge = Number(request?.listingPrice || 0);
     const serviceFee = 19;
     const totalAmount = storageCharge + serviceFee;
 
@@ -143,6 +138,9 @@ function CheckoutPage({
       last4: sanitizedCard.slice(-4),
       cardBrand: inferCardBrand(sanitizedCard),
       storageCharge: pricing.storageCharge,
+      ratePeriod: request.ratePeriod,
+      rateLabel: request.rateLabel,
+      rateDisplay: request.rateDisplay,
       serviceFee: pricing.serviceFee,
       totalAmount: pricing.totalAmount,
     });
@@ -254,6 +252,11 @@ function CheckoutPage({
               <div className="checkout-summary-row">
                 <span>Host</span>
                 <strong>{existingPayment.hostName}</strong>
+              </div>
+
+              <div className="checkout-summary-row">
+                <span>Billing rate</span>
+                <strong>{existingPayment.rateDisplay || request.rateDisplay}</strong>
               </div>
 
               <div className="checkout-summary-row">
@@ -427,6 +430,11 @@ function CheckoutPage({
             </div>
 
             <div className="checkout-summary-row">
+              <span>Selected rate</span>
+              <strong>{request.rateDisplay}</strong>
+            </div>
+
+            <div className="checkout-summary-row">
               <span>Move-in date</span>
               <strong>{request.moveInDate}</strong>
             </div>
@@ -442,7 +450,7 @@ function CheckoutPage({
             </div>
 
             <div className="checkout-summary-row">
-              <span>Storage charge</span>
+              <span>{request.rateLabel || "Storage"} charge</span>
               <strong>{formatCurrency(pricing.storageCharge)}</strong>
             </div>
 
