@@ -16,7 +16,11 @@ const OPEN_REQUEST_STATUSES = new Set([
   BOOKING_STATUSES.ACTIVE,
 ]);
 
-export function getBookingTimestamp(request = {}) {
+export function getBookingTimestamp(request = null) {
+  if (!request) {
+    return null;
+  }
+
   return (
     request.updatedAt ||
     request.submittedAt ||
@@ -28,7 +32,7 @@ export function getBookingTimestamp(request = {}) {
   );
 }
 
-export function getBookingTimestampValue(request = {}) {
+export function getBookingTimestampValue(request = null) {
   const timestamp = getBookingTimestamp(request);
   const value = new Date(timestamp || 0).getTime();
 
@@ -108,19 +112,19 @@ export function getLatestBookingRequestForListing(
   }) || null;
 }
 
-export function canCheckoutBookingRequest(request = {}) {
-  return CHECKOUT_READY_STATUSES.has(request.status);
+export function canCheckoutBookingRequest(request = null) {
+  return Boolean(request?.status && CHECKOUT_READY_STATUSES.has(request.status));
 }
 
-export function canViewCheckoutHistory(request = {}) {
-  return CHECKOUT_HISTORY_STATUSES.has(request.status);
+export function canViewCheckoutHistory(request = null) {
+  return Boolean(request?.status && CHECKOUT_HISTORY_STATUSES.has(request.status));
 }
 
-export function hasOpenBookingRequest(request = {}) {
-  return OPEN_REQUEST_STATUSES.has(request.status);
+export function hasOpenBookingRequest(request = null) {
+  return Boolean(request?.status && OPEN_REQUEST_STATUSES.has(request.status));
 }
 
-export function getBookingRequestCheckoutPath(request = {}) {
+export function getBookingRequestCheckoutPath(request = null) {
   if (!request?.id) {
     return APP_ROUTES.profile;
   }
@@ -128,7 +132,7 @@ export function getBookingRequestCheckoutPath(request = {}) {
   return buildCheckoutPath(request.id);
 }
 
-export function getBookingRequestPrimaryAction(request = {}) {
+export function getBookingRequestPrimaryAction(request = null) {
   if (canCheckoutBookingRequest(request)) {
     return {
       label: "Checkout",
@@ -145,11 +149,11 @@ export function getBookingRequestPrimaryAction(request = {}) {
 
   return {
     label: "View listing",
-    to: buildListingPath(request.listingId),
+    to: request?.listingId ? buildListingPath(request.listingId) : APP_ROUTES.explore,
   };
 }
 
-export function getCheckoutBlockedReason(request = {}) {
+export function getCheckoutBlockedReason(request = null) {
   if (!request) {
     return {
       title: "Checkout not available",
