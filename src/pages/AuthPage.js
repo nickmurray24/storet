@@ -42,6 +42,8 @@ function AuthPage({ onLogin }) {
     password: "",
   });
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isSignup = authMode === "signup";
 
@@ -86,12 +88,13 @@ function AuthPage({ onLogin }) {
 
   function handleModeSwitch() {
     setError("");
+    setSuccessMessage("");
     setAuthMode((currentMode) =>
       currentMode === "login" ? "signup" : "login"
     );
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const trimmedName = formData.fullName.trim();
@@ -112,12 +115,10 @@ function AuthPage({ onLogin }) {
       return;
     }
 
-    const user = {
-      isAuthenticated: true,
-      fullName: isSignup ? trimmedName : "Demo User",
-      email: trimmedEmail,
-      role,
-    };
+    if (isSignup && formData.password.length < 6) {
+      setError("Please use a password with at least 6 characters.");
+      return;
+    }
 
     const loginAction = onLogin || storetApp?.actions?.login;
 
@@ -126,7 +127,33 @@ function AuthPage({ onLogin }) {
       return;
     }
 
-    loginAction(user);
+    setError("");
+    setSuccessMessage("");
+    setIsSubmitting(true);
+
+    const result = await loginAction({
+      authMode,
+      fullName: trimmedName,
+      email: trimmedEmail,
+      password: formData.password,
+      role,
+    });
+
+    setIsSubmitting(false);
+
+    if (!result?.ok) {
+      setError(result?.error || "We could not finish signing you in. Please try again.");
+      return;
+    }
+
+    if (result.needsEmailConfirmation) {
+      setSuccessMessage(
+        "Account created. Check your email to confirm your Storet account, then log in."
+      );
+      setAuthMode("login");
+      return;
+    }
+
     navigate(redirectAfterAuth, { replace: true });
   }
 
@@ -329,6 +356,14 @@ function AuthPage({ onLogin }) {
 
                   <Divider />
 
+                  {storetApp?.authError && !error && (
+                    <Alert severity="warning">{storetApp.authError}</Alert>
+                  )}
+
+                  {successMessage && (
+                    <Alert severity="success">{successMessage}</Alert>
+                  )}
+
                   {error && <Alert severity="error">{error}</Alert>}
 
                   <Box component="form" onSubmit={handleSubmit}>
@@ -339,6 +374,7 @@ function AuthPage({ onLogin }) {
                           name="fullName"
                           value={formData.fullName}
                           onChange={handleInputChange}
+                          disabled={isSubmitting}
                           fullWidth
                         />
                       )}
@@ -349,6 +385,7 @@ function AuthPage({ onLogin }) {
                         type="email"
                         value={formData.email}
                         onChange={handleInputChange}
+                        disabled={isSubmitting}
                         fullWidth
                       />
 
@@ -358,6 +395,7 @@ function AuthPage({ onLogin }) {
                         type="password"
                         value={formData.password}
                         onChange={handleInputChange}
+                        disabled={isSubmitting}
                         fullWidth
                       />
 
@@ -384,8 +422,12 @@ function AuthPage({ onLogin }) {
                             },
                           }}
                         >
-                          <ToggleButton value="Renter">Renter</ToggleButton>
-                          <ToggleButton value="Host">Host</ToggleButton>
+                          <ToggleButton value="Renter" disabled={isSubmitting}>
+                            Renter
+                          </ToggleButton>
+                          <ToggleButton value="Host" disabled={isSubmitting}>
+                            Host
+                          </ToggleButton>
                         </ToggleButtonGroup>
                       </Stack>
 
@@ -394,8 +436,9 @@ function AuthPage({ onLogin }) {
                         size="large"
                         variant="contained"
                         endIcon={<ArrowForwardRoundedIcon />}
+                        disabled={isSubmitting}
                       >
-                        {pageCopy.buttonLabel}
+                        {isSubmitting ? "Please wait..." : pageCopy.buttonLabel}
                       </Button>
                     </Stack>
                   </Box>
@@ -412,7 +455,7 @@ function AuthPage({ onLogin }) {
                       {pageCopy.switchText}
                     </Typography>
 
-                    <Button onClick={handleModeSwitch}>
+                    <Button onClick={handleModeSwitch} disabled={isSubmitting}>
                       {pageCopy.switchAction}
                     </Button>
                   </Stack>
