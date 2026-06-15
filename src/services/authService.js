@@ -2,6 +2,25 @@ import { USER_ROLES } from "../constants/appEnums";
 import { mapAppUserToDatabaseProfile, mapDatabaseProfileToAppUser } from "./backendMappers";
 import { formatServiceResponse, requireSupabase } from "./backendServiceUtils";
 
+function getAuthRedirectUrl() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return `${window.location.origin}/auth`;
+}
+
+function normalizeAuthError(error) {
+  if (!error) {
+    return null;
+  }
+
+  return {
+    ...error,
+    message: error.message || "Something went wrong while authenticating.",
+  };
+}
+
 function buildProfileFromAuthUser(authUser, profile = null) {
   if (!authUser) {
     return null;
@@ -9,15 +28,89 @@ function buildProfileFromAuthUser(authUser, profile = null) {
 
   const fallbackProfile = {
     id: authUser.id,
-    full_name: authUser.user_metadata?.full_name || authUser.user_metadata?.name || "Storet User",
+    full_name:
+      authUser.user_metadata?.full_name ||
+      authUser.user_metadata?.name ||
+      authUser.email?.split("@")[0] ||
+      "Storet User",
     email: authUser.email || "",
     role: authUser.user_metadata?.role || USER_ROLES.RENTER,
+    created_at: authUser.created_at,
+    updated_at: authUser.updated_at,
   };
 
   return mapDatabaseProfileToAppUser(profile || fallbackProfile, {
     email: authUser.email,
     isAuthenticated: true,
   });
+}
+
+async function fetchProfileForAuthUser(supabase, authUser) {
+  if (!authUser?.id) {
+    return {
+      profile: null,
+      error: null,
+    };
+  }
+
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", authUser.id)
+    .maybeSingle();
+
+  return {
+    profile,
+    error: profileError,
+  };
+}
+
+async function ensureProfileForAuthUser(supabase, authUser, profileInput = {}) {
+  if (!authUser?.id) {
+    return {
+      profile: null,
+      error: null,
+    };
+  }
+
+  const { profile, error } = await fetchProfileForAuthUser(supabase, authUser);
+
+  if (error) {
+    return {
+      profile: null,
+      error,
+    };
+  }
+
+  if (profile) {
+    return {
+      profile,
+      error: null,
+    };
+  }
+
+  const profilePayload = mapAppUserToDatabaseProfile({
+    id: authUser.id,
+    fullName:
+      profileInput.fullName ||
+      authUser.user_metadata?.full_name ||
+      authUser.user_metadata?.name ||
+      authUser.email?.split("@")[0] ||
+      "Storet User",
+    email: profileInput.email || authUser.email || "",
+    role: profileInput.role || authUser.user_metadata?.role || USER_ROLES.RENTER,
+  });
+
+  const { data: insertedProfile, error: insertError } = await supabase
+    .from("profiles")
+    .upsert(profilePayload, { onConflict: "id" })
+    .select("*")
+    .single();
+
+  return {
+    profile: insertedProfile,
+    error: insertError,
+  };
 }
 
 export const authService = {
@@ -29,7 +122,7 @@ export const authService = {
     }
 
     const { data, error: sessionError } = await supabase.auth.getSession();
-    return formatServiceResponse(data?.session || null, sessionError);
+    return formatServiceResponse(data?.session || null, normalizeAuthError(sessionError));
   },
 
   async getCurrentUserProfile() {
@@ -45,17 +138,16 @@ export const authService = {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
-      return formatServiceResponse(null, userError);
+      return formatServiceResponse(null, normalizeAuthError(userError));
     }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .maybeSingle();
+    const { profile, error: profileError } = await ensureProfileForAuthUser(
+      supabase,
+      user
+    );
 
     if (profileError) {
-      return formatServiceResponse(null, profileError);
+      return formatServiceResponse(null, normalizeAuthError(profileError));
     }
 
     return formatServiceResponse(buildProfileFromAuthUser(user, profile));
@@ -72,6 +164,7 @@ export const authService = {
       email,
       password,
       options: {
+        emailRedirectTo: getAuthRedirectUrl(),
         data: {
           full_name: fullName,
           role,
@@ -80,29 +173,40 @@ export const authService = {
     });
 
     if (signUpError || !data?.user) {
-      return formatServiceResponse(null, signUpError);
+      return formatServiceResponse(null, normalizeAuthError(signUpError));
     }
 
-    const profilePayload = mapAppUserToDatabaseProfile({
-      id: data.user.id,
-      fullName,
-      email,
-      role,
-    });
+    if (!data.session) {
+      return formatServiceResponse({
+        session: null,
+        user: buildProfileFromAuthUser(data.user, {
+          id: data.user.id,
+          full_name: fullName,
+          email,
+          role,
+        }),
+        needsEmailConfirmation: true,
+      });
+    }
 
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .upsert(profilePayload, { onConflict: "id" })
-      .select("*")
-      .single();
+    const { profile, error: profileError } = await ensureProfileForAuthUser(
+      supabase,
+      data.user,
+      {
+        fullName,
+        email,
+        role,
+      }
+    );
 
     if (profileError) {
-      return formatServiceResponse(null, profileError);
+      return formatServiceResponse(null, normalizeAuthError(profileError));
     }
 
     return formatServiceResponse({
       session: data.session,
       user: buildProfileFromAuthUser(data.user, profile),
+      needsEmailConfirmation: false,
     });
   },
 
@@ -119,18 +223,22 @@ export const authService = {
     });
 
     if (signInError || !data?.user) {
-      return formatServiceResponse(null, signInError);
+      return formatServiceResponse(null, normalizeAuthError(signInError));
     }
 
-    const profileResponse = await authService.getCurrentUserProfile();
+    const { profile, error: profileError } = await ensureProfileForAuthUser(
+      supabase,
+      data.user
+    );
 
-    if (profileResponse.error) {
-      return profileResponse;
+    if (profileError) {
+      return formatServiceResponse(null, normalizeAuthError(profileError));
     }
 
     return formatServiceResponse({
       session: data.session,
-      user: profileResponse.data,
+      user: buildProfileFromAuthUser(data.user, profile),
+      needsEmailConfirmation: false,
     });
   },
 
@@ -142,7 +250,7 @@ export const authService = {
     }
 
     const { error: signOutError } = await supabase.auth.signOut();
-    return formatServiceResponse(true, signOutError);
+    return formatServiceResponse(true, normalizeAuthError(signOutError));
   },
 
   onAuthStateChange(callback) {
