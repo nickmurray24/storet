@@ -19,7 +19,10 @@ import { createHostMessage, updateHostMessageStatus } from "../utils/hostMessage
 import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
 import { getHostMessagesForListings } from "../utils/messageSelectors";
 import { authService } from "../services/authService";
+import { bookingService } from "../services/bookingService";
 import { listingService } from "../services/listingService";
+import { messageService } from "../services/messageService";
+import { paymentService } from "../services/paymentService";
 import { storetDataService } from "../services/storetDataService";
 import { LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
 import { normalizeUserProfile } from "../models/storetModels";
@@ -56,9 +59,33 @@ function mergeListingsById(...listingGroups) {
   return normalizeListingList(Array.from(listingMap.values()));
 }
 
-function isBackendListingId(listingId) {
+function mergeRecordsById(...recordGroups) {
+  const recordMap = new Map();
+
+  recordGroups.flatMap(ensureArray).forEach((record) => {
+    if (!record?.id) {
+      return;
+    }
+
+    recordMap.set(String(record.id), record);
+  });
+
+  return Array.from(recordMap.values());
+}
+
+function replaceRecordById(records = [], recordId, nextRecord) {
+  return ensureArray(records).map((record) =>
+    String(record.id) === String(recordId) ? nextRecord : record
+  );
+}
+
+function removeRecordById(records = [], recordId) {
+  return ensureArray(records).filter((record) => String(record.id) !== String(recordId));
+}
+
+function isBackendId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    String(listingId || "")
+    String(value || "")
   );
 }
 
@@ -76,6 +103,8 @@ export function StoretAppProvider({ children }) {
   const [authError, setAuthError] = useState("");
   const [listingsAreLoading, setListingsAreLoading] = useState(false);
   const [listingsError, setListingsError] = useState("");
+  const [activityIsLoading, setActivityIsLoading] = useState(false);
+  const [activityError, setActivityError] = useState("");
 
   const persistAuthenticatedUser = useCallback((user) => {
     const normalizedUser = normalizeUserProfile({
@@ -94,6 +123,13 @@ export function StoretAppProvider({ children }) {
   const clearAuthenticatedUser = useCallback(() => {
     storetDataService.clearCurrentUser();
     setCurrentUser(null);
+    setUserListings([]);
+    setSavedListingIds([]);
+    setBookingRequests([]);
+    setPaymentRecords([]);
+    setHostMessages([]);
+    setActivityError("");
+    setListingsError("");
   }, []);
 
   const refreshActiveListings = useCallback(async () => {
@@ -159,6 +195,50 @@ export function StoretAppProvider({ children }) {
       ok: true,
       userListings: hostListingsResponse.data || [],
       savedListingIds: savedListingsResponse.data || [],
+    };
+  }, [currentUser?.isAuthenticated]);
+
+  const refreshCurrentUserActivityData = useCallback(async () => {
+    if (!currentUser?.isAuthenticated) {
+      setBookingRequests([]);
+      setPaymentRecords([]);
+      setHostMessages([]);
+      return { ok: true };
+    }
+
+    setActivityIsLoading(true);
+    setActivityError("");
+
+    const [bookingsResponse, paymentsResponse, messagesResponse] = await Promise.all([
+      bookingService.getCurrentUserBookings(),
+      paymentService.getCurrentUserPaymentRecords(),
+      messageService.getCurrentUserMessages(),
+    ]);
+
+    setActivityIsLoading(false);
+
+    if (bookingsResponse.error || paymentsResponse.error || messagesResponse.error) {
+      const message = getErrorMessage(
+        bookingsResponse.error || paymentsResponse.error || messagesResponse.error,
+        "We could not load your booking and message activity yet."
+      );
+      setActivityError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    setBookingRequests(bookingsResponse.data || []);
+    setPaymentRecords(paymentsResponse.data || []);
+    setHostMessages(messagesResponse.data || []);
+
+    return {
+      ok: true,
+      bookingRequests: bookingsResponse.data || [],
+      paymentRecords: paymentsResponse.data || [],
+      hostMessages: messagesResponse.data || [],
     };
   }, [currentUser?.isAuthenticated]);
 
@@ -250,6 +330,10 @@ export function StoretAppProvider({ children }) {
   useEffect(() => {
     refreshCurrentUserListingData();
   }, [refreshCurrentUserListingData]);
+
+  useEffect(() => {
+    refreshCurrentUserActivityData();
+  }, [refreshCurrentUserActivityData]);
 
   const activeBackendListings = useMemo(() => ensureArray(listings), [listings]);
   const allUserListings = useMemo(() => ensureArray(userListings), [userListings]);
@@ -410,7 +494,7 @@ export function StoretAppProvider({ children }) {
 
     setSavedListingIds(updatedIds);
 
-    if (!currentUser?.isAuthenticated || !isBackendListingId(normalizedId)) {
+    if (!currentUser?.isAuthenticated || !isBackendId(normalizedId)) {
       storetDataService.saveSavedListingIds(updatedIds);
       return {
         ok: true,
@@ -489,6 +573,15 @@ export function StoretAppProvider({ children }) {
         : withoutListing;
     });
 
+    if (!isBackendId(normalizedId)) {
+      storetDataService.saveUserListings(
+        previousHostListings.map((listing) =>
+          String(listing.id) === normalizedId ? updatedListing : listing
+        )
+      );
+      return { ok: true, listing: updatedListing };
+    }
+
     setListingsError("");
 
     const response = await listingService.updateListing(normalizedId, {
@@ -553,39 +646,39 @@ export function StoretAppProvider({ children }) {
       normalizeSavedIds(currentIds).filter((id) => String(id) !== normalizedId)
     );
 
-    setBookingRequests((currentRequests) => {
-      const updatedRequests = ensureArray(currentRequests).filter(
+    setBookingRequests((currentRequests) =>
+      ensureArray(currentRequests).filter(
         (request) => String(request.listingId) !== normalizedId
-      );
+      )
+    );
 
-      storetDataService.saveBookingRequests(updatedRequests);
-      return updatedRequests;
-    });
-
-    setPaymentRecords((currentPaymentRecords) => {
-      const updatedPaymentRecords = ensureArray(currentPaymentRecords).filter(
+    setPaymentRecords((currentPaymentRecords) =>
+      ensureArray(currentPaymentRecords).filter(
         (payment) => String(payment.listingId) !== normalizedId
-      );
+      )
+    );
 
-      storetDataService.savePaymentRecords(updatedPaymentRecords);
-      return updatedPaymentRecords;
-    });
-
-    setHostMessages((currentMessages) => {
-      const updatedMessages = ensureArray(currentMessages).filter(
+    setHostMessages((currentMessages) =>
+      ensureArray(currentMessages).filter(
         (message) => String(message.listingId) !== normalizedId
-      );
+      )
+    );
 
-      storetDataService.saveHostMessages(updatedMessages);
-      return updatedMessages;
-    });
-
-    if (!isBackendListingId(normalizedId)) {
+    if (!isBackendId(normalizedId)) {
       storetDataService.saveUserListings(
         previousHostListings.filter((listing) => String(listing.id) !== normalizedId)
       );
       storetDataService.saveSavedListingIds(
         previousSavedIds.filter((id) => String(id) !== normalizedId)
+      );
+      storetDataService.saveBookingRequests(
+        allBookingRequests.filter((request) => String(request.listingId) !== normalizedId)
+      );
+      storetDataService.savePaymentRecords(
+        allPaymentRecords.filter((payment) => String(payment.listingId) !== normalizedId)
+      );
+      storetDataService.saveHostMessages(
+        allHostMessages.filter((message) => String(message.listingId) !== normalizedId)
       );
 
       return { ok: true };
@@ -614,7 +707,7 @@ export function StoretAppProvider({ children }) {
     return { ok: true };
   }
 
-  function submitBookingRequest(listing, requestData = {}) {
+  async function submitBookingRequest(listing, requestData = {}) {
     if (!listing) {
       return {
         ok: false,
@@ -628,41 +721,153 @@ export function StoretAppProvider({ children }) {
       requestData,
     });
 
-    setBookingRequests((currentRequests) => {
-      const updatedRequests = [request, ...ensureArray(currentRequests)];
-      storetDataService.saveBookingRequests(updatedRequests);
-      return updatedRequests;
-    });
+    if (!currentUser?.isAuthenticated || !isBackendId(request.listingId)) {
+      setBookingRequests((currentRequests) => {
+        const updatedRequests = [request, ...ensureArray(currentRequests)];
+        storetDataService.saveBookingRequests(updatedRequests);
+        return updatedRequests;
+      });
+
+      return {
+        ok: true,
+        request,
+      };
+    }
+
+    setActivityError("");
+
+    const response = await bookingService.createBookingRequest(request);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not submit that booking request yet."
+      );
+      setActivityError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedRequest = response.data || request;
+
+    setBookingRequests((currentRequests) =>
+      mergeRecordsById([savedRequest], currentRequests)
+    );
 
     return {
       ok: true,
-      request,
+      request: savedRequest,
     };
   }
 
-  function updateBookingRequestStatusById(requestId, status) {
-    setBookingRequests((currentRequests) => {
-      const updatedRequests = ensureArray(currentRequests).map((request) =>
-        request.id === requestId ? updateBookingRequestStatus(request, status) : request
-      );
+  async function updateBookingRequestStatusById(requestId, status) {
+    const targetRequest = allBookingRequests.find(
+      (request) => String(request.id) === String(requestId)
+    );
 
-      storetDataService.saveBookingRequests(updatedRequests);
-      return updatedRequests;
-    });
+    if (!targetRequest) {
+      return {
+        ok: false,
+        error: "We could not find that booking request.",
+      };
+    }
+
+    const previousRequests = allBookingRequests;
+    const updatedRequest = updateBookingRequestStatus(targetRequest, status);
+
+    setBookingRequests((currentRequests) =>
+      replaceRecordById(currentRequests, requestId, updatedRequest)
+    );
+
+    if (!isBackendId(requestId)) {
+      storetDataService.saveBookingRequests(
+        replaceRecordById(previousRequests, requestId, updatedRequest)
+      );
+      return { ok: true, request: updatedRequest };
+    }
+
+    setActivityError("");
+
+    const response = await bookingService.updateBookingRequest(requestId, updatedRequest);
+
+    if (response.error) {
+      setBookingRequests(previousRequests);
+      const message = getErrorMessage(
+        response.error,
+        "We could not update that booking request yet."
+      );
+      setActivityError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedRequest = response.data || updatedRequest;
+    setBookingRequests((currentRequests) =>
+      replaceRecordById(currentRequests, requestId, savedRequest)
+    );
+
+    return { ok: true, request: savedRequest };
   }
 
-  function updateBookingLifecycleById(requestId, status) {
-    setBookingRequests((currentRequests) => {
-      const updatedRequests = ensureArray(currentRequests).map((request) =>
-        request.id === requestId ? updateBookingLifecycle(request, status) : request
-      );
+  async function updateBookingLifecycleById(requestId, status) {
+    const targetRequest = allBookingRequests.find(
+      (request) => String(request.id) === String(requestId)
+    );
 
-      storetDataService.saveBookingRequests(updatedRequests);
-      return updatedRequests;
-    });
+    if (!targetRequest) {
+      return {
+        ok: false,
+        error: "We could not find that booking request.",
+      };
+    }
+
+    const previousRequests = allBookingRequests;
+    const updatedRequest = updateBookingLifecycle(targetRequest, status);
+
+    setBookingRequests((currentRequests) =>
+      replaceRecordById(currentRequests, requestId, updatedRequest)
+    );
+
+    if (!isBackendId(requestId)) {
+      storetDataService.saveBookingRequests(
+        replaceRecordById(previousRequests, requestId, updatedRequest)
+      );
+      return { ok: true, request: updatedRequest };
+    }
+
+    setActivityError("");
+
+    const response = await bookingService.updateBookingRequest(requestId, updatedRequest);
+
+    if (response.error) {
+      setBookingRequests(previousRequests);
+      const message = getErrorMessage(
+        response.error,
+        "We could not update that booking yet."
+      );
+      setActivityError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedRequest = response.data || updatedRequest;
+    setBookingRequests((currentRequests) =>
+      replaceRecordById(currentRequests, requestId, savedRequest)
+    );
+
+    return { ok: true, request: savedRequest };
   }
 
-  function submitHostMessage(listing, messageData = {}) {
+  async function submitHostMessage(listing, messageData = {}) {
     if (!listing) {
       return {
         ok: false,
@@ -676,31 +881,102 @@ export function StoretAppProvider({ children }) {
       messageData,
     });
 
-    setHostMessages((currentMessages) => {
-      const updatedMessages = [hostMessage, ...ensureArray(currentMessages)];
-      storetDataService.saveHostMessages(updatedMessages);
-      return updatedMessages;
-    });
+    if (!currentUser?.isAuthenticated || !isBackendId(hostMessage.listingId)) {
+      setHostMessages((currentMessages) => {
+        const updatedMessages = [hostMessage, ...ensureArray(currentMessages)];
+        storetDataService.saveHostMessages(updatedMessages);
+        return updatedMessages;
+      });
+
+      return {
+        ok: true,
+        message: hostMessage,
+      };
+    }
+
+    setActivityError("");
+
+    const response = await messageService.createHostMessage(hostMessage);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not send that host message yet."
+      );
+      setActivityError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedMessage = response.data || hostMessage;
+
+    setHostMessages((currentMessages) =>
+      mergeRecordsById([savedMessage], currentMessages)
+    );
 
     return {
       ok: true,
-      message: hostMessage,
+      message: savedMessage,
     };
   }
 
-  function updateHostMessageStatusById(messageId, status) {
-    setHostMessages((currentMessages) => {
-      const updatedMessages = ensureArray(currentMessages).map((message) =>
-        message.id === messageId ? updateHostMessageStatus(message, status) : message
-      );
+  async function updateHostMessageStatusById(messageId, status) {
+    const targetMessage = allHostMessages.find(
+      (message) => String(message.id) === String(messageId)
+    );
 
-      storetDataService.saveHostMessages(updatedMessages);
-      return updatedMessages;
-    });
+    if (!targetMessage) {
+      return {
+        ok: false,
+        error: "We could not find that message.",
+      };
+    }
+
+    const previousMessages = allHostMessages;
+    const updatedMessage = updateHostMessageStatus(targetMessage, status);
+
+    setHostMessages((currentMessages) =>
+      replaceRecordById(currentMessages, messageId, updatedMessage)
+    );
+
+    if (!isBackendId(messageId)) {
+      storetDataService.saveHostMessages(
+        replaceRecordById(previousMessages, messageId, updatedMessage)
+      );
+      return { ok: true, message: updatedMessage };
+    }
+
+    setActivityError("");
+
+    const response = await messageService.updateHostMessage(messageId, updatedMessage);
+
+    if (response.error) {
+      setHostMessages(previousMessages);
+      const message = getErrorMessage(
+        response.error,
+        "We could not update that host message yet."
+      );
+      setActivityError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedMessage = response.data || updatedMessage;
+    setHostMessages((currentMessages) =>
+      replaceRecordById(currentMessages, messageId, savedMessage)
+    );
+
+    return { ok: true, message: savedMessage };
   }
 
-  function completeCheckout(requestId, paymentData = {}) {
-    const request = allBookingRequests.find((item) => item.id === requestId);
+  async function completeCheckout(requestId, paymentData = {}) {
+    const request = allBookingRequests.find((item) => String(item.id) === String(requestId));
 
     if (!request) {
       return {
@@ -711,33 +987,107 @@ export function StoretAppProvider({ children }) {
 
     const paymentRecord = createPaymentRecord(request, paymentData);
 
-    setPaymentRecords((currentPaymentRecords) => {
-      const updatedPaymentRecords = [paymentRecord, ...ensureArray(currentPaymentRecords)];
-      storetDataService.savePaymentRecords(updatedPaymentRecords);
-      return updatedPaymentRecords;
-    });
-
-    setBookingRequests((currentRequests) => {
-      const updatedRequests = ensureArray(currentRequests).map((currentRequest) => {
-        if (currentRequest.id !== requestId) {
-          return currentRequest;
-        }
-
-        return {
-          ...updateBookingLifecycle(currentRequest, BOOKING_STATUSES.CONFIRMED),
-          paymentRecordId: paymentRecord.id,
-          confirmedAt: paymentRecord.paidAt,
-          updatedAt: paymentRecord.paidAt,
-        };
+    if (!currentUser?.isAuthenticated || !isBackendId(requestId)) {
+      setPaymentRecords((currentPaymentRecords) => {
+        const updatedPaymentRecords = [paymentRecord, ...ensureArray(currentPaymentRecords)];
+        storetDataService.savePaymentRecords(updatedPaymentRecords);
+        return updatedPaymentRecords;
       });
 
-      storetDataService.saveBookingRequests(updatedRequests);
-      return updatedRequests;
-    });
+      setBookingRequests((currentRequests) => {
+        const updatedRequests = ensureArray(currentRequests).map((currentRequest) => {
+          if (String(currentRequest.id) !== String(requestId)) {
+            return currentRequest;
+          }
+
+          return {
+            ...updateBookingLifecycle(currentRequest, BOOKING_STATUSES.CONFIRMED),
+            paymentRecordId: paymentRecord.id,
+            confirmedAt: paymentRecord.paidAt,
+            updatedAt: paymentRecord.paidAt,
+          };
+        });
+
+        storetDataService.saveBookingRequests(updatedRequests);
+        return updatedRequests;
+      });
+
+      return {
+        ok: true,
+        paymentRecord,
+      };
+    }
+
+    setActivityError("");
+
+    const paymentResponse = await paymentService.createMockPaymentRecord(paymentRecord);
+
+    if (paymentResponse.error) {
+      const message = getErrorMessage(
+        paymentResponse.error,
+        "We could not record that checkout payment yet."
+      );
+      setActivityError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedPaymentRecord = {
+      ...paymentRecord,
+      ...(paymentResponse.data || {}),
+      listingTitle: paymentRecord.listingTitle,
+      hostName: paymentRecord.hostName,
+      renterName: paymentRecord.renterName,
+      renterEmail: paymentRecord.renterEmail,
+      hostEmail: paymentRecord.hostEmail,
+      cardholderName: paymentRecord.cardholderName,
+      billingZip: paymentRecord.billingZip,
+    };
+
+    const confirmedRequest = {
+      ...updateBookingLifecycle(request, BOOKING_STATUSES.CONFIRMED),
+      paymentRecordId: savedPaymentRecord.id,
+      confirmedAt: savedPaymentRecord.paidAt,
+      updatedAt: savedPaymentRecord.paidAt,
+    };
+
+    const bookingResponse = await bookingService.updateBookingRequest(requestId, confirmedRequest);
+
+    if (bookingResponse.error) {
+      const message = getErrorMessage(
+        bookingResponse.error,
+        "We recorded the payment, but could not confirm the booking yet."
+      );
+      setActivityError(message);
+
+      setPaymentRecords((currentPaymentRecords) =>
+        mergeRecordsById([savedPaymentRecord], currentPaymentRecords)
+      );
+
+      return {
+        ok: false,
+        error: message,
+        paymentRecord: savedPaymentRecord,
+      };
+    }
+
+    const savedRequest = bookingResponse.data || confirmedRequest;
+
+    setPaymentRecords((currentPaymentRecords) =>
+      mergeRecordsById([savedPaymentRecord], currentPaymentRecords)
+    );
+
+    setBookingRequests((currentRequests) =>
+      replaceRecordById(currentRequests, requestId, savedRequest)
+    );
 
     return {
       ok: true,
-      paymentRecord,
+      paymentRecord: savedPaymentRecord,
+      request: savedRequest,
     };
   }
 
@@ -756,6 +1106,8 @@ export function StoretAppProvider({ children }) {
     authError,
     listingsAreLoading,
     listingsError,
+    activityIsLoading,
+    activityError,
     actions: {
       login,
       logout,
@@ -771,6 +1123,7 @@ export function StoretAppProvider({ children }) {
       completeCheckout,
       refreshActiveListings,
       refreshCurrentUserListingData,
+      refreshCurrentUserActivityData,
     },
   };
 

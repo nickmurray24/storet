@@ -61,15 +61,20 @@ export function getPaymentRecordForRequest(paymentRecords = [], requestId) {
 
 export function getRenterBookingRequests(requests = [], currentUser = {}) {
   const activeEmail = currentUser?.email?.toLowerCase?.() || "";
+  const activeUserId = currentUser?.id ? String(currentUser.id) : "";
   const normalizedRequests = sortBookingRequestsByNewest(requests);
 
-  if (!activeEmail) {
+  if (!activeEmail && !activeUserId) {
     return normalizedRequests;
   }
 
-  return normalizedRequests.filter(
-    (request) => request.renterEmail?.toLowerCase?.() === activeEmail
-  );
+  return normalizedRequests.filter((request) => {
+    const matchesUserId = activeUserId && String(request.renterId) === activeUserId;
+    const matchesEmail =
+      activeEmail && request.renterEmail?.toLowerCase?.() === activeEmail;
+
+    return matchesUserId || matchesEmail;
+  });
 }
 
 export function getHostBookingRequests(requests = [], hostListings = []) {
@@ -96,6 +101,7 @@ export function getLatestBookingRequestForListing(
   currentUser = null
 ) {
   const activeEmail = currentUser?.email?.toLowerCase?.() || "";
+  const activeUserId = currentUser?.id ? String(currentUser.id) : "";
 
   return sortBookingRequestsByNewest(requests).find((request) => {
     const matchesListing = String(request.listingId) === String(listingId);
@@ -104,11 +110,15 @@ export function getLatestBookingRequestForListing(
       return false;
     }
 
-    if (!activeEmail) {
+    if (!activeEmail && !activeUserId) {
       return true;
     }
 
-    return request.renterEmail?.toLowerCase?.() === activeEmail;
+    const matchesUserId = activeUserId && String(request.renterId) === activeUserId;
+    const matchesEmail =
+      activeEmail && request.renterEmail?.toLowerCase?.() === activeEmail;
+
+    return matchesUserId || matchesEmail;
   }) || null;
 }
 

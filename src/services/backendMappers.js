@@ -285,11 +285,21 @@ function dollarsToCents(value) {
 }
 
 export function mapDatabasePaymentToAppPayment(row = {}) {
+  const booking = Array.isArray(row.booking_requests)
+    ? row.booking_requests[0]
+    : row.booking_requests || row.booking_request || {};
+
   return {
     id: row.id,
     requestId: row.booking_request_id,
     listingId: row.listing_id,
+    listingTitle: booking.listing_title || row.listing_title,
+    listingLocation: booking.listing_location || row.listing_location,
+    hostName: booking.host_display_name || row.host_display_name,
     hostId: row.host_id,
+    hostEmail: row.host_email || "",
+    renterName: booking.renter_display_name || row.renter_display_name,
+    renterEmail: row.renter_email || "",
     renterId: row.renter_id,
     last4: row.display_last4,
     cardBrand: row.display_card_brand,

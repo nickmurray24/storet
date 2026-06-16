@@ -72,6 +72,7 @@ function CheckoutPage({
 
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -117,7 +118,7 @@ function CheckoutPage({
     return nextErrors;
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const nextErrors = validateForm();
@@ -132,7 +133,9 @@ function CheckoutPage({
     const completeCheckoutAction =
       onCompleteCheckout || storetApp?.actions?.completeCheckout || (() => null);
 
-    const result = completeCheckoutAction(request.id, {
+    setIsSubmitting(true);
+
+    const result = await completeCheckoutAction(request.id, {
       cardholderName: formData.cardholderName,
       billingZip: formData.billingZip,
       last4: sanitizedCard.slice(-4),
@@ -144,6 +147,8 @@ function CheckoutPage({
       serviceFee: pricing.serviceFee,
       totalAmount: pricing.totalAmount,
     });
+
+    setIsSubmitting(false);
 
     if (result?.ok === false) {
       setSubmitError(result.error || 'We could not complete checkout.');
@@ -404,8 +409,8 @@ function CheckoutPage({
             )}
 
             <div className="activity-action-row">
-              <button type="submit" className="primary-button">
-                Pay {formatCurrency(pricing.totalAmount)}
+              <button type="submit" className="primary-button" disabled={isSubmitting}>
+                {isSubmitting ? 'Processing...' : `Pay ${formatCurrency(pricing.totalAmount)}`}
               </button>
 
               <Link to={APP_ROUTES.profile} className="secondary-button">

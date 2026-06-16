@@ -28,6 +28,7 @@ function ContactHostForm({
 
   const [errors, setErrors] = useState({});
   const [submissionResult, setSubmissionResult] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   function handleChange(event) {
     const { name, value } = event.target;
@@ -64,7 +65,7 @@ function ContactHostForm({
     return nextErrors;
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const nextErrors = validateForm();
@@ -74,11 +75,15 @@ function ContactHostForm({
       return;
     }
 
-    const result = onSubmitMessage({
+    setIsSubmitting(true);
+
+    const result = await onSubmitMessage({
       fullName: formData.fullName.trim(),
       email: formData.email.trim(),
       message: formData.message.trim(),
     });
+
+    setIsSubmitting(false);
 
     if (result?.ok === false) {
       setErrors({
@@ -184,8 +189,9 @@ function ContactHostForm({
           size="large"
           startIcon={<SendRoundedIcon />}
           fullWidth
+          disabled={isSubmitting}
         >
-          Send message
+          {isSubmitting ? "Sending..." : "Send message"}
         </Button>
       </Stack>
     </Box>

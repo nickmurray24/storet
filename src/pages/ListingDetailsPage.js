@@ -114,6 +114,7 @@ function ListingDetailsPage({
   const [bookingStatus, setBookingStatus] = useState("");
   const [submittedBookingRequest, setSubmittedBookingRequest] = useState(null);
   const [selectedRatePeriod, setSelectedRatePeriod] = useState("");
+  const [bookingIsSubmitting, setBookingIsSubmitting] = useState(false);
 
   const activeBookingRequests = useMemo(
     () => bookingRequests ?? storetApp?.bookingRequests ?? [],
@@ -186,8 +187,8 @@ function ListingDetailsPage({
     return { ok: true };
   }
 
-  function handleBookingAction() {
-    if (!listing) return;
+  async function handleBookingAction() {
+    if (!listing || bookingIsSubmitting) return;
 
     const activeBookingRequest = submittedBookingRequest || latestListingRequest;
 
@@ -215,7 +216,9 @@ function ListingDetailsPage({
       onSubmitBookingRequest || storetApp?.actions?.submitBookingRequest;
 
     if (submitBookingRequestAction) {
-      const result = submitBookingRequestAction(listing, {
+      setBookingIsSubmitting(true);
+
+      const result = await submitBookingRequestAction(listing, {
         fullName: activeUser.fullName || "Demo User",
         email: activeUser.email || "",
         ratePeriod: selectedPricingOption?.period,
@@ -224,6 +227,8 @@ function ListingDetailsPage({
         duration: selectedPricingOption?.durationLabel || "Month-to-month",
         notes: "Quick reservation request from the listing details page.",
       });
+
+      setBookingIsSubmitting(false);
 
       if (result?.ok === false) {
         setBookingStatus("error");
@@ -715,7 +720,8 @@ function ListingDetailsPage({
 
                   {bookingStatus === "error" && (
                     <Alert severity="error">
-                      We could not create that booking request. Please try again.
+                      {storetApp?.activityError ||
+                        "We could not create that booking request. Please try again."}
                     </Alert>
                   )}
 
@@ -753,9 +759,9 @@ function ListingDetailsPage({
                       )
                     }
                     onClick={handleBookingAction}
-                    disabled={shouldDisableReservation}
+                    disabled={shouldDisableReservation || bookingIsSubmitting}
                   >
-                    {activeActionLabel}
+                    {bookingIsSubmitting ? "Submitting..." : activeActionLabel}
                   </Button>
 
                   <Button

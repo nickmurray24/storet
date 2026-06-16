@@ -33,15 +33,20 @@ export function getHostMessagesForListings(messages = [], hostListings = []) {
 
 export function getRenterHostMessages(messages = [], currentUser = {}) {
   const activeEmail = currentUser?.email?.toLowerCase?.() || "";
+  const activeUserId = currentUser?.id ? String(currentUser.id) : "";
   const normalizedMessages = sortHostMessagesByNewest(messages);
 
-  if (!activeEmail) {
+  if (!activeEmail && !activeUserId) {
     return normalizedMessages;
   }
 
-  return normalizedMessages.filter(
-    (message) => message.senderEmail?.toLowerCase?.() === activeEmail
-  );
+  return normalizedMessages.filter((message) => {
+    const matchesUserId = activeUserId && String(message.senderId) === activeUserId;
+    const matchesEmail =
+      activeEmail && message.senderEmail?.toLowerCase?.() === activeEmail;
+
+    return matchesUserId || matchesEmail;
+  });
 }
 
 export function getUnreadHostMessageCount(messages = []) {
