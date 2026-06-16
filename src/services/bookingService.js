@@ -33,7 +33,9 @@ export const bookingService = {
     }
 
     return formatServiceResponse(
-      (data || []).map((booking) => normalizeBookingRequest(mapDatabaseBookingToAppBooking(booking)))
+      (data || []).map((booking) =>
+        normalizeBookingRequest(mapDatabaseBookingToAppBooking(booking))
+      )
     );
   },
 
@@ -65,7 +67,9 @@ export const bookingService = {
       return formatServiceResponse(null, insertError);
     }
 
-    return formatServiceResponse(normalizeBookingRequest(mapDatabaseBookingToAppBooking(data)));
+    return formatServiceResponse(
+      normalizeBookingRequest(mapDatabaseBookingToAppBooking(data))
+    );
   },
 
   async updateBookingRequest(bookingId, updates) {
@@ -88,6 +92,8 @@ export const bookingService = {
       return formatServiceResponse(null, updateError);
     }
 
-    return formatServiceResponse(normalizeBookingRequest(mapDatabaseBookingToAppBooking(data)));
+    return formatServiceResponse(
+      normalizeBookingRequest(mapDatabaseBookingToAppBooking(data))
+    );
   },
 };

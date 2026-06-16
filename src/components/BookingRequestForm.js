@@ -30,6 +30,7 @@ function BookingRequestForm({
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [submitState, setSubmitState] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const selectedPricingOption = getPricingOptionByPeriod(
     pricing,
@@ -84,7 +85,7 @@ function BookingRequestForm({
     return nextErrors;
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
 
     const nextErrors = validateForm();
@@ -94,7 +95,9 @@ function BookingRequestForm({
       return;
     }
 
-    const result = onSubmitRequest({
+    setIsSubmitting(true);
+
+    const result = await onSubmitRequest({
       fullName: formData.fullName,
       email: formData.email,
       moveInDate: formData.moveInDate,
@@ -105,6 +108,8 @@ function BookingRequestForm({
       duration: formData.duration,
       notes: formData.notes,
     });
+
+    setIsSubmitting(false);
 
     if (result?.ok === false) {
       setSubmitError(result.error || 'We could not submit this booking request.');

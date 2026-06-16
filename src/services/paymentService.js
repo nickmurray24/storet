@@ -4,6 +4,12 @@ import {
 } from "./backendMappers";
 import { formatServiceResponse, requireSupabase } from "./backendServiceUtils";
 import { PAYMENT_STATUSES } from "../constants/appEnums";
+import { normalizePaymentRecord } from "../utils/paymentUtils";
+
+const PAYMENT_WITH_BOOKING_SELECT = `
+  *,
+  booking_request:booking_requests!payment_records_booking_request_id_fkey(*)
+`;
 
 export const paymentService = {
   async getCurrentUserPaymentRecords() {
@@ -24,7 +30,7 @@ export const paymentService = {
 
     const { data, error: queryError } = await supabase
       .from("payment_records")
-      .select("*")
+      .select(PAYMENT_WITH_BOOKING_SELECT)
       .or(`renter_id.eq.${user.id},host_id.eq.${user.id}`)
       .order("created_at", { ascending: false });
 
@@ -32,7 +38,11 @@ export const paymentService = {
       return formatServiceResponse([], queryError);
     }
 
-    return formatServiceResponse((data || []).map(mapDatabasePaymentToAppPayment));
+    return formatServiceResponse(
+      (data || []).map((payment) =>
+        normalizePaymentRecord(mapDatabasePaymentToAppPayment(payment))
+      )
+    );
   },
 
   async createMockPaymentRecord(payment) {
@@ -62,13 +72,15 @@ export const paymentService = {
     const { data, error: insertError } = await supabase
       .from("payment_records")
       .insert(payload)
-      .select("*")
+      .select(PAYMENT_WITH_BOOKING_SELECT)
       .single();
 
     if (insertError) {
       return formatServiceResponse(null, insertError);
     }
 
-    return formatServiceResponse(mapDatabasePaymentToAppPayment(data));
+    return formatServiceResponse(
+      normalizePaymentRecord(mapDatabasePaymentToAppPayment(data))
+    );
   },
 };
