@@ -329,6 +329,12 @@ function ListingDetailsPage({
     : shouldDisableReservation
     ? `${activeBookingRequest.status} request`
     : primaryActionLabel;
+  const listingImages = Array.isArray(listing.images) ? listing.images.filter(Boolean) : [];
+  const heroImageUrl = listing.imageUrl || listingImages[0] || "";
+  const fallbackHeroGradient =
+    listing.listingType === "Commercial"
+      ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.74))"
+      : "linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(20, 184, 166, 0.78))";
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
@@ -441,10 +447,11 @@ function ListingDetailsPage({
                 <Box
                   sx={{
                     minHeight: { xs: 260, md: 390 },
-                    background:
-                      listing.listingType === "Commercial"
-                        ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.74))"
-                        : "linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(20, 184, 166, 0.78))",
+                    background: heroImageUrl
+                      ? `linear-gradient(135deg, rgba(15, 23, 42, 0.68), rgba(15, 23, 42, 0.18)), url(${heroImageUrl})`
+                      : fallbackHeroGradient,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
                     color: "white",
                     p: { xs: 3, md: 4 },
                     display: "flex",
@@ -482,6 +489,35 @@ function ListingDetailsPage({
                   </Box>
                 </Box>
               </Card>
+
+              {listingImages.length > 1 && (
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: {
+                      xs: "repeat(2, minmax(0, 1fr))",
+                      sm: "repeat(4, minmax(0, 1fr))",
+                    },
+                    gap: 1.5,
+                  }}
+                >
+                  {listingImages.slice(1, 5).map((imageUrl, index) => (
+                    <Card key={imageUrl} sx={{ overflow: "hidden" }}>
+                      <Box
+                        component="img"
+                        src={imageUrl}
+                        alt={`${listing.title} photo ${index + 2}`}
+                        sx={{
+                          width: "100%",
+                          height: { xs: 120, sm: 140 },
+                          objectFit: "cover",
+                          display: "block",
+                        }}
+                      />
+                    </Card>
+                  ))}
+                </Box>
+              )}
 
               <Card>
                 <CardContent sx={{ p: { xs: 3, md: 4 } }}>

@@ -238,7 +238,7 @@ export function mapDatabaseBookingToAppBooking(row = {}) {
     activatedAt: row.activated_at,
     completedAt: row.completed_at,
     cancelledAt: row.cancelled_at,
-    paymentRecordId: row.payment_record_id,
+    paymentRecordId: row.payment_record_id || row.paymentRecordId || null,
   };
 }
 
@@ -269,7 +269,6 @@ export function mapAppBookingToDatabaseBooking(booking = {}, options = {}) {
     activated_at: booking.activatedAt,
     completed_at: booking.completedAt,
     cancelled_at: booking.cancelledAt,
-    payment_record_id: booking.paymentRecordId,
     updated_at: new Date().toISOString(),
   });
 }
@@ -285,9 +284,7 @@ function dollarsToCents(value) {
 }
 
 export function mapDatabasePaymentToAppPayment(row = {}) {
-  const booking = Array.isArray(row.booking_requests)
-    ? row.booking_requests[0]
-    : row.booking_requests || row.booking_request || {};
+  const booking = row.booking_request || row.bookingRequest || {};
 
   return {
     id: row.id,

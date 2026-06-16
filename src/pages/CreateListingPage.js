@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -13,6 +13,7 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  IconButton,
   InputAdornment,
   InputLabel,
   MenuItem,
@@ -25,10 +26,13 @@ import {
 } from "@mui/material";
 
 import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
+import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
+import ImageRoundedIcon from "@mui/icons-material/ImageRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import PhotoCameraRoundedIcon from "@mui/icons-material/PhotoCameraRounded";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
@@ -37,6 +41,7 @@ import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { DEFAULT_USER_PROFILE } from "../models/storetModels";
 import { createListingRecord, parseNumber } from "../utils/listingUtils";
+import { getListingImageValidationMessage } from "../services/listingImageService";
 import { formatPricingSummary, normalizePricing, hasAnyPricing } from "../utils/pricingUtils";
 
 const storageTypes = [
@@ -69,6 +74,8 @@ const amenityOptions = [
   "Short-term friendly",
   "Long-term friendly",
 ];
+
+const MAX_LISTING_IMAGES = 5;
 
 function CreateListingPage({ currentUser, onAddListing }) {
   const storetApp = useOptionalStoretApp();
@@ -105,6 +112,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
     "Private access",
     "Good for boxes",
   ]);
+  const [selectedImageFiles, setSelectedImageFiles] = useState([]);
+  const [imagePreviewUrls, setImagePreviewUrls] = useState([]);
 
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -136,6 +145,15 @@ function CreateListingPage({ currentUser, onAddListing }) {
     };
   }, [formData]);
 
+  useEffect(() => {
+    const previewUrls = selectedImageFiles.map((file) => URL.createObjectURL(file));
+    setImagePreviewUrls(previewUrls);
+
+    return () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [selectedImageFiles]);
+
   function handleInputChange(event) {
     const { name, value } = event.target;
 
@@ -162,6 +180,26 @@ function CreateListingPage({ currentUser, onAddListing }) {
 
       return [...currentAmenities, amenity];
     });
+  }
+
+  function handleImageFilesChange(event) {
+    const files = Array.from(event.target.files || []).slice(0, MAX_LISTING_IMAGES);
+    const validationMessage = getListingImageValidationMessage(files);
+
+    if (validationMessage) {
+      setError(validationMessage);
+      event.target.value = "";
+      return;
+    }
+
+    setSelectedImageFiles(files);
+    event.target.value = "";
+  }
+
+  function handleRemoveImage(indexToRemove) {
+    setSelectedImageFiles((currentFiles) =>
+      currentFiles.filter((_, index) => index !== indexToRemove)
+    );
   }
 
   function buildTags() {
@@ -241,6 +279,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
         instantBook: formData.bookingType === "instant",
         waitlist: formData.bookingType === "waitlist",
         description,
+        images: [],
         tags: buildTags(),
         amenities:
           selectedAmenities.length > 0
@@ -266,9 +305,31 @@ function CreateListingPage({ currentUser, onAddListing }) {
         return;
       }
 
-      const savedListing = result?.listing || result?.data || newListing;
+      let savedListing = result?.listing || result?.data || newListing;
 
-      setSuccessMessage("Listing created successfully!");
+      if (selectedImageFiles.length > 0) {
+        const attachImagesAction = storetApp?.actions?.attachListingImages;
+
+        if (attachImagesAction) {
+          const imageResult = await attachImagesAction(savedListing.id, selectedImageFiles);
+
+          if (imageResult?.ok === false) {
+            setError(
+              imageResult.error ||
+                "Your listing was created, but we could not upload the photos yet."
+            );
+            return;
+          }
+
+          savedListing = imageResult?.listing || savedListing;
+        }
+      }
+
+      setSuccessMessage(
+        selectedImageFiles.length > 0
+          ? "Listing and photos created successfully!"
+          : "Listing created successfully!"
+      );
 
       setTimeout(() => {
         navigate(buildListingPath(savedListing.id));
@@ -564,6 +625,95 @@ function CreateListingPage({ currentUser, onAddListing }) {
                     <Divider />
 
                     <Stack spacing={1}>
+                      <Typography variant="h5">Listing photos</Typography>
+                      <Typography color="text.secondary">
+                        Upload up to {MAX_LISTING_IMAGES} photos. These will be stored in Supabase Storage after the listing is created.
+                      </Typography>
+                    </Stack>
+
+                    <Box>
+                      <input
+                        id="listing-image-upload"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        multiple
+                        hidden
+                        onChange={handleImageFilesChange}
+                      />
+
+                      <Button
+                        component="label"
+                        htmlFor="listing-image-upload"
+                        variant="outlined"
+                        startIcon={<PhotoCameraRoundedIcon />}
+                        disabled={isSubmitting}
+                      >
+                        Choose photos
+                      </Button>
+
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        JPG, PNG, WebP, or GIF. Maximum 5 MB per photo.
+                      </Typography>
+                    </Box>
+
+                    {imagePreviewUrls.length > 0 && (
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "repeat(2, minmax(0, 1fr))",
+                            sm: "repeat(3, minmax(0, 1fr))",
+                          },
+                          gap: 1.5,
+                        }}
+                      >
+                        {imagePreviewUrls.map((url, index) => (
+                          <Box
+                            key={url}
+                            sx={{
+                              position: "relative",
+                              borderRadius: 3,
+                              overflow: "hidden",
+                              border: "1px solid",
+                              borderColor: "divider",
+                              minHeight: 128,
+                              bgcolor: "background.default",
+                            }}
+                          >
+                            <Box
+                              component="img"
+                              src={url}
+                              alt={`Listing preview ${index + 1}`}
+                              sx={{
+                                width: "100%",
+                                height: 128,
+                                objectFit: "cover",
+                                display: "block",
+                              }}
+                            />
+
+                            <IconButton
+                              size="small"
+                              aria-label="Remove photo"
+                              onClick={() => handleRemoveImage(index)}
+                              sx={{
+                                position: "absolute",
+                                top: 8,
+                                right: 8,
+                                bgcolor: "rgba(255,255,255,0.9)",
+                                "&:hover": { bgcolor: "rgba(255,255,255,1)" },
+                              }}
+                            >
+                              <DeleteRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
+
+                    <Divider />
+
+                    <Stack spacing={1}>
                       <Typography variant="h5">Description and amenities</Typography>
                       <Typography color="text.secondary">
                         Help renters understand what the space is best for.
@@ -673,10 +823,13 @@ function CreateListingPage({ currentUser, onAddListing }) {
                     sx={{
                       borderRadius: 4,
                       minHeight: 180,
-                      background:
-                        previewListing.listingType === "Commercial"
-                          ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.74))"
-                          : "linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(20, 184, 166, 0.78))",
+                      background: imagePreviewUrls[0]
+                        ? `linear-gradient(135deg, rgba(15, 23, 42, 0.62), rgba(15, 23, 42, 0.22)), url(${imagePreviewUrls[0]})`
+                        : previewListing.listingType === "Commercial"
+                        ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.74))"
+                        : "linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(20, 184, 166, 0.78))",
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
                       color: "white",
                       p: 2.5,
                       display: "flex",
@@ -712,6 +865,15 @@ function CreateListingPage({ currentUser, onAddListing }) {
                       icon={<WarehouseRoundedIcon />}
                       label="Type"
                       value={previewListing.storageType}
+                    />
+                    <PreviewRow
+                      icon={<ImageRoundedIcon />}
+                      label="Photos"
+                      value={
+                        imagePreviewUrls.length > 0
+                          ? `${imagePreviewUrls.length} selected`
+                          : "No photos selected"
+                      }
                     />
                     <PreviewRow
                       icon={<PaymentsRoundedIcon />}
@@ -751,8 +913,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
                   </Stack>
 
                   <Alert severity="info">
-                    Created listings are saved locally for now and will appear on
-                    Explore and Listing Details.
+                    Created listings are saved to Supabase and will appear on Explore,
+                    Listing Details, and your Host Dashboard.
                   </Alert>
                 </Stack>
               </CardContent>

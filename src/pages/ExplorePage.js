@@ -510,28 +510,60 @@ function ExplorePage({
                 {filteredListings.map((listing) => {
                   const isSaved = savedIdSet.has(String(listing.id));
                   const listingPath = buildListingPath(listing.id);
+                  const listingImageUrl =
+                    listing.coverImageUrl ||
+                    listing.imageUrl ||
+                    (Array.isArray(listing.images) ? listing.images[0] : "");
 
                   return (
                     <Card key={listing.id} sx={{ overflow: "hidden" }}>
                       <CardActionArea component={RouterLink} to={listingPath}>
                         <Box
                           sx={{
-                            height: 170,
+                            height: 190,
+                            position: "relative",
+                            overflow: "hidden",
                             background:
                               listing.listingType === "Commercial"
                                 ? "linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(37, 99, 235, 0.72))"
                                 : "linear-gradient(135deg, rgba(37, 99, 235, 0.9), rgba(20, 184, 166, 0.76))",
                             color: "white",
-                            p: 2.5,
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "space-between",
                           }}
                         >
+                          {listingImageUrl && (
+                            <Box
+                              component="img"
+                              src={listingImageUrl}
+                              alt={listing.title}
+                              loading="lazy"
+                              sx={{
+                                width: "100%",
+                                height: "100%",
+                                display: "block",
+                                objectFit: "cover",
+                              }}
+                            />
+                          )}
+
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              inset: 0,
+                              background:
+                                "linear-gradient(180deg, rgba(15, 23, 42, 0.12) 0%, rgba(15, 23, 42, 0.42) 48%, rgba(15, 23, 42, 0.76) 100%)",
+                            }}
+                          />
+
                           <Stack
                             direction="row"
                             justifyContent="space-between"
                             alignItems="flex-start"
+                            sx={{
+                              position: "absolute",
+                              top: 16,
+                              left: 16,
+                              right: 16,
+                            }}
                           >
                             <Chip
                               icon={
@@ -544,7 +576,7 @@ function ExplorePage({
                               label={listing.listingType}
                               size="small"
                               sx={{
-                                bgcolor: "rgba(255,255,255,0.9)",
+                                bgcolor: "rgba(255,255,255,0.92)",
                                 color: "text.primary",
                                 fontWeight: 700,
                               }}
@@ -556,7 +588,7 @@ function ExplorePage({
                                 label="Instant"
                                 size="small"
                                 sx={{
-                                  bgcolor: "rgba(255,255,255,0.9)",
+                                  bgcolor: "rgba(255,255,255,0.92)",
                                   color: "text.primary",
                                   fontWeight: 700,
                                 }}
@@ -564,9 +596,18 @@ function ExplorePage({
                             )}
                           </Stack>
 
-                          <Box>
-                            <Typography variant="h5">{listing.title}</Typography>
-                            <Typography sx={{ opacity: 0.88 }}>
+                          <Box
+                            sx={{
+                              position: "absolute",
+                              left: 20,
+                              right: 20,
+                              bottom: 18,
+                            }}
+                          >
+                            <Typography variant="h5" sx={{ textShadow: "0 1px 2px rgba(0,0,0,0.25)" }}>
+                              {listing.title}
+                            </Typography>
+                            <Typography sx={{ opacity: 0.9, textShadow: "0 1px 2px rgba(0,0,0,0.25)" }}>
                               Hosted by {listing.host}
                             </Typography>
                           </Box>
