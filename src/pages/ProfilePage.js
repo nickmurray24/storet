@@ -93,8 +93,12 @@ function ProfilePage({
   }, [listings, storedUserListings, storetApp?.userListings]);
 
   const allListings = useMemo(() => {
+    if (Array.isArray(storetApp?.listings) && storetApp.listings.length > 0) {
+      return normalizeListingList(storetApp.listings);
+    }
+
     return getListingCatalog(hostListings);
-  }, [hostListings]);
+  }, [hostListings, storetApp?.listings]);
 
   const savedIds = normalizeSavedIds(
     savedListingIds ?? storetApp?.savedListingIds
@@ -255,6 +259,10 @@ function ProfilePage({
 
       <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
         <Stack spacing={3}>
+          {storetApp?.listingsError && (
+            <Alert severity="warning">{storetApp.listingsError}</Alert>
+          )}
+
           <Box
             sx={{
               display: "grid",

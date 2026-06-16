@@ -108,6 +108,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
 
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const previewListing = useMemo(() => {
     const pricing = normalizePricing({
@@ -182,7 +183,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
     return Array.from(new Set([...automaticTags, ...customTags]));
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     setError("");
     setSuccessMessage("");
@@ -255,13 +256,28 @@ function CreateListingPage({ currentUser, onAddListing }) {
       return;
     }
 
-    addListingAction(newListing);
+    setIsSubmitting(true);
 
-    setSuccessMessage("Listing created successfully!");
+    try {
+      const result = await Promise.resolve(addListingAction(newListing));
 
-    setTimeout(() => {
-      navigate(buildListingPath(newListing.id));
-    }, 650);
+      if (result?.ok === false) {
+        setError(result.error || "We could not save your listing. Please try again.");
+        return;
+      }
+
+      const savedListing = result?.listing || result?.data || newListing;
+
+      setSuccessMessage("Listing created successfully!");
+
+      setTimeout(() => {
+        navigate(buildListingPath(savedListing.id));
+      }, 650);
+    } catch (saveError) {
+      setError(saveError?.message || "We could not save your listing. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -616,6 +632,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
                         type="button"
                         variant="outlined"
                         onClick={() => navigate(APP_ROUTES.explore)}
+                        disabled={isSubmitting}
                       >
                         Cancel
                       </Button>
@@ -625,8 +642,9 @@ function CreateListingPage({ currentUser, onAddListing }) {
                         variant="contained"
                         size="large"
                         startIcon={<AddHomeWorkRoundedIcon />}
+                        disabled={isSubmitting}
                       >
-                        Create listing
+                        {isSubmitting ? "Creating listing..." : "Create listing"}
                       </Button>
                     </Stack>
                   </Stack>

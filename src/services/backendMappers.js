@@ -18,6 +18,38 @@ function arrayOrEmpty(value) {
   return Array.isArray(value) ? value : [];
 }
 
+function arrayOrUndefined(value) {
+  return value === undefined ? undefined : arrayOrEmpty(value);
+}
+
+function hasAnyField(record = {}, fields = []) {
+  return fields.some((field) => Object.prototype.hasOwnProperty.call(record, field));
+}
+
+function nullableNumberField(record = {}, fields = []) {
+  if (!hasAnyField(record, fields)) {
+    return undefined;
+  }
+
+  const firstPresentField = fields.find((field) =>
+    Object.prototype.hasOwnProperty.call(record, field)
+  );
+
+  return numberOrNull(record[firstPresentField]);
+}
+
+function nullableIntegerField(record = {}, fields = []) {
+  if (!hasAnyField(record, fields)) {
+    return undefined;
+  }
+
+  const firstPresentField = fields.find((field) =>
+    Object.prototype.hasOwnProperty.call(record, field)
+  );
+
+  return integerOrNull(record[firstPresentField]);
+}
+
 function getNestedProfile(row = {}) {
   if (row.profiles) {
     return Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
@@ -74,6 +106,8 @@ export function mapDatabaseListingToAppListing(row = {}) {
     id: row.id,
     title: row.title,
     location: row.location,
+    distance: row.distance_label || row.distance || "Nearby",
+    distanceLabel: row.distance_label || row.distance || "Nearby",
     latitude: numberOrNull(row.latitude),
     longitude: numberOrNull(row.longitude),
     pricing,
@@ -106,19 +140,40 @@ export function mapDatabaseListingToAppListing(row = {}) {
 
 export function mapAppListingToDatabaseListing(listing = {}, options = {}) {
   const pricing = listing.pricing || {};
+  const hasPricingFields =
+    hasAnyField(listing, ["pricing"]) ||
+    hasAnyField(pricing, [
+      PRICING_PERIODS.DAILY,
+      PRICING_PERIODS.MONTHLY,
+      PRICING_PERIODS.YEARLY,
+    ]) ||
+    hasAnyField(listing, ["dailyRate", "monthlyRate", "yearlyRate", "price"]);
 
   return omitUndefinedFields({
     host_id: options.hostId || listing.hostId || listing.ownerId || listing.createdBy,
     title: listing.title,
     location: listing.location,
-    latitude: numberOrNull(listing.latitude),
-    longitude: numberOrNull(listing.longitude),
-    daily_rate: numberOrNull(pricing[PRICING_PERIODS.DAILY] ?? listing.dailyRate),
-    monthly_rate: numberOrNull(
-      pricing[PRICING_PERIODS.MONTHLY] ?? listing.monthlyRate ?? listing.price
-    ),
-    yearly_rate: numberOrNull(pricing[PRICING_PERIODS.YEARLY] ?? listing.yearlyRate),
-    sqft: integerOrNull(listing.sqft),
+    distance_label: listing.distanceLabel || listing.distance,
+    latitude: nullableNumberField(listing, ["latitude"]),
+    longitude: nullableNumberField(listing, ["longitude"]),
+    daily_rate: hasPricingFields
+      ? numberOrNull(pricing[PRICING_PERIODS.DAILY] ?? listing.dailyRate)
+      : undefined,
+    monthly_rate: hasPricingFields
+      ? numberOrNull(
+          pricing[PRICING_PERIODS.MONTHLY] ?? listing.monthlyRate ?? listing.price
+        )
+      : undefined,
+    yearly_rate: hasPricingFields
+      ? numberOrNull(pricing[PRICING_PERIODS.YEARLY] ?? listing.yearlyRate)
+      : undefined,
+    sqft: nullableIntegerField(listing, [
+      "sqft",
+      "squareFeet",
+      "sizeSqft",
+      "squareFootage",
+      "size",
+    ]),
     storage_type: listing.storageType || listing.type,
     listing_type: listing.listingType,
     access: listing.access,
@@ -126,12 +181,12 @@ export function mapAppListingToDatabaseListing(listing = {}, options = {}) {
     availability_status: listing.availabilityStatus,
     status: listing.status,
     description: listing.description,
-    tags: arrayOrEmpty(listing.tags),
-    amenities: arrayOrEmpty(listing.amenities),
-    images: arrayOrEmpty(listing.images),
+    tags: arrayOrUndefined(listing.tags),
+    amenities: arrayOrUndefined(listing.amenities),
+    images: arrayOrUndefined(listing.images),
     host_display_name: listing.hostName || listing.host,
-    average_rating: numberOrNull(listing.averageRating ?? listing.rating),
-    review_count: integerOrNull(listing.reviewCount ?? listing.reviews),
+    average_rating: nullableNumberField(listing, ["averageRating", "rating"]),
+    review_count: nullableIntegerField(listing, ["reviewCount", "reviews"]),
     updated_at: new Date().toISOString(),
   });
 }

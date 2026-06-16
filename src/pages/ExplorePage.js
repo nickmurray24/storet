@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
+  Alert,
   Avatar,
   Box,
   Button,
@@ -14,6 +15,7 @@ import {
   FormControl,
   InputAdornment,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Select,
   Slider,
@@ -74,9 +76,13 @@ function ExplorePage({
     return readUserListings();
   }, [storetApp?.userListings]);
 
+  const contextListings = Array.isArray(storetApp?.listings)
+    ? storetApp.listings
+    : undefined;
+
   const allListings = useMemo(() => {
-    return getPageListings(listings, userListings);
-  }, [listings, userListings]);
+    return getPageListings(listings ?? contextListings, userListings);
+  }, [contextListings, listings, userListings]);
 
   const hasExternalSavedIds =
     savedListingIds !== undefined || storetApp?.savedListingIds !== undefined;
@@ -212,6 +218,14 @@ function ExplorePage({
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+      {storetApp?.listingsAreLoading && <LinearProgress />}
+
+      {storetApp?.listingsError && (
+        <Container maxWidth="lg" sx={{ pt: 3 }}>
+          <Alert severity="warning">{storetApp.listingsError}</Alert>
+        </Container>
+      )}
+
       <Box
         sx={{
           borderBottom: "1px solid",
