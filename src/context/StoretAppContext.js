@@ -21,6 +21,7 @@ import { getHostMessagesForListings } from "../utils/messageSelectors";
 import { authService } from "../services/authService";
 import { bookingService } from "../services/bookingService";
 import { listingService } from "../services/listingService";
+import { listingImageService } from "../services/listingImageService";
 import { messageService } from "../services/messageService";
 import { paymentService } from "../services/paymentService";
 import { storetDataService } from "../services/storetDataService";
@@ -81,6 +82,26 @@ function replaceRecordById(records = [], recordId, nextRecord) {
 
 function removeRecordById(records = [], recordId) {
   return ensureArray(records).filter((record) => String(record.id) !== String(recordId));
+}
+
+function attachPaymentRecordIdsToBookings(bookings = [], payments = []) {
+  const paymentIdByRequestId = new Map();
+
+  ensureArray(payments).forEach((payment) => {
+    const requestId = payment?.requestId || payment?.bookingRequestId;
+
+    if (requestId && payment?.id) {
+      paymentIdByRequestId.set(String(requestId), payment.id);
+    }
+  });
+
+  return ensureArray(bookings).map((booking) => {
+    const linkedPaymentRecordId = paymentIdByRequestId.get(String(booking.id));
+
+    return linkedPaymentRecordId && !booking.paymentRecordId
+      ? { ...booking, paymentRecordId: linkedPaymentRecordId }
+      : booking;
+  });
 }
 
 function isBackendId(value) {
@@ -230,13 +251,18 @@ export function StoretAppProvider({ children }) {
       };
     }
 
-    setBookingRequests(bookingsResponse.data || []);
+    const enrichedBookingRequests = attachPaymentRecordIdsToBookings(
+      bookingsResponse.data || [],
+      paymentsResponse.data || []
+    );
+
+    setBookingRequests(enrichedBookingRequests);
     setPaymentRecords(paymentsResponse.data || []);
     setHostMessages(messagesResponse.data || []);
 
     return {
       ok: true,
-      bookingRequests: bookingsResponse.data || [],
+      bookingRequests: enrichedBookingRequests,
       paymentRecords: paymentsResponse.data || [],
       hostMessages: messagesResponse.data || [],
     };
@@ -481,6 +507,100 @@ export function StoretAppProvider({ children }) {
     return {
       ok: true,
       listing: savedListing,
+    };
+  }
+
+  async function attachListingImages(listingId, imageFiles = []) {
+    const normalizedId = String(listingId || "");
+
+    if (!normalizedId) {
+      return {
+        ok: false,
+        error: "We could not find that listing before uploading photos.",
+      };
+    }
+
+    if (!currentUser?.isAuthenticated || !isBackendId(normalizedId)) {
+      return {
+        ok: true,
+        imageUrls: [],
+      };
+    }
+
+    const targetListing = allUserListings.find(
+      (listing) => String(listing.id) === normalizedId
+    );
+
+    setListingsError("");
+
+    const uploadResponse = await listingImageService.uploadListingImages(imageFiles, {
+      listingId: normalizedId,
+    });
+
+    if (uploadResponse.error) {
+      const message = getErrorMessage(
+        uploadResponse.error,
+        "We saved your listing, but could not upload the photos yet."
+      );
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const imageUrls = (uploadResponse.data || [])
+      .map((image) => image.url)
+      .filter(Boolean);
+
+    if (imageUrls.length === 0) {
+      return {
+        ok: true,
+        imageUrls: [],
+      };
+    }
+
+    const nextImages = Array.from(
+      new Set([...(targetListing?.images || []), ...imageUrls])
+    );
+
+    const updateResponse = await listingService.updateListing(normalizedId, {
+      images: nextImages,
+    });
+
+    if (updateResponse.error) {
+      const message = getErrorMessage(
+        updateResponse.error,
+        "We uploaded your photos, but could not attach them to the listing yet."
+      );
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+        imageUrls,
+      };
+    }
+
+    const updatedListing = updateResponse.data;
+
+    setUserListings((currentListings) =>
+      ensureArray(currentListings).map((listing) =>
+        String(listing.id) === normalizedId ? updatedListing : listing
+      )
+    );
+
+    setListings((currentListings) =>
+      updatedListing?.status === LISTING_STATUSES.ACTIVE
+        ? mergeListingsById([updatedListing], currentListings)
+        : ensureArray(currentListings)
+    );
+
+    return {
+      ok: true,
+      listing: updatedListing,
+      imageUrls,
     };
   }
 
@@ -1074,7 +1194,10 @@ export function StoretAppProvider({ children }) {
       };
     }
 
-    const savedRequest = bookingResponse.data || confirmedRequest;
+    const savedRequest = {
+      ...(bookingResponse.data || confirmedRequest),
+      paymentRecordId: savedPaymentRecord.id,
+    };
 
     setPaymentRecords((currentPaymentRecords) =>
       mergeRecordsById([savedPaymentRecord], currentPaymentRecords)
@@ -1112,6 +1235,7 @@ export function StoretAppProvider({ children }) {
       login,
       logout,
       addListing,
+      attachListingImages,
       toggleSave,
       toggleListingStatus,
       deleteListing,

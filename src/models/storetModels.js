@@ -59,6 +59,8 @@ export const DEFAULT_LISTING_MODEL = {
   tags: [],
   amenities: ["Flexible rental", "Local storage", "Host managed"],
   images: [],
+  imageUrl: "",
+  coverImageUrl: "",
   createdAt: "",
   updatedAt: "",
 };

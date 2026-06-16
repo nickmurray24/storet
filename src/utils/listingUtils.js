@@ -165,6 +165,9 @@ export function normalizeListing(listing = {}, index = 0) {
     listing.hostId ?? listing.ownerId ?? listing.createdBy ?? hostEmail ?? ""
   );
 
+  const images = Array.isArray(listing.images) ? listing.images : [];
+  const imageUrl = listing.imageUrl || listing.coverImageUrl || images[0] || "";
+
   return {
     ...DEFAULT_LISTING_MODEL,
     ...listing,
@@ -211,7 +214,9 @@ export function normalizeListing(listing = {}, index = 0) {
     amenities: Array.isArray(listing.amenities)
       ? listing.amenities
       : DEFAULT_LISTING_MODEL.amenities,
-    images: Array.isArray(listing.images) ? listing.images : [],
+    images,
+    imageUrl,
+    coverImageUrl: imageUrl,
     createdAt,
     updatedAt,
   };
