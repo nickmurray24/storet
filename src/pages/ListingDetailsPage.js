@@ -81,9 +81,13 @@ function ListingDetailsPage({
     return readUserListings();
   }, [storetApp?.userListings]);
 
+  const contextListings = Array.isArray(storetApp?.listings)
+    ? storetApp.listings
+    : undefined;
+
   const allListings = useMemo(() => {
-    return getPageListings(listings, userListings);
-  }, [listings, userListings]);
+    return getPageListings(listings ?? contextListings, userListings);
+  }, [contextListings, listings, userListings]);
 
   const listing = useMemo(() => {
     return allListings.find((item) => String(item.id) === routeListingId);
@@ -111,7 +115,10 @@ function ListingDetailsPage({
   const [submittedBookingRequest, setSubmittedBookingRequest] = useState(null);
   const [selectedRatePeriod, setSelectedRatePeriod] = useState("");
 
-  const activeBookingRequests = bookingRequests ?? storetApp?.bookingRequests ?? [];
+  const activeBookingRequests = useMemo(
+    () => bookingRequests ?? storetApp?.bookingRequests ?? [],
+    [bookingRequests, storetApp?.bookingRequests]
+  );
 
   const latestListingRequest = useMemo(() => {
     if (!listing) {
@@ -236,10 +243,41 @@ function ListingDetailsPage({
     setBookingStatus(BOOKING_STATUSES.APPROVED);
   }
 
+  if (!listing && storetApp?.listingsAreLoading) {
+    return (
+      <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
+        <LinearProgress />
+        <Container maxWidth="md" sx={{ py: 8 }}>
+          <Card>
+            <CardContent sx={{ p: 5, textAlign: "center" }}>
+              <Stack spacing={2} alignItems="center">
+                <Avatar sx={{ bgcolor: "primary.light", color: "primary.dark" }}>
+                  <WarehouseRoundedIcon />
+                </Avatar>
+
+                <Typography variant="h4">Loading listing...</Typography>
+
+                <Typography color="text.secondary">
+                  We are pulling the latest listing details from Storet.
+                </Typography>
+              </Stack>
+            </CardContent>
+          </Card>
+        </Container>
+      </Box>
+    );
+  }
+
   if (!listing) {
     return (
       <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
         <Container maxWidth="md" sx={{ py: 8 }}>
+          {storetApp?.listingsError && (
+            <Alert severity="warning" sx={{ mb: 3 }}>
+              {storetApp.listingsError}
+            </Alert>
+          )}
+
           <Card>
             <CardContent sx={{ p: 5, textAlign: "center" }}>
               <Stack spacing={2} alignItems="center">

@@ -16,9 +16,10 @@ import {
   updateBookingRequestStatus,
 } from "../utils/bookingUtils";
 import { createHostMessage, updateHostMessageStatus } from "../utils/hostMessageUtils";
-import { normalizeSavedIds } from "../utils/listingUtils";
+import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
 import { getHostMessagesForListings } from "../utils/messageSelectors";
 import { authService } from "../services/authService";
+import { listingService } from "../services/listingService";
 import { storetDataService } from "../services/storetDataService";
 import { LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
 import { normalizeUserProfile } from "../models/storetModels";
@@ -41,10 +42,31 @@ function getErrorMessage(error, fallbackMessage = "Something went wrong.") {
   return error.message || fallbackMessage;
 }
 
+function mergeListingsById(...listingGroups) {
+  const listingMap = new Map();
+
+  listingGroups.flatMap(ensureArray).forEach((listing) => {
+    if (!listing?.id) {
+      return;
+    }
+
+    listingMap.set(String(listing.id), listing);
+  });
+
+  return normalizeListingList(Array.from(listingMap.values()));
+}
+
+function isBackendListingId(listingId) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    String(listingId || "")
+  );
+}
+
 export function StoretAppProvider({ children }) {
   const initialState = useMemo(() => storetDataService.loadState(), []);
 
   const [currentUser, setCurrentUser] = useState(initialState.currentUser);
+  const [listings, setListings] = useState([]);
   const [userListings, setUserListings] = useState(initialState.userListings);
   const [savedListingIds, setSavedListingIds] = useState(initialState.savedListingIds);
   const [bookingRequests, setBookingRequests] = useState(initialState.bookingRequests);
@@ -52,6 +74,8 @@ export function StoretAppProvider({ children }) {
   const [hostMessages, setHostMessages] = useState(initialState.hostMessages);
   const [authIsLoading, setAuthIsLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [listingsAreLoading, setListingsAreLoading] = useState(false);
+  const [listingsError, setListingsError] = useState("");
 
   const persistAuthenticatedUser = useCallback((user) => {
     const normalizedUser = normalizeUserProfile({
@@ -71,6 +95,72 @@ export function StoretAppProvider({ children }) {
     storetDataService.clearCurrentUser();
     setCurrentUser(null);
   }, []);
+
+  const refreshActiveListings = useCallback(async () => {
+    setListingsAreLoading(true);
+    setListingsError("");
+
+    const response = await listingService.getActiveListings();
+
+    setListingsAreLoading(false);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not load listings from Storet yet."
+      );
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    setListings(response.data || []);
+
+    return {
+      ok: true,
+      listings: response.data || [],
+    };
+  }, []);
+
+  const refreshCurrentUserListingData = useCallback(async () => {
+    if (!currentUser?.isAuthenticated) {
+      setUserListings([]);
+      setSavedListingIds([]);
+      return { ok: true };
+    }
+
+    setListingsError("");
+
+    const [hostListingsResponse, savedListingsResponse] = await Promise.all([
+      listingService.getCurrentUserListings(),
+      listingService.getSavedListingIds(),
+    ]);
+
+    if (hostListingsResponse.error || savedListingsResponse.error) {
+      const message = getErrorMessage(
+        hostListingsResponse.error || savedListingsResponse.error,
+        "We could not load your listing data yet."
+      );
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    setUserListings(hostListingsResponse.data || []);
+    setSavedListingIds(normalizeSavedIds(savedListingsResponse.data));
+
+    return {
+      ok: true,
+      userListings: hostListingsResponse.data || [],
+      savedListingIds: savedListingsResponse.data || [],
+    };
+  }, [currentUser?.isAuthenticated]);
 
   useEffect(() => {
     let isMounted = true;
@@ -153,7 +243,20 @@ export function StoretAppProvider({ children }) {
     };
   }, [clearAuthenticatedUser, persistAuthenticatedUser]);
 
+  useEffect(() => {
+    refreshActiveListings();
+  }, [refreshActiveListings]);
+
+  useEffect(() => {
+    refreshCurrentUserListingData();
+  }, [refreshCurrentUserListingData]);
+
+  const activeBackendListings = useMemo(() => ensureArray(listings), [listings]);
   const allUserListings = useMemo(() => ensureArray(userListings), [userListings]);
+  const allListings = useMemo(
+    () => mergeListingsById(activeBackendListings, allUserListings),
+    [activeBackendListings, allUserListings]
+  );
   const allBookingRequests = useMemo(
     () => ensureArray(bookingRequests),
     [bookingRequests]
@@ -254,78 +357,201 @@ export function StoretAppProvider({ children }) {
     };
   }
 
-  function addListing(newListing) {
+  async function addListing(newListing) {
     if (!newListing) {
-      return;
+      return {
+        ok: false,
+        error: "We could not save an empty listing.",
+      };
     }
 
-    setUserListings((currentListings) => {
-      const updatedListings = [newListing, ...ensureArray(currentListings)];
-      storetDataService.saveUserListings(updatedListings);
-      return updatedListings;
-    });
+    setListingsError("");
+
+    const response = await listingService.createListing(newListing);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not save your listing to Storet yet."
+      );
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedListing = response.data;
+
+    setUserListings((currentListings) =>
+      mergeListingsById([savedListing], currentListings)
+    );
+
+    if (savedListing?.status === LISTING_STATUSES.ACTIVE) {
+      setListings((currentListings) =>
+        mergeListingsById([savedListing], currentListings)
+      );
+    }
+
+    return {
+      ok: true,
+      listing: savedListing,
+    };
   }
 
-  function toggleSave(listingId) {
+  async function toggleSave(listingId) {
     const normalizedId = String(listingId);
+    const safeCurrentIds = normalizeSavedIds(savedListingIds);
+    const isCurrentlySaved = safeCurrentIds.includes(normalizedId);
+    const updatedIds = isCurrentlySaved
+      ? safeCurrentIds.filter((id) => id !== normalizedId)
+      : [...safeCurrentIds, normalizedId];
 
-    setSavedListingIds((currentIds) => {
-      const safeCurrentIds = normalizeSavedIds(currentIds);
-      const updatedIds = safeCurrentIds.includes(normalizedId)
-        ? safeCurrentIds.filter((id) => id !== normalizedId)
-        : [...safeCurrentIds, normalizedId];
+    setSavedListingIds(updatedIds);
 
+    if (!currentUser?.isAuthenticated || !isBackendListingId(normalizedId)) {
       storetDataService.saveSavedListingIds(updatedIds);
-      return updatedIds;
-    });
+      return {
+        ok: true,
+        savedListingIds: updatedIds,
+      };
+    }
+
+    setListingsError("");
+
+    const response = isCurrentlySaved
+      ? await listingService.unsaveListing(normalizedId)
+      : await listingService.saveListing(normalizedId);
+
+    if (response.error) {
+      setSavedListingIds(safeCurrentIds);
+      const message = getErrorMessage(
+        response.error,
+        "We could not update your saved listings yet."
+      );
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    return {
+      ok: true,
+      savedListingIds: updatedIds,
+    };
   }
 
-  function toggleListingStatus(listingId) {
+  async function toggleListingStatus(listingId) {
     const normalizedId = String(listingId);
+    const targetListing = allUserListings.find(
+      (listing) => String(listing.id) === normalizedId
+    );
 
-    setUserListings((currentListings) => {
-      const updatedListings = ensureArray(currentListings).map((listing) => {
-        if (String(listing.id) !== normalizedId) {
-          return listing;
-        }
+    if (!targetListing) {
+      return {
+        ok: false,
+        error: "We could not find that listing.",
+      };
+    }
 
-        const currentStatus = listing.status || LISTING_STATUSES.ACTIVE;
+    const currentStatus = targetListing.status || LISTING_STATUSES.ACTIVE;
+    const nextStatus =
+      currentStatus === LISTING_STATUSES.PAUSED
+        ? LISTING_STATUSES.ACTIVE
+        : LISTING_STATUSES.PAUSED;
+    const updatedListing = {
+      ...targetListing,
+      status: nextStatus,
+      availabilityStatus:
+        nextStatus === LISTING_STATUSES.ACTIVE ? "available" : "unavailable",
+      updatedAt: new Date().toISOString(),
+    };
 
-        return {
-          ...listing,
-          status:
-            currentStatus === LISTING_STATUSES.PAUSED
-              ? LISTING_STATUSES.ACTIVE
-              : LISTING_STATUSES.PAUSED,
-          updatedAt: new Date().toISOString(),
-        };
-      });
+    const previousHostListings = allUserListings;
+    const previousActiveListings = activeBackendListings;
 
-      storetDataService.saveUserListings(updatedListings);
-      return updatedListings;
-    });
-  }
+    setUserListings((currentListings) =>
+      ensureArray(currentListings).map((listing) =>
+        String(listing.id) === normalizedId ? updatedListing : listing
+      )
+    );
 
-  function deleteListing(listingId) {
-    const normalizedId = String(listingId);
-
-    setUserListings((currentListings) => {
-      const updatedListings = ensureArray(currentListings).filter(
+    setListings((currentListings) => {
+      const withoutListing = ensureArray(currentListings).filter(
         (listing) => String(listing.id) !== normalizedId
       );
 
-      storetDataService.saveUserListings(updatedListings);
-      return updatedListings;
+      return nextStatus === LISTING_STATUSES.ACTIVE
+        ? mergeListingsById([updatedListing], withoutListing)
+        : withoutListing;
     });
 
-    setSavedListingIds((currentIds) => {
-      const updatedIds = normalizeSavedIds(currentIds).filter(
-        (id) => String(id) !== normalizedId
+    setListingsError("");
+
+    const response = await listingService.updateListing(normalizedId, {
+      status: nextStatus,
+      availabilityStatus: updatedListing.availabilityStatus,
+    });
+
+    if (response.error) {
+      setUserListings(previousHostListings);
+      setListings(previousActiveListings);
+      const message = getErrorMessage(
+        response.error,
+        "We could not update that listing status yet."
       );
+      setListingsError(message);
 
-      storetDataService.saveSavedListingIds(updatedIds);
-      return updatedIds;
-    });
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedListing = response.data || updatedListing;
+
+    setUserListings((currentListings) =>
+      ensureArray(currentListings).map((listing) =>
+        String(listing.id) === normalizedId ? savedListing : listing
+      )
+    );
+
+    if (savedListing.status === LISTING_STATUSES.ACTIVE) {
+      setListings((currentListings) =>
+        mergeListingsById([savedListing], currentListings)
+      );
+    }
+
+    return {
+      ok: true,
+      listing: savedListing,
+    };
+  }
+
+  async function deleteListing(listingId) {
+    const normalizedId = String(listingId);
+    const previousHostListings = allUserListings;
+    const previousActiveListings = activeBackendListings;
+    const previousSavedIds = normalizeSavedIds(savedListingIds);
+
+    setUserListings((currentListings) =>
+      ensureArray(currentListings).filter(
+        (listing) => String(listing.id) !== normalizedId
+      )
+    );
+
+    setListings((currentListings) =>
+      ensureArray(currentListings).filter(
+        (listing) => String(listing.id) !== normalizedId
+      )
+    );
+
+    setSavedListingIds((currentIds) =>
+      normalizeSavedIds(currentIds).filter((id) => String(id) !== normalizedId)
+    );
 
     setBookingRequests((currentRequests) => {
       const updatedRequests = ensureArray(currentRequests).filter(
@@ -353,6 +579,39 @@ export function StoretAppProvider({ children }) {
       storetDataService.saveHostMessages(updatedMessages);
       return updatedMessages;
     });
+
+    if (!isBackendListingId(normalizedId)) {
+      storetDataService.saveUserListings(
+        previousHostListings.filter((listing) => String(listing.id) !== normalizedId)
+      );
+      storetDataService.saveSavedListingIds(
+        previousSavedIds.filter((id) => String(id) !== normalizedId)
+      );
+
+      return { ok: true };
+    }
+
+    setListingsError("");
+
+    const response = await listingService.deleteListing(normalizedId);
+
+    if (response.error) {
+      setUserListings(previousHostListings);
+      setListings(previousActiveListings);
+      setSavedListingIds(previousSavedIds);
+      const message = getErrorMessage(
+        response.error,
+        "We could not delete that listing yet."
+      );
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    return { ok: true };
   }
 
   function submitBookingRequest(listing, requestData = {}) {
@@ -484,6 +743,8 @@ export function StoretAppProvider({ children }) {
 
   const value = {
     currentUser,
+    listings: allListings,
+    activeListings: activeBackendListings,
     userListings: allUserListings,
     savedListingIds,
     bookingRequests: allBookingRequests,
@@ -493,6 +754,8 @@ export function StoretAppProvider({ children }) {
     hostDashboardMessages,
     authIsLoading,
     authError,
+    listingsAreLoading,
+    listingsError,
     actions: {
       login,
       logout,
@@ -506,6 +769,8 @@ export function StoretAppProvider({ children }) {
       submitHostMessage,
       updateHostMessageStatus: updateHostMessageStatusById,
       completeCheckout,
+      refreshActiveListings,
+      refreshCurrentUserListingData,
     },
   };
 

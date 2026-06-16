@@ -6,7 +6,7 @@ import {
 import { formatServiceResponse, requireSupabase } from "./backendServiceUtils";
 import { normalizeListing, normalizeListingList } from "../utils/listingUtils";
 
-const LISTING_SELECT = "*, profiles:host_id(full_name, email)";
+const LISTING_SELECT = "*";
 
 export const listingService = {
   async getActiveListings() {
@@ -100,7 +100,7 @@ export const listingService = {
       return formatServiceResponse(null, error);
     }
 
-    const payload = mapAppListingToDatabaseListing(updates);
+    const payload = mapAppListingToDatabaseListing(updates, { partial: true });
 
     const { data, error: updateError } = await supabase
       .from("listings")
