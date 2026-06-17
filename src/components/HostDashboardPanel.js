@@ -10,6 +10,7 @@ import {
   Container,
   Divider,
   LinearProgress,
+  Skeleton,
   Stack,
   Typography,
 } from "@mui/material";
@@ -27,6 +28,8 @@ import PauseCircleRoundedIcon from "@mui/icons-material/PauseCircleRounded";
 import PendingActionsRoundedIcon from "@mui/icons-material/PendingActionsRounded";
 import PlayCircleRoundedIcon from "@mui/icons-material/PlayCircleRounded";
 import QueryStatsRoundedIcon from "@mui/icons-material/QueryStatsRounded";
+import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
+import PaidRoundedIcon from "@mui/icons-material/PaidRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
@@ -37,6 +40,7 @@ import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
+import { getDefaultStatusBreakdown, getHostAnalyticsSummaryValue } from "../utils/hostAnalyticsUtils";
 import {
   getBookingRequestPrimaryAction,
   getBookingTimestamp,
@@ -82,6 +86,14 @@ function getPriceValue(price) {
 
 function formatMoney(value) {
   return `$${Number(value || 0).toFixed(0)}`;
+}
+
+function formatMoneyExact(value) {
+  return Number(value || 0).toLocaleString(undefined, {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
 }
 
 function formatPercent(value) {
@@ -742,6 +754,75 @@ function MessageCard({ message, onUpdateHostMessageStatus }) {
   );
 }
 
+
+function AnalyticsBarList({ title, description, icon, items, valueFormatter = (value) => value }) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const maxValue = Math.max(...safeItems.map((item) => Number(item.value || 0)), 1);
+
+  return (
+    <Card
+      elevation={0}
+      sx={{ height: "100%", border: "1px solid", borderColor: "divider", borderRadius: 5 }}
+    >
+      <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start" sx={{ mb: 2 }}>
+          <Box
+            sx={(theme) => ({
+              width: 42,
+              height: 42,
+              borderRadius: 3,
+              display: "grid",
+              placeItems: "center",
+              color: "primary.main",
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+              flexShrink: 0,
+            })}
+          >
+            {icon}
+          </Box>
+          <Box>
+            <Typography variant="h5">{title}</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+              {description}
+            </Typography>
+          </Box>
+        </Stack>
+
+        {safeItems.length > 0 ? (
+          <Stack spacing={1.5}>
+            {safeItems.map((item) => {
+              const value = Number(item.value || 0);
+              const percent = maxValue > 0 ? Math.min(100, (value / maxValue) * 100) : 0;
+
+              return (
+                <Box key={item.key || item.label}>
+                  <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mb: 0.75 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
+                      {item.label}
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontWeight: 900 }}>
+                      {valueFormatter(value, item)}
+                    </Typography>
+                  </Stack>
+                  <LinearProgress
+                    variant="determinate"
+                    value={percent}
+                    sx={{ height: 8, borderRadius: 999 }}
+                  />
+                </Box>
+              );
+            })}
+          </Stack>
+        ) : (
+          <Typography color="text.secondary">
+            Analytics will populate as Stripe payments and booking activity come in.
+          </Typography>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
   const isPaused = listing.status === "paused";
 
@@ -871,6 +952,29 @@ function HostDashboardPanel({
     ? hostMessages
     : storetApp?.hostDashboardMessages ?? [];
 
+  const backendAnalytics = storetApp?.hostAnalytics || null;
+  const backendSummary = backendAnalytics?.summary || {};
+  const backendListingAnalytics = Array.isArray(backendAnalytics?.listingAnalytics)
+    ? backendAnalytics.listingAnalytics
+    : [];
+  const monthlyRevenueItems = Array.isArray(backendAnalytics?.monthlyRevenue)
+    ? backendAnalytics.monthlyRevenue.map((item) => ({
+        key: item.month || item.label,
+        label: item.label || item.month,
+        value: item.revenue || 0,
+        paymentCount: item.paymentCount || 0,
+      }))
+    : [];
+  const statusBreakdownItems = (
+    Array.isArray(backendAnalytics?.statusBreakdown) && backendAnalytics.statusBreakdown.length > 0
+      ? backendAnalytics.statusBreakdown
+      : getDefaultStatusBreakdown()
+  ).map((item) => ({
+    key: item.status,
+    label: item.status,
+    value: item.count || 0,
+  }));
+
   const deleteListingAction =
     onDeleteListing || storetApp?.actions?.deleteListing || (() => {});
   const toggleListingStatusAction =
@@ -888,35 +992,44 @@ function HostDashboardPanel({
     storetApp?.actions?.updateHostMessageStatus ||
     (() => {});
 
-  const activeCount = safeMyListings.filter((listing) => listing.status !== "paused").length;
-  const pausedCount = safeMyListings.filter((listing) => listing.status === "paused").length;
-  const pendingRequestCount = sortedBookingRequests.filter(
+  const localActiveCount = safeMyListings.filter((listing) => listing.status !== "paused").length;
+  const localPausedCount = safeMyListings.filter((listing) => listing.status === "paused").length;
+  const localPendingRequestCount = sortedBookingRequests.filter(
     (request) => request.status === BOOKING_STATUSES.PENDING
   ).length;
-  const waitlistedCount = sortedBookingRequests.filter(
+  const localWaitlistedCount = sortedBookingRequests.filter(
     (request) => request.status === BOOKING_STATUSES.WAITLISTED
   ).length;
-  const unreadMessageCount = safeHostMessages.filter((message) => message.status === "Unread").length;
-  const confirmedCount = sortedBookingRequests.filter(
+  const localUnreadMessageCount = safeHostMessages.filter((message) => message.status === "Unread").length;
+  const localConfirmedCount = sortedBookingRequests.filter(
     (request) => request.status === BOOKING_STATUSES.CONFIRMED
   ).length;
-  const activeBookingCount = sortedBookingRequests.filter(
+  const localActiveBookingCount = sortedBookingRequests.filter(
     (request) => request.status === BOOKING_STATUSES.ACTIVE
   ).length;
-  const completedCount = sortedBookingRequests.filter(
+  const localCompletedCount = sortedBookingRequests.filter(
     (request) => request.status === BOOKING_STATUSES.COMPLETED
   ).length;
+
+  const activeCount = getHostAnalyticsSummaryValue(backendSummary, "activeListings", localActiveCount);
+  const pausedCount = getHostAnalyticsSummaryValue(backendSummary, "pausedListings", localPausedCount);
+  const pendingRequestCount = getHostAnalyticsSummaryValue(backendSummary, "pendingRequests", localPendingRequestCount);
+  const waitlistedCount = getHostAnalyticsSummaryValue(backendSummary, "waitlistedRequests", localWaitlistedCount);
+  const unreadMessageCount = getHostAnalyticsSummaryValue(backendSummary, "unreadMessages", localUnreadMessageCount);
+  const confirmedCount = getHostAnalyticsSummaryValue(backendSummary, "confirmedBookings", localConfirmedCount);
+  const activeBookingCount = getHostAnalyticsSummaryValue(backendSummary, "activeBookings", localActiveBookingCount);
+  const completedCount = getHostAnalyticsSummaryValue(backendSummary, "completedBookings", localCompletedCount);
 
   const approvedLikeCount = sortedBookingRequests.filter((request) =>
     APPROVED_OR_BETTER_STATUSES.includes(request.status)
   ).length;
 
-  const conversionRate =
+  const localConversionRate =
     sortedBookingRequests.length > 0
       ? (approvedLikeCount / sortedBookingRequests.length) * 100
       : 0;
 
-  const bookedVolumeEstimate = sortedBookingRequests.reduce((total, request) => {
+  const localBookedVolumeEstimate = sortedBookingRequests.reduce((total, request) => {
     if (!BOOKED_STATUSES.includes(request.status)) {
       return total;
     }
@@ -924,11 +1037,20 @@ function HostDashboardPanel({
     return total + getPriceValue(request.listingPrice);
   }, 0);
 
-  const averageRating =
+  const localAverageRating =
     safeMyListings.length > 0
       ? safeMyListings.reduce((sum, listing) => sum + getListingRating(listing), 0) /
         safeMyListings.length
       : 0;
+
+  const conversionRate = getHostAnalyticsSummaryValue(backendSummary, "conversionRate", localConversionRate);
+  const bookedVolumeEstimate = getHostAnalyticsSummaryValue(
+    backendSummary,
+    "grossRevenue",
+    localBookedVolumeEstimate
+  );
+  const averageRating = getHostAnalyticsSummaryValue(backendSummary, "averageRating", localAverageRating);
+  const savedListingsCount = getHostAnalyticsSummaryValue(backendSummary, "savedListings", 0);
 
   const listingAnalytics = safeMyListings
     .map((listing) => {
@@ -993,7 +1115,22 @@ function HostDashboardPanel({
       return getListingRating(b) - getListingRating(a);
     });
 
-  const attentionListings = listingAnalytics.filter(
+  const displayedListingAnalytics = backendListingAnalytics.length > 0
+    ? backendListingAnalytics.map((backendListing) => {
+        const localListing = listingAnalytics.find(
+          (listing) => String(listing.id) === String(backendListing.listingId || backendListing.id)
+        );
+
+        return {
+          ...(localListing || {}),
+          ...backendListing,
+          id: backendListing.listingId || backendListing.id,
+          bookedEstimate: backendListing.paidRevenue || localListing?.bookedEstimate || 0,
+        };
+      })
+    : listingAnalytics;
+
+  const attentionListings = displayedListingAnalytics.filter(
     (listing) =>
       listing.pending > 0 ||
       listing.waitlisted > 0 ||
@@ -1001,7 +1138,12 @@ function HostDashboardPanel({
       listing.status === "paused"
   );
 
-  const actionNeededCount = pendingRequestCount + waitlistedCount + unreadMessageCount + pausedCount;
+  const localActionNeededCount = pendingRequestCount + waitlistedCount + unreadMessageCount + pausedCount;
+  const actionNeededCount = getHostAnalyticsSummaryValue(
+    backendSummary,
+    "actionNeededCount",
+    localActionNeededCount
+  );
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default", pb: 6 }}>
@@ -1065,6 +1207,19 @@ function HostDashboardPanel({
       </Box>
 
       <Container maxWidth="lg" sx={{ mt: { xs: 3, md: 4 } }}>
+        {storetApp?.hostAnalyticsError && (
+          <Alert severity="warning" sx={{ mb: 2, borderRadius: 3 }}>
+            {storetApp.hostAnalyticsError}
+          </Alert>
+        )}
+
+        {storetApp?.hostAnalyticsAreLoading && !backendAnalytics && (
+          <Stack spacing={1.25} sx={{ mb: 3 }}>
+            <Skeleton variant="rounded" height={72} />
+            <Skeleton variant="rounded" height={72} />
+          </Stack>
+        )}
+
         <Box
           sx={{
             display: "grid",
@@ -1087,7 +1242,7 @@ function HostDashboardPanel({
           <StatCard
             icon={<Inventory2RoundedIcon />}
             label="Hosted listings"
-            value={safeMyListings.length}
+            value={getHostAnalyticsSummaryValue(backendSummary, "hostedListings", safeMyListings.length)}
             helper={`${activeCount} active · ${pausedCount} paused`}
           />
           <StatCard
@@ -1128,6 +1283,67 @@ function HostDashboardPanel({
               <MetricPill label="Booked volume estimate" value={formatMoney(bookedVolumeEstimate)} />
               <MetricPill label="Average listing rating" value={averageRating.toFixed(1)} />
               <MetricPill label="Unread messages" value={unreadMessageCount} />
+            </Box>
+          </CardContent>
+        </Card>
+
+
+        <Card
+          elevation={0}
+          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
+        >
+          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
+            <SectionHeader
+              eyebrow="Backend analytics"
+              title="Revenue and booking pipeline"
+              description="These cards are powered by the Supabase host analytics function instead of only frontend-derived state."
+              action={
+                backendAnalytics?.refreshedAt ? (
+                  <Chip
+                    label={`Updated ${formatDateTime(backendAnalytics.refreshedAt)}`}
+                    variant="outlined"
+                    size="small"
+                    sx={{ fontWeight: 800 }}
+                  />
+                ) : null
+              }
+            />
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                gap: 2,
+              }}
+            >
+              <AnalyticsBarList
+                title="Paid revenue"
+                description="Stripe-confirmed payment volume by month."
+                icon={<PaidRoundedIcon />}
+                items={monthlyRevenueItems}
+                valueFormatter={(value, item) => `${formatMoneyExact(value)} · ${item.paymentCount || 0} payments`}
+              />
+
+              <AnalyticsBarList
+                title="Booking pipeline"
+                description="Current request and rental lifecycle status counts."
+                icon={<BarChartRoundedIcon />}
+                items={statusBreakdownItems}
+                valueFormatter={(value) => value}
+              />
+            </Box>
+
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
+                gap: 1.5,
+                mt: 2,
+              }}
+            >
+              <MetricPill label="Saved by renters" value={savedListingsCount} />
+              <MetricPill label="Paid payments" value={backendSummary.paidPaymentCount || 0} />
+              <MetricPill label="Total reviews" value={backendSummary.reviewCount || 0} />
             </Box>
           </CardContent>
         </Card>
@@ -1202,7 +1418,7 @@ function HostDashboardPanel({
               description="See which spaces are generating activity and where renters are getting stuck."
             />
 
-            {listingAnalytics.length > 0 ? (
+            {displayedListingAnalytics.length > 0 ? (
               <Box
                 sx={{
                   display: "grid",
@@ -1210,7 +1426,7 @@ function HostDashboardPanel({
                   gap: 2,
                 }}
               >
-                {listingAnalytics.map((listing) => (
+                {displayedListingAnalytics.map((listing) => (
                   <ListingPerformanceCard key={listing.id} listing={listing} />
                 ))}
               </Box>

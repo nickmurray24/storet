@@ -19,6 +19,7 @@ import { createHostMessage, updateHostMessageStatus } from "../utils/hostMessage
 import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
 import { createReviewRecord, normalizeReviewList } from "../utils/reviewUtils";
 import { getUnreadNotificationCount, normalizeNotificationList } from "../utils/notificationUtils";
+import { normalizeHostAnalytics } from "../utils/hostAnalyticsUtils";
 import { getHostMessagesForListings } from "../utils/messageSelectors";
 import { authService } from "../services/authService";
 import { bookingService } from "../services/bookingService";
@@ -28,6 +29,7 @@ import { messageService } from "../services/messageService";
 import { paymentService } from "../services/paymentService";
 import { notificationService } from "../services/notificationService";
 import { reviewService } from "../services/reviewService";
+import { hostAnalyticsService } from "../services/hostAnalyticsService";
 import { stripeCheckoutService } from "../services/stripeCheckoutService";
 import { storetDataService } from "../services/storetDataService";
 import { LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
@@ -128,6 +130,7 @@ export function StoretAppProvider({ children }) {
   const [hostMessages, setHostMessages] = useState(initialState.hostMessages);
   const [reviewsByListingId, setReviewsByListingId] = useState({});
   const [notifications, setNotifications] = useState([]);
+  const [hostAnalytics, setHostAnalytics] = useState(null);
   const [authIsLoading, setAuthIsLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [listingsAreLoading, setListingsAreLoading] = useState(false);
@@ -138,6 +141,8 @@ export function StoretAppProvider({ children }) {
   const [reviewsError, setReviewsError] = useState("");
   const [notificationsAreLoading, setNotificationsAreLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
+  const [hostAnalyticsAreLoading, setHostAnalyticsAreLoading] = useState(false);
+  const [hostAnalyticsError, setHostAnalyticsError] = useState("");
 
   const persistAuthenticatedUser = useCallback((user) => {
     const normalizedUser = normalizeUserProfile({
@@ -166,6 +171,8 @@ export function StoretAppProvider({ children }) {
     setReviewsError("");
     setNotifications([]);
     setNotificationsError("");
+    setHostAnalytics(null);
+    setHostAnalyticsError("");
   }, []);
 
   const refreshActiveListings = useCallback(async () => {
@@ -318,6 +325,42 @@ export function StoretAppProvider({ children }) {
     };
   }, [currentUser?.id, currentUser?.isAuthenticated]);
 
+
+  const refreshCurrentUserHostAnalyticsData = useCallback(async () => {
+    if (!currentUser?.isAuthenticated) {
+      setHostAnalytics(null);
+      return { ok: true, hostAnalytics: null };
+    }
+
+    setHostAnalyticsAreLoading(true);
+    setHostAnalyticsError("");
+
+    const response = await hostAnalyticsService.getCurrentHostAnalytics();
+
+    setHostAnalyticsAreLoading(false);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not load host analytics yet."
+      );
+      setHostAnalyticsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const normalizedAnalytics = normalizeHostAnalytics(response.data || {});
+    setHostAnalytics(normalizedAnalytics);
+
+    return {
+      ok: true,
+      hostAnalytics: normalizedAnalytics,
+    };
+  }, [currentUser?.id, currentUser?.isAuthenticated]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -414,6 +457,10 @@ export function StoretAppProvider({ children }) {
   useEffect(() => {
     refreshCurrentUserNotificationData();
   }, [refreshCurrentUserNotificationData]);
+
+  useEffect(() => {
+    refreshCurrentUserHostAnalyticsData();
+  }, [refreshCurrentUserHostAnalyticsData]);
 
   useEffect(() => {
     if (!currentUser?.isAuthenticated || !currentUser?.id) {
@@ -582,6 +629,8 @@ export function StoretAppProvider({ children }) {
         mergeListingsById([savedListing], currentListings)
       );
     }
+
+    refreshCurrentUserHostAnalyticsData();
 
     return {
       ok: true,
@@ -956,6 +1005,8 @@ export function StoretAppProvider({ children }) {
       mergeRecordsById([savedRequest], currentRequests)
     );
 
+    refreshCurrentUserHostAnalyticsData();
+
     return {
       ok: true,
       request: savedRequest,
@@ -1011,6 +1062,8 @@ export function StoretAppProvider({ children }) {
       replaceRecordById(currentRequests, requestId, savedRequest)
     );
 
+    refreshCurrentUserHostAnalyticsData();
+
     return { ok: true, request: savedRequest };
   }
 
@@ -1062,6 +1115,8 @@ export function StoretAppProvider({ children }) {
     setBookingRequests((currentRequests) =>
       replaceRecordById(currentRequests, requestId, savedRequest)
     );
+
+    refreshCurrentUserHostAnalyticsData();
 
     return { ok: true, request: savedRequest };
   }
@@ -1115,6 +1170,8 @@ export function StoretAppProvider({ children }) {
     setHostMessages((currentMessages) =>
       mergeRecordsById([savedMessage], currentMessages)
     );
+
+    refreshCurrentUserHostAnalyticsData();
 
     return {
       ok: true,
@@ -1170,6 +1227,8 @@ export function StoretAppProvider({ children }) {
     setHostMessages((currentMessages) =>
       replaceRecordById(currentMessages, messageId, savedMessage)
     );
+
+    refreshCurrentUserHostAnalyticsData();
 
     return { ok: true, message: savedMessage };
   }
@@ -1279,6 +1338,7 @@ export function StoretAppProvider({ children }) {
     await Promise.all([
       refreshActiveListings(),
       refreshCurrentUserListingData(),
+      refreshCurrentUserHostAnalyticsData(),
     ]);
 
     return {
@@ -1553,6 +1613,9 @@ export function StoretAppProvider({ children }) {
     unreadNotificationsCount,
     notificationsAreLoading,
     notificationsError,
+    hostAnalytics,
+    hostAnalyticsAreLoading,
+    hostAnalyticsError,
     hostBookingRequests,
     hostDashboardMessages,
     authIsLoading,
@@ -1579,6 +1642,7 @@ export function StoretAppProvider({ children }) {
       markNotificationRead,
       markAllNotificationsRead,
       refreshCurrentUserNotificationData,
+      refreshCurrentUserHostAnalyticsData,
       startStripeCheckout,
       completeCheckout,
       refreshActiveListings,
