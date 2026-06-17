@@ -18,6 +18,7 @@ import {
 import { createHostMessage, updateHostMessageStatus } from "../utils/hostMessageUtils";
 import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
 import { createReviewRecord, normalizeReviewList } from "../utils/reviewUtils";
+import { getUnreadNotificationCount, normalizeNotificationList } from "../utils/notificationUtils";
 import { getHostMessagesForListings } from "../utils/messageSelectors";
 import { authService } from "../services/authService";
 import { bookingService } from "../services/bookingService";
@@ -25,6 +26,7 @@ import { listingService } from "../services/listingService";
 import { listingImageService } from "../services/listingImageService";
 import { messageService } from "../services/messageService";
 import { paymentService } from "../services/paymentService";
+import { notificationService } from "../services/notificationService";
 import { reviewService } from "../services/reviewService";
 import { stripeCheckoutService } from "../services/stripeCheckoutService";
 import { storetDataService } from "../services/storetDataService";
@@ -125,6 +127,7 @@ export function StoretAppProvider({ children }) {
   const [paymentRecords, setPaymentRecords] = useState(initialState.paymentRecords);
   const [hostMessages, setHostMessages] = useState(initialState.hostMessages);
   const [reviewsByListingId, setReviewsByListingId] = useState({});
+  const [notifications, setNotifications] = useState([]);
   const [authIsLoading, setAuthIsLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [listingsAreLoading, setListingsAreLoading] = useState(false);
@@ -133,6 +136,8 @@ export function StoretAppProvider({ children }) {
   const [activityError, setActivityError] = useState("");
   const [reviewsAreLoading, setReviewsAreLoading] = useState(false);
   const [reviewsError, setReviewsError] = useState("");
+  const [notificationsAreLoading, setNotificationsAreLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
 
   const persistAuthenticatedUser = useCallback((user) => {
     const normalizedUser = normalizeUserProfile({
@@ -159,6 +164,8 @@ export function StoretAppProvider({ children }) {
     setActivityError("");
     setListingsError("");
     setReviewsError("");
+    setNotifications([]);
+    setNotificationsError("");
   }, []);
 
   const refreshActiveListings = useCallback(async () => {
@@ -276,6 +283,41 @@ export function StoretAppProvider({ children }) {
     };
   }, [currentUser?.isAuthenticated]);
 
+  const refreshCurrentUserNotificationData = useCallback(async () => {
+    if (!currentUser?.isAuthenticated) {
+      setNotifications([]);
+      return { ok: true, notifications: [] };
+    }
+
+    setNotificationsAreLoading(true);
+    setNotificationsError("");
+
+    const response = await notificationService.getCurrentUserNotifications();
+
+    setNotificationsAreLoading(false);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not load your notifications yet."
+      );
+      setNotificationsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const normalizedNotifications = normalizeNotificationList(response.data || []);
+    setNotifications(normalizedNotifications);
+
+    return {
+      ok: true,
+      notifications: normalizedNotifications,
+    };
+  }, [currentUser?.id, currentUser?.isAuthenticated]);
+
   useEffect(() => {
     let isMounted = true;
 
@@ -369,6 +411,27 @@ export function StoretAppProvider({ children }) {
     refreshCurrentUserActivityData();
   }, [refreshCurrentUserActivityData]);
 
+  useEffect(() => {
+    refreshCurrentUserNotificationData();
+  }, [refreshCurrentUserNotificationData]);
+
+  useEffect(() => {
+    if (!currentUser?.isAuthenticated || !currentUser?.id) {
+      return undefined;
+    }
+
+    const subscription = notificationService.subscribeToCurrentUserNotifications(
+      currentUser.id,
+      () => {
+        refreshCurrentUserNotificationData();
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [currentUser?.id, currentUser?.isAuthenticated, refreshCurrentUserNotificationData]);
+
   const activeBackendListings = useMemo(() => ensureArray(listings), [listings]);
   const allUserListings = useMemo(() => ensureArray(userListings), [userListings]);
   const allListings = useMemo(
@@ -381,6 +444,14 @@ export function StoretAppProvider({ children }) {
   );
   const allPaymentRecords = useMemo(() => ensureArray(paymentRecords), [paymentRecords]);
   const allHostMessages = useMemo(() => ensureArray(hostMessages), [hostMessages]);
+  const allNotifications = useMemo(
+    () => normalizeNotificationList(notifications),
+    [notifications]
+  );
+  const unreadNotificationsCount = useMemo(
+    () => getUnreadNotificationCount(allNotifications),
+    [allNotifications]
+  );
 
   const hostBookingRequests = useMemo(() => {
     return getHostBookingRequests(allBookingRequests, allUserListings);
@@ -1217,6 +1288,92 @@ export function StoretAppProvider({ children }) {
   }
 
 
+  async function markNotificationRead(notificationId) {
+    const targetNotification = allNotifications.find(
+      (notification) => String(notification.id) === String(notificationId)
+    );
+
+    if (!targetNotification) {
+      return {
+        ok: false,
+        error: "We could not find that notification.",
+      };
+    }
+
+    if (targetNotification.isRead) {
+      return {
+        ok: true,
+        notification: targetNotification,
+      };
+    }
+
+    setNotificationsError("");
+
+    const response = await notificationService.markNotificationRead(notificationId);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not mark that notification as read yet."
+      );
+      setNotificationsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const updatedNotification = response.data;
+
+    setNotifications((currentNotifications) =>
+      normalizeNotificationList(
+        ensureArray(currentNotifications).map((notification) =>
+          String(notification.id) === String(notificationId)
+            ? updatedNotification
+            : notification
+        )
+      )
+    );
+
+    return {
+      ok: true,
+      notification: updatedNotification,
+    };
+  }
+
+  async function markAllNotificationsRead() {
+    if (unreadNotificationsCount === 0) {
+      return {
+        ok: true,
+      };
+    }
+
+    setNotificationsError("");
+
+    const response = await notificationService.markAllNotificationsRead();
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not mark your notifications as read yet."
+      );
+      setNotificationsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    await refreshCurrentUserNotificationData();
+
+    return {
+      ok: true,
+      notifications: response.data || [],
+    };
+  }
+
   async function startStripeCheckout(requestId) {
     const request = allBookingRequests.find((item) => String(item.id) === String(requestId));
 
@@ -1392,6 +1549,10 @@ export function StoretAppProvider({ children }) {
     reviewsByListingId,
     reviewsAreLoading,
     reviewsError,
+    notifications: allNotifications,
+    unreadNotificationsCount,
+    notificationsAreLoading,
+    notificationsError,
     hostBookingRequests,
     hostDashboardMessages,
     authIsLoading,
@@ -1415,6 +1576,9 @@ export function StoretAppProvider({ children }) {
       updateHostMessageStatus: updateHostMessageStatusById,
       loadListingReviews,
       submitReview,
+      markNotificationRead,
+      markAllNotificationsRead,
+      refreshCurrentUserNotificationData,
       startStripeCheckout,
       completeCheckout,
       refreshActiveListings,
