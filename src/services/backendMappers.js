@@ -300,6 +300,8 @@ export function mapDatabasePaymentToAppPayment(row = {}) {
     renterId: row.renter_id,
     last4: row.display_last4,
     cardBrand: row.display_card_brand,
+    stripeCheckoutSessionId: row.stripe_checkout_session_id,
+    stripePaymentIntentId: row.stripe_payment_intent_id,
     storageCharge: centsToDollars(row.storage_charge_cents),
     ratePeriod: row.rate_period,
     rateLabel: row.rate_label,

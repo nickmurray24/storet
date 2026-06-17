@@ -26,6 +26,8 @@ export function normalizePaymentRecord(payment = {}, index = 0) {
     billingZip: payment.billingZip || "",
     last4: payment.last4 || DEFAULT_PAYMENT_RECORD_MODEL.last4,
     cardBrand: payment.cardBrand || DEFAULT_PAYMENT_RECORD_MODEL.cardBrand,
+    stripeCheckoutSessionId: payment.stripeCheckoutSessionId || "",
+    stripePaymentIntentId: payment.stripePaymentIntentId || "",
     storageCharge,
     ratePeriod,
     rateLabel: payment.rateLabel || DEFAULT_PAYMENT_RECORD_MODEL.rateLabel,

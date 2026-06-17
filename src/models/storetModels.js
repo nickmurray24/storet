@@ -120,6 +120,8 @@ export const DEFAULT_PAYMENT_RECORD_MODEL = {
   billingZip: "",
   last4: "0000",
   cardBrand: "Card",
+  stripeCheckoutSessionId: "",
+  stripePaymentIntentId: "",
   storageCharge: 0,
   ratePeriod: PRICING_PERIODS.MONTHLY,
   rateLabel: "Monthly",

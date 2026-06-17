@@ -45,6 +45,7 @@ export const PRICING_PERIODS = {
 };
 
 export const PAYMENT_STATUSES = {
+  PENDING: "Pending",
   PAID: "Paid",
   REFUNDED: "Refunded",
   FAILED: "Failed",

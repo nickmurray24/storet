@@ -1,49 +1,272 @@
-import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useMemo, useState } from "react";
+import { Link as RouterLink, useParams, useSearchParams } from "react-router-dom";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Container,
+  Divider,
+  Stack,
+  Typography,
+} from "@mui/material";
 
-import { useOptionalStoretApp } from '../context/StoretAppContext';
-import { APP_ROUTES, buildListingPath } from '../routes/appRoutes';
-import { BOOKING_STATUSES } from '../utils/bookingUtils';
+import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import CreditCardRoundedIcon from "@mui/icons-material/CreditCardRounded";
+import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
+import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
+import LockRoundedIcon from "@mui/icons-material/LockRounded";
+import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
+import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
+
+import { useOptionalStoretApp } from "../context/StoretAppContext";
+import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
+import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import {
   getBookingRequestById,
   getCheckoutBlockedReason,
   getPaymentRecordForRequest,
-} from '../utils/bookingSelectors';
+} from "../utils/bookingSelectors";
 
-function inferCardBrand(cardNumber) {
-  if (/^4/.test(cardNumber)) {
-    return 'Visa';
-  }
-
-  if (/^5[1-5]/.test(cardNumber)) {
-    return 'Mastercard';
-  }
-
-  if (/^3[47]/.test(cardNumber)) {
-    return 'Amex';
-  }
-
-  return 'Card';
-}
+const SERVICE_FEE = 19;
 
 function formatCurrency(value) {
-  return `$${value.toFixed(2)}`;
+  const amount = Number(value || 0);
+  return amount.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
 }
 
 function formatDateTime(value) {
+  if (!value) {
+    return "Not recorded";
+  }
+
   return new Date(value).toLocaleString();
 }
 
+function getPaidWithLabel(payment = {}) {
+  if (payment.cardBrand === "Stripe" || payment.last4 === "Checkout") {
+    return "Stripe Checkout";
+  }
+
+  if (payment.cardBrand && payment.last4) {
+    return `${payment.cardBrand} ending in ${payment.last4}`;
+  }
+
+  return "Payment method recorded";
+}
+
+function SummaryRow({ label, value, strong = false }) {
+  return (
+    <Stack direction="row" justifyContent="space-between" gap={2} alignItems="flex-start">
+      <Typography variant="body2" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography
+        variant="body2"
+        fontWeight={strong ? 800 : 700}
+        textAlign="right"
+        color="text.primary"
+      >
+        {value || "—"}
+      </Typography>
+    </Stack>
+  );
+}
+
+function CheckoutHero({ icon, eyebrow, title, description, chip }) {
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        mb: 3,
+        overflow: "hidden",
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 4,
+        background:
+          "linear-gradient(135deg, rgba(46,125,50,0.12), rgba(25,118,210,0.08) 48%, rgba(255,255,255,0.95))",
+      }}
+    >
+      <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2.5} alignItems={{ xs: "flex-start", md: "center" }}>
+          <Box
+            sx={{
+              width: 58,
+              height: 58,
+              borderRadius: 3,
+              display: "grid",
+              placeItems: "center",
+              color: "primary.main",
+              bgcolor: "background.paper",
+              boxShadow: "0 18px 35px rgba(15, 23, 42, 0.10)",
+            }}
+          >
+            {icon}
+          </Box>
+
+          <Box sx={{ flex: 1 }}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Typography variant="overline" color="primary.main" fontWeight={800}>
+                {eyebrow}
+              </Typography>
+              {chip}
+            </Stack>
+            <Typography variant="h3" component="h1" fontWeight={900} sx={{ mt: 0.5 }}>
+              {title}
+            </Typography>
+            <Typography variant="body1" color="text.secondary" sx={{ mt: 1, maxWidth: 760 }}>
+              {description}
+            </Typography>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BookingSummaryCard({ request, pricing }) {
+  return (
+    <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 4 }}>
+      <CardContent sx={{ p: 3 }}>
+        <Stack spacing={2.25}>
+          <Stack direction="row" spacing={1.25} alignItems="center">
+            <HomeWorkRoundedIcon color="primary" />
+            <Box>
+              <Typography variant="h6" fontWeight={900}>
+                Booking summary
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Review the approved storage booking before payment.
+              </Typography>
+            </Box>
+          </Stack>
+
+          <Divider />
+
+          <SummaryRow label="Listing" value={request.listingTitle} />
+          <SummaryRow label="Host" value={request.hostName} />
+          <SummaryRow label="Selected rate" value={request.rateDisplay} />
+          <SummaryRow label="Move-in" value={request.moveInDate} />
+          <SummaryRow label="Move-out" value={request.moveOutDate} />
+          <SummaryRow label="Duration" value={request.duration} />
+
+          <Divider />
+
+          <SummaryRow
+            label={`${request.rateLabel || "Storage"} charge`}
+            value={formatCurrency(pricing.storageCharge)}
+          />
+          <SummaryRow label="Platform service fee" value={formatCurrency(pricing.serviceFee)} />
+
+          <Box
+            sx={{
+              mt: 0.5,
+              p: 2,
+              borderRadius: 3,
+              bgcolor: "primary.main",
+              color: "primary.contrastText",
+            }}
+          >
+            <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2}>
+              <Typography variant="body1" fontWeight={800}>
+                Total due today
+              </Typography>
+              <Typography variant="h5" fontWeight={900}>
+                {formatCurrency(pricing.totalAmount)}
+              </Typography>
+            </Stack>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReceiptSummaryCard({ request, payment }) {
+  return (
+    <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 4 }}>
+      <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+        <Stack spacing={2.5}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="space-between">
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              <ReceiptLongRoundedIcon color="primary" />
+              <Box>
+                <Typography variant="h5" fontWeight={900}>
+                  Payment receipt
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Receipt #{payment.receiptNumber || "Processing"}
+                </Typography>
+              </Box>
+            </Stack>
+
+            <Chip
+              color="success"
+              icon={<CheckCircleRoundedIcon />}
+              label={payment.status || "Paid"}
+              sx={{ fontWeight: 800, alignSelf: { xs: "flex-start", sm: "center" } }}
+            />
+          </Stack>
+
+          <Divider />
+
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+              gap: 2,
+            }}
+          >
+            <Stack spacing={1.5}>
+              <SummaryRow label="Listing" value={payment.listingTitle || request.listingTitle} />
+              <SummaryRow label="Host" value={payment.hostName || request.hostName} />
+              <SummaryRow label="Billing rate" value={payment.rateDisplay || request.rateDisplay} />
+              <SummaryRow label="Paid with" value={getPaidWithLabel(payment)} />
+            </Stack>
+
+            <Stack spacing={1.5}>
+              <SummaryRow label="Paid at" value={formatDateTime(payment.paidAt)} />
+              <SummaryRow label="Rental active" value={formatDateTime(request.activatedAt)} />
+              <SummaryRow label="Completed at" value={formatDateTime(request.completedAt)} />
+              {payment.stripeCheckoutSessionId && (
+                <SummaryRow label="Stripe session" value={payment.stripeCheckoutSessionId.slice(-12)} />
+              )}
+            </Stack>
+          </Box>
+
+          <Divider />
+
+          <Stack spacing={1.5}>
+            <SummaryRow label="Storage charge" value={formatCurrency(payment.storageCharge)} />
+            <SummaryRow label="Platform service fee" value={formatCurrency(payment.serviceFee)} />
+            <SummaryRow label="Total paid" value={formatCurrency(payment.amount)} strong />
+          </Stack>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
 function CheckoutPage({
-  currentUser,
   bookingRequests,
   paymentRecords,
-  onCompleteCheckout,
+  onStartStripeCheckout,
 }) {
   const storetApp = useOptionalStoretApp();
   const { requestId } = useParams();
+  const [searchParams] = useSearchParams();
 
-  const activeCurrentUser = currentUser || storetApp?.currentUser || {};
+  const checkoutStatus = searchParams.get("checkout");
+  const stripeSessionId = searchParams.get("session_id");
+
   const activeBookingRequests = bookingRequests ?? storetApp?.bookingRequests ?? [];
   const activePaymentRecords = paymentRecords ?? storetApp?.paymentRecords ?? [];
 
@@ -52,7 +275,7 @@ function CheckoutPage({
 
   const pricing = useMemo(() => {
     const storageCharge = Number(request?.listingPrice || 0);
-    const serviceFee = 19;
+    const serviceFee = SERVICE_FEE;
     const totalAmount = storageCharge + serviceFee;
 
     return {
@@ -62,161 +285,88 @@ function CheckoutPage({
     };
   }, [request]);
 
-  const [formData, setFormData] = useState({
-    cardholderName: activeCurrentUser.fullName || '',
-    cardNumber: '',
-    expiry: '',
-    cvc: '',
-    billingZip: '',
-  });
-
-  const [errors, setErrors] = useState({});
-  const [submitError, setSubmitError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  function handleChange(event) {
-    const { name, value } = event.target;
-
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
-    setErrors((prev) => ({
-      ...prev,
-      [name]: '',
-    }));
-
-    setSubmitError('');
-  }
-
-  function validateForm() {
-    const nextErrors = {};
-    const sanitizedCard = formData.cardNumber.replace(/\s+/g, '');
-    const sanitizedCvc = formData.cvc.replace(/\s+/g, '');
-
-    if (!formData.cardholderName.trim()) {
-      nextErrors.cardholderName = 'Please enter the cardholder name.';
-    }
-
-    if (!/^\d{13,19}$/.test(sanitizedCard)) {
-      nextErrors.cardNumber = 'Enter a valid mock card number.';
-    }
-
-    if (!/^\d{2}\/\d{2}$/.test(formData.expiry.trim())) {
-      nextErrors.expiry = 'Use MM/YY format.';
-    }
-
-    if (!/^\d{3,4}$/.test(sanitizedCvc)) {
-      nextErrors.cvc = 'Enter a valid CVC.';
-    }
-
-    if (!/^\d{5}$/.test(formData.billingZip.trim())) {
-      nextErrors.billingZip = 'Enter a 5-digit billing ZIP code.';
-    }
-
-    return nextErrors;
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault();
-
-    const nextErrors = validateForm();
-
-    if (Object.keys(nextErrors).length > 0) {
-      setErrors(nextErrors);
-      return;
-    }
-
-    const sanitizedCard = formData.cardNumber.replace(/\s+/g, '');
-
-    const completeCheckoutAction =
-      onCompleteCheckout || storetApp?.actions?.completeCheckout || (() => null);
-
-    setIsSubmitting(true);
-
-    const result = await completeCheckoutAction(request.id, {
-      cardholderName: formData.cardholderName,
-      billingZip: formData.billingZip,
-      last4: sanitizedCard.slice(-4),
-      cardBrand: inferCardBrand(sanitizedCard),
-      storageCharge: pricing.storageCharge,
-      ratePeriod: request.ratePeriod,
-      rateLabel: request.rateLabel,
-      rateDisplay: request.rateDisplay,
-      serviceFee: pricing.serviceFee,
-      totalAmount: pricing.totalAmount,
-    });
-
-    setIsSubmitting(false);
-
-    if (result?.ok === false) {
-      setSubmitError(result.error || 'We could not complete checkout.');
-    }
-  }
+  const [submitError, setSubmitError] = useState("");
+  const [isStripeSubmitting, setIsStripeSubmitting] = useState(false);
 
   const blockedCheckout = getCheckoutBlockedReason(request);
 
+  async function handleStartStripeCheckout() {
+    if (!request) {
+      return;
+    }
+
+    const startStripeCheckoutAction =
+      onStartStripeCheckout || storetApp?.actions?.startStripeCheckout || (() => null);
+
+    setSubmitError("");
+    setIsStripeSubmitting(true);
+
+    const result = await startStripeCheckoutAction(request.id);
+
+    setIsStripeSubmitting(false);
+
+    if (result?.ok === false || !result?.url) {
+      setSubmitError(result?.error || "We could not start Stripe Checkout yet.");
+      return;
+    }
+
+    window.location.assign(result.url);
+  }
+
+
   if (blockedCheckout) {
     return (
-      <div className="checkout-page">
-        <div className="page-header-block">
-          <h1>{blockedCheckout.title}</h1>
-          <p>{blockedCheckout.description}</p>
-          <Link to={blockedCheckout.actionTo} className="primary-button">
-            {blockedCheckout.actionLabel}
-          </Link>
-        </div>
-      </div>
+      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+        <CheckoutHero
+          icon={<LockRoundedIcon fontSize="large" />}
+          eyebrow="Checkout"
+          title={blockedCheckout.title}
+          description={blockedCheckout.description}
+        />
+
+        <Button component={RouterLink} to={blockedCheckout.actionTo} variant="contained" size="large">
+          {blockedCheckout.actionLabel}
+        </Button>
+      </Container>
     );
   }
 
   if (request.status === BOOKING_STATUSES.CANCELLED) {
     return (
-      <div className="checkout-page">
-        <div className="page-header-block">
-          <h1>Booking cancelled</h1>
-          <p>This booking was cancelled and is no longer active.</p>
-        </div>
+      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+        <CheckoutHero
+          icon={<EventAvailableRoundedIcon fontSize="large" />}
+          eyebrow="Booking update"
+          title="Booking cancelled"
+          description="This booking was cancelled and is no longer active. The details are kept here for your records."
+          chip={<Chip label="Cancelled" color="default" sx={{ fontWeight: 800 }} />}
+        />
 
-        <div className="checkout-layout">
-          <section className="checkout-card receipt-card">
-            <h2>Booking Summary</h2>
-
-            <div className="checkout-summary-group">
-              <div className="checkout-summary-row">
-                <span>Listing</span>
-                <strong>{request.listingTitle}</strong>
-              </div>
-
-              <div className="checkout-summary-row">
-                <span>Host</span>
-                <strong>{request.hostName}</strong>
-              </div>
-
-              {request.cancelledAt && (
-                <div className="checkout-summary-row">
-                  <span>Cancelled at</span>
-                  <strong>{formatDateTime(request.cancelledAt)}</strong>
-                </div>
-              )}
-
+        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 4 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Stack spacing={2}>
+              <Typography variant="h6" fontWeight={900}>
+                Booking summary
+              </Typography>
+              <Divider />
+              <SummaryRow label="Listing" value={request.listingTitle} />
+              <SummaryRow label="Host" value={request.hostName} />
+              <SummaryRow label="Cancelled at" value={formatDateTime(request.cancelledAt)} />
               {existingPayment && (
-                <div className="checkout-summary-row">
-                  <span>Original payment</span>
-                  <strong>{formatCurrency(existingPayment.amount)}</strong>
-                </div>
+                <SummaryRow label="Original payment" value={formatCurrency(existingPayment.amount)} />
               )}
-            </div>
-
-            <div className="activity-action-row">
-              <Link to={APP_ROUTES.profile} className="primary-button">
-                Back to Profile
-              </Link>
-            </div>
-          </section>
-        </div>
-      </div>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ pt: 1 }}>
+                <Button component={RouterLink} to={APP_ROUTES.profile} variant="contained">
+                  Back to Profile
+                </Button>
+                <Button component={RouterLink} to={APP_ROUTES.explore} variant="outlined">
+                  Browse Listings
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+      </Container>
     );
   }
 
@@ -226,252 +376,163 @@ function CheckoutPage({
       request.status === BOOKING_STATUSES.COMPLETED) &&
     existingPayment
   ) {
+    const title =
+      request.status === BOOKING_STATUSES.COMPLETED
+        ? "Booking completed"
+        : request.status === BOOKING_STATUSES.ACTIVE
+        ? "Rental active"
+        : "Booking confirmed";
+
     return (
-      <div className="checkout-page">
-        <div className="page-header-block">
-          <h1>
-            {request.status === BOOKING_STATUSES.COMPLETED
-              ? 'Booking completed'
-              : request.status === BOOKING_STATUSES.ACTIVE
-              ? 'Rental active'
-              : 'Booking confirmed'}
-          </h1>
-          <p>Your payment was recorded and this booking status has been updated.</p>
-        </div>
+      <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+        <CheckoutHero
+          icon={<CheckCircleRoundedIcon fontSize="large" />}
+          eyebrow="Receipt"
+          title={title}
+          description="Your payment is recorded and this booking is confirmed in Storet. Keep this receipt for your records."
+          chip={<Chip color="success" label="Paid" sx={{ fontWeight: 800 }} />}
+        />
 
-        <div className="checkout-layout">
-          <section className="checkout-card receipt-card">
-            <h2>Payment Receipt</h2>
+        <ReceiptSummaryCard request={request} payment={existingPayment} />
 
-            <div className="checkout-summary-group">
-              <div className="checkout-summary-row">
-                <span>Receipt number</span>
-                <strong>{existingPayment.receiptNumber}</strong>
-              </div>
-
-              <div className="checkout-summary-row">
-                <span>Listing</span>
-                <strong>{existingPayment.listingTitle}</strong>
-              </div>
-
-              <div className="checkout-summary-row">
-                <span>Host</span>
-                <strong>{existingPayment.hostName}</strong>
-              </div>
-
-              <div className="checkout-summary-row">
-                <span>Billing rate</span>
-                <strong>{existingPayment.rateDisplay || request.rateDisplay}</strong>
-              </div>
-
-              <div className="checkout-summary-row">
-                <span>Paid with</span>
-                <strong>
-                  {existingPayment.cardBrand} ending in {existingPayment.last4}
-                </strong>
-              </div>
-
-              <div className="checkout-summary-row">
-                <span>Paid at</span>
-                <strong>{formatDateTime(existingPayment.paidAt)}</strong>
-              </div>
-
-              {request.activatedAt && (
-                <div className="checkout-summary-row">
-                  <span>Rental active</span>
-                  <strong>{formatDateTime(request.activatedAt)}</strong>
-                </div>
-              )}
-
-              {request.completedAt && (
-                <div className="checkout-summary-row">
-                  <span>Completed at</span>
-                  <strong>{formatDateTime(request.completedAt)}</strong>
-                </div>
-              )}
-
-              <div className="checkout-total-row">
-                <span>Total paid</span>
-                <strong>{formatCurrency(existingPayment.amount)}</strong>
-              </div>
-            </div>
-
-            <div className="activity-action-row">
-              <Link to={APP_ROUTES.profile} className="primary-button">
-                Back to Profile
-              </Link>
-
-              <Link to={buildListingPath(request.listingId)} className="secondary-button">
-                View Listing
-              </Link>
-            </div>
-          </section>
-        </div>
-      </div>
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 3 }}>
+          <Button component={RouterLink} to={APP_ROUTES.profile} variant="contained" size="large">
+            Back to Profile
+          </Button>
+          <Button
+            component={RouterLink}
+            to={buildListingPath(request.listingId)}
+            variant="outlined"
+            size="large"
+          >
+            View Listing
+          </Button>
+        </Stack>
+      </Container>
     );
   }
 
   return (
-    <div className="checkout-page">
-      <div className="page-header-block">
-        <h1>Checkout</h1>
-        <p>
-          Complete your mock payment to confirm this approved booking request.
-        </p>
-      </div>
+    <Container maxWidth="lg" sx={{ py: { xs: 4, md: 6 } }}>
+      <CheckoutHero
+        icon={<PaymentsRoundedIcon fontSize="large" />}
+        eyebrow="Secure checkout"
+        title="Complete your booking payment"
+        description="You’ll be redirected to Stripe Checkout to securely complete payment. Storet will update your booking automatically after Stripe confirms the payment."
+        chip={<Chip color="primary" label="Stripe Checkout" sx={{ fontWeight: 800 }} />}
+      />
 
-      <div className="checkout-layout">
-        <section className="checkout-card">
-          <h2>Payment Information</h2>
+      {checkoutStatus === "success" && !existingPayment && (
+        <Alert severity="info" sx={{ mb: 3, borderRadius: 3 }}>
+          Stripe returned you to Storet. If the receipt is not visible yet, the webhook may still be processing. Refresh this page in a moment.
+          {stripeSessionId ? ` Session ${stripeSessionId.slice(-12)} is pending confirmation.` : ""}
+        </Alert>
+      )}
 
-          <form className="payment-form" onSubmit={handleSubmit}>
-            <div className="filter-group">
-              <label htmlFor="cardholderName">Cardholder Name</label>
-              <input
-                id="cardholderName"
-                name="cardholderName"
-                type="text"
-                value={formData.cardholderName}
-                onChange={handleChange}
-                placeholder="Full name on card"
-              />
-              {errors.cardholderName && (
-                <span className="form-error">{errors.cardholderName}</span>
-              )}
-            </div>
+      {checkoutStatus === "cancelled" && (
+        <Alert severity="warning" sx={{ mb: 3, borderRadius: 3 }}>
+          Stripe Checkout was cancelled. Your booking is still approved, and you can restart checkout whenever you’re ready.
+        </Alert>
+      )}
 
-            <div className="filter-group">
-              <label htmlFor="cardNumber">Card Number</label>
-              <input
-                id="cardNumber"
-                name="cardNumber"
-                type="text"
-                value={formData.cardNumber}
-                onChange={handleChange}
-                placeholder="4242424242424242"
-              />
-              {errors.cardNumber && (
-                <span className="form-error">{errors.cardNumber}</span>
-              )}
-            </div>
+      {submitError && (
+        <Alert severity="error" sx={{ mb: 3, borderRadius: 3 }}>
+          {submitError}
+        </Alert>
+      )}
 
-            <div className="payment-grid">
-              <div className="filter-group">
-                <label htmlFor="expiry">Expiry</label>
-                <input
-                  id="expiry"
-                  name="expiry"
-                  type="text"
-                  value={formData.expiry}
-                  onChange={handleChange}
-                  placeholder="MM/YY"
-                />
-                {errors.expiry && (
-                  <span className="form-error">{errors.expiry}</span>
-                )}
-              </div>
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 1.15fr) minmax(320px, 0.85fr)" },
+          gap: 3,
+          alignItems: "start",
+        }}
+      >
+        <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 4 }}>
+          <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+            <Stack spacing={3}>
+              <Stack spacing={1}>
+                <Stack direction="row" spacing={1.25} alignItems="center">
+                  <CreditCardRoundedIcon color="primary" />
+                  <Typography variant="h5" fontWeight={900}>
+                    Payment method
+                  </Typography>
+                </Stack>
+                <Typography variant="body1" color="text.secondary">
+                  Real card details are collected by Stripe, not stored in Storet. This keeps the React app out of direct card handling.
+                </Typography>
+              </Stack>
 
-              <div className="filter-group">
-                <label htmlFor="cvc">CVC</label>
-                <input
-                  id="cvc"
-                  name="cvc"
-                  type="text"
-                  value={formData.cvc}
-                  onChange={handleChange}
-                  placeholder="123"
-                />
-                {errors.cvc && <span className="form-error">{errors.cvc}</span>}
-              </div>
+              <Box
+                sx={{
+                  p: 2.5,
+                  borderRadius: 3,
+                  bgcolor: "grey.50",
+                  border: "1px solid",
+                  borderColor: "divider",
+                }}
+              >
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+                  <Box
+                    sx={{
+                      width: 54,
+                      height: 38,
+                      borderRadius: 2,
+                      display: "grid",
+                      placeItems: "center",
+                      bgcolor: "background.paper",
+                      border: "1px solid",
+                      borderColor: "divider",
+                      fontWeight: 900,
+                    }}
+                  >
+                    $tr
+                  </Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography fontWeight={900}>Stripe-hosted checkout</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Use Stripe’s hosted payment page for card entry, payment confirmation, and redirect back to Storet.
+                    </Typography>
+                  </Box>
+                  <Chip icon={<ShieldRoundedIcon />} label="Secure redirect" color="success" variant="outlined" />
+                </Stack>
+              </Box>
 
-              <div className="filter-group">
-                <label htmlFor="billingZip">Billing ZIP</label>
-                <input
-                  id="billingZip"
-                  name="billingZip"
-                  type="text"
-                  value={formData.billingZip}
-                  onChange={handleChange}
-                  placeholder="43215"
-                />
-                {errors.billingZip && (
-                  <span className="form-error">{errors.billingZip}</span>
-                )}
-              </div>
-            </div>
+              <Stack spacing={1.5}>
+                <Button
+                  type="button"
+                  variant="contained"
+                  size="large"
+                  onClick={handleStartStripeCheckout}
+                  disabled={isStripeSubmitting}
+                  startIcon={
+                    isStripeSubmitting ? <CircularProgress color="inherit" size={18} /> : <LockRoundedIcon />
+                  }
+                >
+                  {isStripeSubmitting
+                    ? "Starting Stripe Checkout..."
+                    : `Continue to Stripe · ${formatCurrency(pricing.totalAmount)}`}
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
 
-            <div className="mock-payment-note">
-              This is a mock checkout flow. No real payment is processed.
-            </div>
+        <BookingSummaryCard request={request} pricing={pricing} />
+      </Box>
 
-            {submitError && (
-              <div className="form-submit-error">{submitError}</div>
-            )}
-
-            <div className="activity-action-row">
-              <button type="submit" className="primary-button" disabled={isSubmitting}>
-                {isSubmitting ? 'Processing...' : `Pay ${formatCurrency(pricing.totalAmount)}`}
-              </button>
-
-              <Link to={APP_ROUTES.profile} className="secondary-button">
-                Cancel
-              </Link>
-            </div>
-          </form>
-        </section>
-
-        <aside className="checkout-summary-card">
-          <h2>Order Summary</h2>
-
-          <div className="checkout-summary-group">
-            <div className="checkout-summary-row">
-              <span>Listing</span>
-              <strong>{request.listingTitle}</strong>
-            </div>
-
-            <div className="checkout-summary-row">
-              <span>Host</span>
-              <strong>{request.hostName}</strong>
-            </div>
-
-            <div className="checkout-summary-row">
-              <span>Selected rate</span>
-              <strong>{request.rateDisplay}</strong>
-            </div>
-
-            <div className="checkout-summary-row">
-              <span>Move-in date</span>
-              <strong>{request.moveInDate}</strong>
-            </div>
-
-            <div className="checkout-summary-row">
-              <span>Move-out date</span>
-              <strong>{request.moveOutDate}</strong>
-            </div>
-
-            <div className="checkout-summary-row">
-              <span>Duration</span>
-              <strong>{request.duration}</strong>
-            </div>
-
-            <div className="checkout-summary-row">
-              <span>{request.rateLabel || "Storage"} charge</span>
-              <strong>{formatCurrency(pricing.storageCharge)}</strong>
-            </div>
-
-            <div className="checkout-summary-row">
-              <span>Platform service fee</span>
-              <strong>{formatCurrency(pricing.serviceFee)}</strong>
-            </div>
-
-            <div className="checkout-total-row">
-              <span>Total due today</span>
-              <strong>{formatCurrency(pricing.totalAmount)}</strong>
-            </div>
-          </div>
-        </aside>
-      </div>
-    </div>
+      <Button
+        component={RouterLink}
+        to={APP_ROUTES.profile}
+        variant="text"
+        color="inherit"
+        startIcon={<ArrowBackRoundedIcon />}
+        sx={{ mt: 3 }}
+      >
+        Back to Profile
+      </Button>
+    </Container>
   );
 }
 
