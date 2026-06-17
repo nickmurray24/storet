@@ -17,6 +17,7 @@ import {
 } from "../utils/bookingUtils";
 import { createHostMessage, updateHostMessageStatus } from "../utils/hostMessageUtils";
 import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
+import { createReviewRecord, normalizeReviewList } from "../utils/reviewUtils";
 import { getHostMessagesForListings } from "../utils/messageSelectors";
 import { authService } from "../services/authService";
 import { bookingService } from "../services/bookingService";
@@ -24,6 +25,7 @@ import { listingService } from "../services/listingService";
 import { listingImageService } from "../services/listingImageService";
 import { messageService } from "../services/messageService";
 import { paymentService } from "../services/paymentService";
+import { reviewService } from "../services/reviewService";
 import { stripeCheckoutService } from "../services/stripeCheckoutService";
 import { storetDataService } from "../services/storetDataService";
 import { LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
@@ -122,12 +124,15 @@ export function StoretAppProvider({ children }) {
   const [bookingRequests, setBookingRequests] = useState(initialState.bookingRequests);
   const [paymentRecords, setPaymentRecords] = useState(initialState.paymentRecords);
   const [hostMessages, setHostMessages] = useState(initialState.hostMessages);
+  const [reviewsByListingId, setReviewsByListingId] = useState({});
   const [authIsLoading, setAuthIsLoading] = useState(true);
   const [authError, setAuthError] = useState("");
   const [listingsAreLoading, setListingsAreLoading] = useState(false);
   const [listingsError, setListingsError] = useState("");
   const [activityIsLoading, setActivityIsLoading] = useState(false);
   const [activityError, setActivityError] = useState("");
+  const [reviewsAreLoading, setReviewsAreLoading] = useState(false);
+  const [reviewsError, setReviewsError] = useState("");
 
   const persistAuthenticatedUser = useCallback((user) => {
     const normalizedUser = normalizeUserProfile({
@@ -153,6 +158,7 @@ export function StoretAppProvider({ children }) {
     setHostMessages([]);
     setActivityError("");
     setListingsError("");
+    setReviewsError("");
   }, []);
 
   const refreshActiveListings = useCallback(async () => {
@@ -1098,6 +1104,119 @@ export function StoretAppProvider({ children }) {
   }
 
 
+  async function loadListingReviews(listingId) {
+    const normalizedListingId = String(listingId || "");
+
+    if (!normalizedListingId) {
+      return {
+        ok: false,
+        error: "We could not find that listing before loading reviews.",
+      };
+    }
+
+    setReviewsAreLoading(true);
+    setReviewsError("");
+
+    const response = await reviewService.getListingReviews(normalizedListingId);
+
+    setReviewsAreLoading(false);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not load reviews for this listing yet."
+      );
+      setReviewsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const reviews = normalizeReviewList(response.data || []);
+
+    setReviewsByListingId((currentReviewsByListingId) => ({
+      ...currentReviewsByListingId,
+      [normalizedListingId]: reviews,
+    }));
+
+    return {
+      ok: true,
+      reviews,
+    };
+  }
+
+  async function submitReview(listing, bookingRequest, reviewData = {}) {
+    if (!listing || !bookingRequest) {
+      return {
+        ok: false,
+        error: "A completed booking is required before leaving a review.",
+      };
+    }
+
+    if (!currentUser?.isAuthenticated || !isBackendId(listing.id)) {
+      return {
+        ok: false,
+        error: "Please sign in and use a backend-backed listing before leaving a review.",
+      };
+    }
+
+    const review = createReviewRecord({
+      listing,
+      bookingRequest,
+      currentUser,
+      reviewData,
+    });
+
+    setReviewsError("");
+
+    const response = await reviewService.createReview(review);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not save that review yet."
+      );
+      setReviewsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedReview = response.data || review;
+    const normalizedListingId = String(savedReview.listingId || listing.id);
+
+    setReviewsByListingId((currentReviewsByListingId) => {
+      const currentListingReviews = normalizeReviewList(
+        currentReviewsByListingId[normalizedListingId] || []
+      );
+
+      return {
+        ...currentReviewsByListingId,
+        [normalizedListingId]: normalizeReviewList([
+          savedReview,
+          ...currentListingReviews.filter(
+            (currentReview) => String(currentReview.id) !== String(savedReview.id)
+          ),
+        ]),
+      };
+    });
+
+    await Promise.all([
+      refreshActiveListings(),
+      refreshCurrentUserListingData(),
+    ]);
+
+    return {
+      ok: true,
+      review: savedReview,
+    };
+  }
+
+
   async function startStripeCheckout(requestId) {
     const request = allBookingRequests.find((item) => String(item.id) === String(requestId));
 
@@ -1270,6 +1389,9 @@ export function StoretAppProvider({ children }) {
     bookingRequests: allBookingRequests,
     paymentRecords: allPaymentRecords,
     hostMessages: allHostMessages,
+    reviewsByListingId,
+    reviewsAreLoading,
+    reviewsError,
     hostBookingRequests,
     hostDashboardMessages,
     authIsLoading,
@@ -1291,6 +1413,8 @@ export function StoretAppProvider({ children }) {
       updateBookingLifecycle: updateBookingLifecycleById,
       submitHostMessage,
       updateHostMessageStatus: updateHostMessageStatusById,
+      loadListingReviews,
+      submitReview,
       startStripeCheckout,
       completeCheckout,
       refreshActiveListings,

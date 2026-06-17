@@ -14,6 +14,7 @@ export const MODEL_PREFIXES = {
   BOOKING: "booking",
   PAYMENT: "payment",
   HOST_MESSAGE: "host-message",
+  REVIEW: "review",
 };
 
 export const DEFAULT_USER_PROFILE = {

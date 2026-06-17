@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
   Alert,
@@ -11,6 +11,7 @@ import {
   Container,
   Divider,
   LinearProgress,
+  Rating,
   Stack,
   Typography,
 } from "@mui/material";
@@ -32,6 +33,7 @@ import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import ContactHostForm from "../components/ContactHostForm";
+import ReviewForm from "../components/ReviewForm";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import { PRICING_PERIODS } from "../constants/appEnums";
@@ -45,6 +47,7 @@ import { getPageListings } from "../data/listingCatalog";
 import { APP_ROUTES } from "../routes/appRoutes";
 import { normalizeSavedIds } from "../utils/listingUtils";
 import { getAvailablePricingOptions, getPricingOptionByPeriod } from "../utils/pricingUtils";
+import { getEligibleReviewRequest, getReviewSummary } from "../utils/reviewUtils";
 import {
   getStoredCurrentUser,
   readSavedListingIds,
@@ -147,6 +150,29 @@ function ListingDetailsPage({
     selectedRatePeriod || defaultRatePeriod
   );
 
+  const listingReviews = useMemo(() => {
+    return storetApp?.reviewsByListingId?.[routeListingId] || [];
+  }, [routeListingId, storetApp?.reviewsByListingId]);
+
+  const eligibleReviewRequest = useMemo(() => {
+    return getEligibleReviewRequest({
+      listingId: routeListingId,
+      bookingRequests: activeBookingRequests,
+      reviews: listingReviews,
+      currentUser: activeUser,
+    });
+  }, [activeBookingRequests, activeUser, listingReviews, routeListingId]);
+
+  useEffect(() => {
+    if (!routeListingId || !storetApp?.actions?.loadListingReviews) {
+      return;
+    }
+
+    storetApp.actions.loadListingReviews(routeListingId);
+    // The context action object is recreated as state changes, so listing id is the only trigger we want here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routeListingId]);
+
   function handleSaveClick() {
     if (!listing) return;
 
@@ -185,6 +211,26 @@ function ListingDetailsPage({
     }
 
     return { ok: true };
+  }
+
+  async function handleSubmitReview(_, reviewData) {
+    if (!listing || !eligibleReviewRequest) {
+      return {
+        ok: false,
+        error: "A completed booking is required before leaving a review.",
+      };
+    }
+
+    const submitReviewAction = storetApp?.actions?.submitReview;
+
+    if (!submitReviewAction) {
+      return {
+        ok: false,
+        error: "Reviews are not available yet.",
+      };
+    }
+
+    return submitReviewAction(listing, eligibleReviewRequest, reviewData);
   }
 
   async function handleBookingAction() {
@@ -335,6 +381,19 @@ function ListingDetailsPage({
     listing.listingType === "Commercial"
       ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.74))"
       : "linear-gradient(135deg, rgba(37, 99, 235, 0.92), rgba(20, 184, 166, 0.78))";
+  const reviewSummary = getReviewSummary(listingReviews, listing);
+  const displayedRating = Number.isFinite(reviewSummary.averageRating)
+    ? reviewSummary.averageRating
+    : 0;
+  const displayedReviewCount = Number.isFinite(reviewSummary.reviewCount)
+    ? reviewSummary.reviewCount
+    : 0;
+  const hasCompletedBookingForReview = activeBookingRequests.some(
+    (request) =>
+      String(request.listingId) === String(listing.id) &&
+      String(request.renterId || request.requesterId || "") === String(activeUser?.id || "") &&
+      request.status === BOOKING_STATUSES.COMPLETED
+  );
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
@@ -418,7 +477,7 @@ function ListingDetailsPage({
                   <Stack direction="row" spacing={0.75} alignItems="center">
                     <StarRoundedIcon fontSize="small" sx={{ color: "warning.main" }} />
                     <Typography>
-                      {listing.rating.toFixed(1)} · {listing.reviews} reviews
+                      {displayedRating.toFixed(1)} · {displayedReviewCount} reviews
                     </Typography>
                   </Stack>
                 </Stack>
@@ -663,13 +722,13 @@ function ListingDetailsPage({
                       >
                         <Typography color="text.secondary">Host rating</Typography>
                         <Typography fontWeight={800}>
-                          {listing.rating.toFixed(1)} / 5
+                          {displayedRating.toFixed(1)} / 5
                         </Typography>
                       </Stack>
 
                       <LinearProgress
                         variant="determinate"
-                        value={Math.min((listing.rating / 5) * 100, 100)}
+                        value={Math.min((displayedRating / 5) * 100, 100)}
                         sx={{ height: 8, borderRadius: 999 }}
                       />
                     </Stack>
@@ -685,6 +744,103 @@ function ListingDetailsPage({
                     currentUser={activeUser}
                     onSubmitMessage={handleSubmitHostMessage}
                   />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                  <Stack spacing={3}>
+                    <Stack
+                      direction={{ xs: "column", sm: "row" }}
+                      spacing={2}
+                      justifyContent="space-between"
+                      alignItems={{ xs: "flex-start", sm: "center" }}
+                    >
+                      <Box>
+                        <Typography variant="h5">Reviews</Typography>
+                        <Typography color="text.secondary">
+                          Verified renter feedback for this storage space.
+                        </Typography>
+                      </Box>
+
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        <Rating value={displayedRating} precision={0.1} readOnly />
+                        <Typography fontWeight={800}>
+                          {displayedRating.toFixed(1)} · {displayedReviewCount}
+                        </Typography>
+                      </Stack>
+                    </Stack>
+
+                    {storetApp?.reviewsError && (
+                      <Alert severity="error">{storetApp.reviewsError}</Alert>
+                    )}
+
+                    {eligibleReviewRequest ? (
+                      <ReviewForm
+                        eligibleRequest={eligibleReviewRequest}
+                        onSubmitReview={handleSubmitReview}
+                      />
+                    ) : activeUser?.isAuthenticated && hasCompletedBookingForReview ? (
+                      <Alert severity="success" variant="outlined">
+                        You have already reviewed this completed booking. Thanks for helping future renters.
+                      </Alert>
+                    ) : activeUser?.isAuthenticated ? (
+                      <Alert severity="info" variant="outlined">
+                        Complete a booking for this listing before leaving a verified review.
+                      </Alert>
+                    ) : (
+                      <Alert severity="info" variant="outlined">
+                        Sign in and complete a booking to leave a verified review.
+                      </Alert>
+                    )}
+
+                    <Divider />
+
+                    {storetApp?.reviewsAreLoading ? (
+                      <LinearProgress />
+                    ) : listingReviews.length > 0 ? (
+                      <Stack spacing={2}>
+                        {listingReviews.map((review) => (
+                          <Card key={review.id} variant="outlined" sx={{ boxShadow: "none" }}>
+                            <CardContent sx={{ p: 2.5 }}>
+                              <Stack spacing={1.25}>
+                                <Stack
+                                  direction={{ xs: "column", sm: "row" }}
+                                  spacing={1}
+                                  justifyContent="space-between"
+                                  alignItems={{ xs: "flex-start", sm: "center" }}
+                                >
+                                  <Stack direction="row" spacing={1.25} alignItems="center">
+                                    <Avatar sx={{ bgcolor: "primary.light", color: "primary.dark" }}>
+                                      {(review.reviewerName || "S").charAt(0).toUpperCase()}
+                                    </Avatar>
+                                    <Box>
+                                      <Typography fontWeight={800}>
+                                        {review.reviewerName || "Storet renter"}
+                                      </Typography>
+                                      <Typography variant="body2" color="text.secondary">
+                                        {formatReviewDate(review.createdAt)}
+                                      </Typography>
+                                    </Box>
+                                  </Stack>
+
+                                  <Rating value={Number(review.rating || 0)} readOnly size="small" />
+                                </Stack>
+
+                                <Typography color="text.secondary" lineHeight={1.7}>
+                                  {review.comment}
+                                </Typography>
+                              </Stack>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </Stack>
+                    ) : (
+                      <Alert severity="info" variant="outlined">
+                        No reviews yet. Completed renters will be able to leave verified feedback here.
+                      </Alert>
+                    )}
+                  </Stack>
                 </CardContent>
               </Card>
             </Stack>
@@ -825,6 +981,22 @@ function ListingDetailsPage({
       </Container>
     </Box>
   );
+}
+
+function formatReviewDate(value) {
+  if (!value) {
+    return "Recently";
+  }
+
+  try {
+    return new Intl.DateTimeFormat("en", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(new Date(value));
+  } catch (error) {
+    return "Recently";
+  }
 }
 
 function DetailItem({ icon, label, value }) {

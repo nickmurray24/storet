@@ -349,6 +349,35 @@ export function mapAppPaymentToDatabasePayment(payment = {}, options = {}) {
   });
 }
 
+
+export function mapDatabaseReviewToAppReview(row = {}) {
+  return {
+    id: row.id,
+    listingId: row.listing_id,
+    bookingRequestId: row.booking_request_id,
+    reviewerId: row.reviewer_id,
+    reviewerName: row.reviewer_display_name || "Storet renter",
+    hostId: row.host_id,
+    rating: integerOrNull(row.rating),
+    comment: row.comment || "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+export function mapAppReviewToDatabaseReview(review = {}, options = {}) {
+  return omitUndefinedFields({
+    listing_id: review.listingId,
+    booking_request_id: review.bookingRequestId || review.requestId,
+    reviewer_id: options.reviewerId || review.reviewerId,
+    reviewer_display_name: review.reviewerName,
+    host_id: review.hostId,
+    rating: integerOrNull(review.rating),
+    comment: review.comment || review.reviewText || "",
+    updated_at: new Date().toISOString(),
+  });
+}
+
 export function mapDatabaseHostMessageToAppMessage(row = {}) {
   return {
     id: row.id,

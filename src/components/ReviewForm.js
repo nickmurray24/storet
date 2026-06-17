@@ -1,15 +1,28 @@
-import { useState } from 'react';
+import { useState } from "react";
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Rating,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
 
 function ReviewForm({ eligibleRequest, onSubmitReview }) {
   const [formData, setFormData] = useState({
-    rating: '5',
-    reviewText: '',
+    rating: 5,
+    reviewText: "",
   });
   const [errors, setErrors] = useState({});
-  const [submitError, setSubmitError] = useState('');
+  const [submitError, setSubmitError] = useState("");
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleChange(event) {
+  function handleTextChange(event) {
     const { name, value } = event.target;
 
     setFormData((prev) => ({
@@ -19,28 +32,47 @@ function ReviewForm({ eligibleRequest, onSubmitReview }) {
 
     setErrors((prev) => ({
       ...prev,
-      [name]: '',
+      [name]: "",
     }));
 
-    setSubmitError('');
+    setSubmitError("");
+  }
+
+  function handleRatingChange(_, value) {
+    setFormData((prev) => ({
+      ...prev,
+      rating: value || 0,
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      rating: "",
+    }));
+
+    setSubmitError("");
   }
 
   function validateForm() {
     const nextErrors = {};
 
     if (!formData.rating) {
-      nextErrors.rating = 'Please choose a rating.';
+      nextErrors.rating = "Please choose a rating.";
     }
 
     if (!formData.reviewText.trim()) {
-      nextErrors.reviewText = 'Please write a short review.';
+      nextErrors.reviewText = "Please write a short review.";
     }
 
     return nextErrors;
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
+
+    if (!eligibleRequest?.id) {
+      setSubmitError("A completed booking is required before leaving a review.");
+      return;
+    }
 
     const nextErrors = validateForm();
 
@@ -49,10 +81,12 @@ function ReviewForm({ eligibleRequest, onSubmitReview }) {
       return;
     }
 
-    const result = onSubmitReview(eligibleRequest.id, formData);
+    setIsSubmitting(true);
+    const result = await onSubmitReview(eligibleRequest.id, formData);
+    setIsSubmitting(false);
 
     if (result?.ok === false) {
-      setSubmitError(result.error || 'We could not submit your review.');
+      setSubmitError(result.error || "We could not submit your review.");
       return;
     }
 
@@ -61,59 +95,72 @@ function ReviewForm({ eligibleRequest, onSubmitReview }) {
 
   if (isSubmitted) {
     return (
-      <div className="review-success-card">
-        <p className="booking-success-tag">Review Submitted</p>
-        <h3>Thanks for sharing your experience.</h3>
-        <p>Your review is now part of this listing’s rating summary.</p>
-      </div>
+      <Alert severity="success" variant="outlined">
+        Thanks for sharing your experience. Your verified review is now part of this listing.
+      </Alert>
     );
   }
 
   return (
-    <form className="review-form" onSubmit={handleSubmit}>
-      <h3>Leave a Review</h3>
-      <p className="results-subtext">
-        You completed a booking for this listing, so you can leave one verified review.
-      </p>
+    <Card variant="outlined" sx={{ boxShadow: "none" }}>
+      <CardContent sx={{ p: { xs: 2.5, md: 3 } }}>
+        <Box component="form" onSubmit={handleSubmit}>
+          <Stack spacing={2.25}>
+            <Stack direction="row" spacing={1.25} alignItems="center">
+              <RateReviewRoundedIcon color="primary" />
+              <Box>
+                <Typography variant="h6">Leave a verified review</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  You completed this booking, so you can leave one review for this space.
+                </Typography>
+              </Box>
+            </Stack>
 
-      <div className="filter-group">
-        <label htmlFor="rating">Rating</label>
-        <select
-          id="rating"
-          name="rating"
-          value={formData.rating}
-          onChange={handleChange}
-        >
-          <option value="5">5 - Excellent</option>
-          <option value="4">4 - Good</option>
-          <option value="3">3 - Okay</option>
-          <option value="2">2 - Poor</option>
-          <option value="1">1 - Very poor</option>
-        </select>
-        {errors.rating && <span className="form-error">{errors.rating}</span>}
-      </div>
+            <Stack spacing={0.75}>
+              <Typography fontWeight={800}>Rating</Typography>
+              <Rating
+                name="rating"
+                value={Number(formData.rating)}
+                onChange={handleRatingChange}
+                size="large"
+              />
+              {errors.rating && (
+                <Typography variant="body2" color="error">
+                  {errors.rating}
+                </Typography>
+              )}
+            </Stack>
 
-      <div className="filter-group">
-        <label htmlFor="reviewText">Your Review</label>
-        <textarea
-          id="reviewText"
-          name="reviewText"
-          rows="4"
-          value={formData.reviewText}
-          onChange={handleChange}
-          placeholder="How was the space, communication, access, and overall experience?"
-        />
-        {errors.reviewText && (
-          <span className="form-error">{errors.reviewText}</span>
-        )}
-      </div>
+            <TextField
+              id="reviewText"
+              name="reviewText"
+              label="Your review"
+              value={formData.reviewText}
+              onChange={handleTextChange}
+              placeholder="How was the space, communication, access, and overall experience?"
+              multiline
+              minRows={4}
+              fullWidth
+              error={Boolean(errors.reviewText)}
+              helperText={errors.reviewText || "Keep it helpful for future renters."}
+            />
 
-      {submitError && <div className="form-submit-error">{submitError}</div>}
+            {submitError && <Alert severity="error">{submitError}</Alert>}
 
-      <button type="submit" className="primary-button">
-        Submit Review
-      </button>
-    </form>
+            <Button
+              type="submit"
+              variant="contained"
+              size="large"
+              disabled={isSubmitting}
+              startIcon={<RateReviewRoundedIcon />}
+              sx={{ alignSelf: "flex-start" }}
+            >
+              {isSubmitting ? "Submitting..." : "Submit review"}
+            </Button>
+          </Stack>
+        </Box>
+      </CardContent>
+    </Card>
   );
 }
 
