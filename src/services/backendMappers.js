@@ -417,3 +417,48 @@ export function mapAppHostMessageToDatabaseMessage(message = {}, options = {}) {
     updated_at: new Date().toISOString(),
   });
 }
+
+export function mapDatabaseNotificationToAppNotification(row = {}) {
+  return {
+    id: row.id,
+    recipientId: row.recipient_id,
+    actorId: row.actor_id || "",
+    type: row.type || "system",
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    actionLabel: row.action_label,
+    actionTo: row.action_to,
+    listingId: row.listing_id || "",
+    bookingRequestId: row.booking_request_id || "",
+    hostMessageId: row.host_message_id || "",
+    paymentRecordId: row.payment_record_id || "",
+    reviewId: row.review_id || "",
+    metadata: row.metadata || {},
+    readAt: row.read_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    time: row.created_at,
+  };
+}
+
+export function mapAppNotificationToDatabaseNotification(notification = {}, options = {}) {
+  return omitUndefinedFields({
+    recipient_id: options.recipientId || notification.recipientId,
+    actor_id: options.actorId || notification.actorId,
+    type: notification.type,
+    title: notification.title,
+    description: notification.description,
+    status: notification.status,
+    action_label: notification.actionLabel,
+    action_to: notification.actionTo,
+    listing_id: notification.listingId,
+    booking_request_id: notification.bookingRequestId || notification.requestId,
+    host_message_id: notification.hostMessageId,
+    payment_record_id: notification.paymentRecordId,
+    review_id: notification.reviewId,
+    metadata: notification.metadata || {},
+    read_at: notification.readAt,
+    updated_at: new Date().toISOString(),
+  });
+}

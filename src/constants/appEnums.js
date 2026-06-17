@@ -56,3 +56,9 @@ export const HOST_MESSAGE_STATUSES = {
   READ: "Read",
   ARCHIVED: "Archived",
 };
+
+
+export const NOTIFICATION_STATUSES = {
+  UNREAD: "Unread",
+  READ: "Read",
+};

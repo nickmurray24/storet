@@ -3,11 +3,13 @@ import { Link as RouterLink } from "react-router-dom";
 import {
   Alert,
   Avatar,
+  Badge,
   Box,
   Button,
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Container,
   Divider,
   Stack,
@@ -18,7 +20,6 @@ import {
 
 import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
-import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
 import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
@@ -26,24 +27,21 @@ import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
 import MailRoundedIcon from "@mui/icons-material/MailRounded";
 import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
+import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
+import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
+import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
-import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
-import { ACTIVITY_FEED_KEY } from "../constants/storageKeys";
-import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
+import { NOTIFICATION_STATUSES } from "../constants/appEnums";
+import { APP_ROUTES } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
-import { buildBookingActivity } from "../utils/bookingUtils";
-import { buildHostMessageActivity } from "../utils/hostMessageUtils";
-import { normalizeListingList, normalizeSavedIds } from "../utils/listingUtils";
 import {
-  getStoredCurrentUser,
-  readSavedListingIds,
-  readUserListings,
-  safeReadJson,
-} from "../utils/storage";
+  NOTIFICATION_TYPES,
+  normalizeNotificationList,
+} from "../utils/notificationUtils";
 
-function formatActivityTime(value) {
+function formatNotificationTime(value) {
   if (!value) {
     return "Recently";
   }
@@ -68,214 +66,88 @@ function formatActivityTime(value) {
   return date.toLocaleDateString();
 }
 
-function getActivityIcon(type) {
-  if (type === "booking") return <EventAvailableRoundedIcon />;
-  if (type === "saved") return <FavoriteRoundedIcon />;
-  if (type === "listing") return <HomeWorkRoundedIcon />;
-  if (type === "waitlist") return <ScheduleRoundedIcon />;
-  if (type === "message") return <MailRoundedIcon />;
-  if (type === "system") return <CheckCircleRoundedIcon />;
+function getNotificationIcon(type) {
+  if (type === NOTIFICATION_TYPES.BOOKING) return <EventAvailableRoundedIcon />;
+  if (type === NOTIFICATION_TYPES.WAITLIST) return <ScheduleRoundedIcon />;
+  if (type === NOTIFICATION_TYPES.MESSAGE) return <MailRoundedIcon />;
+  if (type === NOTIFICATION_TYPES.PAYMENT) return <PaymentsRoundedIcon />;
+  if (type === NOTIFICATION_TYPES.REVIEW) return <RateReviewRoundedIcon />;
+  if (type === NOTIFICATION_TYPES.LISTING) return <HomeWorkRoundedIcon />;
+  if (type === NOTIFICATION_TYPES.SAVED) return <FavoriteRoundedIcon />;
   return <NotificationsRoundedIcon />;
 }
 
-function getActivityColor(type) {
-  if (type === "booking") return "success";
-  if (type === "saved") return "primary";
-  if (type === "listing") return "secondary";
-  if (type === "waitlist") return "warning";
-  if (type === "message") return "info";
-  if (type === "system") return "primary";
+function getNotificationColor(type) {
+  if (type === NOTIFICATION_TYPES.BOOKING) return "success";
+  if (type === NOTIFICATION_TYPES.WAITLIST) return "warning";
+  if (type === NOTIFICATION_TYPES.MESSAGE) return "info";
+  if (type === NOTIFICATION_TYPES.PAYMENT) return "success";
+  if (type === NOTIFICATION_TYPES.REVIEW) return "secondary";
+  if (type === NOTIFICATION_TYPES.LISTING) return "primary";
+  if (type === NOTIFICATION_TYPES.SAVED) return "primary";
   return "primary";
 }
 
-function buildFallbackActivities(activeUser, hostListings, savedIds) {
-  const now = new Date();
-
-  const baseActivities = [
-    {
-      id: "fallback-system-1",
-      type: "system",
-      title: "Welcome to your Storet activity feed",
-      description:
-        "Booking updates, saved spaces, listing activity, and waitlist changes will appear here.",
-      time: new Date(now.getTime() - 1000 * 60 * 12).toISOString(),
-      status: "New",
-      actionLabel: "Explore spaces",
-      actionTo: APP_ROUTES.explore,
-    },
-    {
-      id: "fallback-booking-1",
-      type: "booking",
-      title: "Reservation flow is ready for testing",
-      description:
-        "Instant booking and request-based listings can now show renter activity in this feed.",
-      time: new Date(now.getTime() - 1000 * 60 * 45).toISOString(),
-      status: "Demo",
-      actionLabel: "Browse listings",
-      actionTo: APP_ROUTES.explore,
-    },
-    {
-      id: "fallback-waitlist-1",
-      type: "waitlist",
-      title: "Waitlist updates will be tracked here",
-      description:
-        "When a renter joins a waitlist, this page can later show host and renter updates.",
-      time: new Date(now.getTime() - 1000 * 60 * 60 * 4).toISOString(),
-      status: "Planned",
-      actionLabel: "View listings",
-      actionTo: APP_ROUTES.explore,
-    },
-  ];
-
-  const listingActivities = hostListings.slice(0, 3).map((listing) => ({
-    id: `listing-${listing.id}`,
-    type: "listing",
-    title: `${listing.title} is active`,
-    description: `${listing.location} · ${listing.sqft} sq ft · ${listing.pricingSummary || listing.priceDisplay}`,
-    time: listing.createdAt,
-    status: listing.instantBook
-      ? "Instant book"
-      : listing.waitlist
-      ? "Waitlist"
-      : "Request",
-    actionLabel: "View listing",
-    actionTo: buildListingPath(listing.id),
-  }));
-
-  const savedActivity =
-    savedIds.length > 0
-      ? [
-          {
-            id: "saved-summary",
-            type: "saved",
-            title: `${savedIds.length} saved ${
-              savedIds.length === 1 ? "space" : "spaces"
-            }`,
-            description:
-              "Your saved spaces are ready to compare from your profile page.",
-            time: new Date(now.getTime() - 1000 * 60 * 90).toISOString(),
-            status: "Saved",
-            actionLabel: "View profile",
-            actionTo: APP_ROUTES.profile,
-          },
-        ]
-      : [];
-
-  return [...listingActivities, ...savedActivity, ...baseActivities].map(
-    (activity) => ({
-      ...activity,
-      userName: activeUser?.fullName || "Demo User",
-    })
-  );
-}
-
-function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
+function NotificationsPage() {
   const storetApp = useOptionalStoretApp();
   const [filterType, setFilterType] = useState("all");
 
-  const storedUser = getStoredCurrentUser() || {
-    fullName: "Demo User",
-    email: "demo@storet.com",
-    role: "Renter",
-    isAuthenticated: true,
-  };
+  const activeUser = storetApp?.currentUser;
+  const notifications = useMemo(
+    () => normalizeNotificationList(storetApp?.notifications || []),
+    [storetApp?.notifications]
+  );
+  const notificationsAreLoading = Boolean(storetApp?.notificationsAreLoading);
+  const notificationsError = storetApp?.notificationsError || "";
+  const unreadCount = storetApp?.unreadNotificationsCount || 0;
 
-  const activeUser = currentUser || storetApp?.currentUser || storedUser;
-
-  const hostListings = useMemo(() => {
-    if (Array.isArray(storetApp?.userListings)) {
-      return normalizeListingList(storetApp.userListings);
-    }
-
-    return normalizeListingList(readUserListings());
-  }, [storetApp?.userListings]);
-
-  const savedIds = useMemo(() => {
-    return normalizeSavedIds(
-      storetApp?.savedListingIds ?? readSavedListingIds()
-    );
-  }, [storetApp?.savedListingIds]);
-
-  const activities = useMemo(() => {
-    const storedActivities = safeReadJson(ACTIVITY_FEED_KEY, []);
-    const safeStoredActivities = Array.isArray(storedActivities)
-      ? storedActivities
-      : [];
-
-    const generatedActivities = buildFallbackActivities(
-      activeUser,
-      hostListings,
-      savedIds
-    );
-
-    const hostListingIds = new Set(hostListings.map((listing) => String(listing.id)));
-    const activeEmail = activeUser?.email?.toLowerCase?.() || "";
-
-    const activeHostMessages = hostMessages ?? storetApp?.hostMessages ?? [];
-
-    const relevantHostMessages = (Array.isArray(activeHostMessages) ? activeHostMessages : []).filter((message) => {
-      const sentByActiveUser = activeEmail && message.senderEmail?.toLowerCase?.() === activeEmail;
-      const sentToActiveHostListing = hostListingIds.has(String(message.listingId));
-
-      return sentByActiveUser || sentToActiveHostListing;
-    });
-
-    const activeBookingRequests = bookingRequests ?? storetApp?.bookingRequests ?? [];
-    const bookingActivities = activeBookingRequests.map(buildBookingActivity);
-    const messageActivities = relevantHostMessages.map(buildHostMessageActivity);
-
-    const combinedActivities = [
-      ...safeStoredActivities,
-      ...messageActivities,
-      ...bookingActivities,
-      ...generatedActivities,
-    ];
-
-    const seenIds = new Set();
-
-    return combinedActivities
-      .filter((activity) => {
-        if (!activity?.id || seenIds.has(activity.id)) {
-          return false;
-        }
-
-        seenIds.add(activity.id);
-        return true;
-      })
-      .sort((a, b) => {
-        const aTime = new Date(a.time || 0).getTime();
-        const bTime = new Date(b.time || 0).getTime();
-
-        return bTime - aTime;
-      });
-  }, [activeUser, bookingRequests, hostListings, hostMessages, savedIds, storetApp?.bookingRequests, storetApp?.hostMessages]);
-
-  const filteredActivities = useMemo(() => {
+  const filteredNotifications = useMemo(() => {
     if (filterType === "all") {
-      return activities;
+      return notifications;
     }
 
-    return activities.filter((activity) => activity.type === filterType);
-  }, [activities, filterType]);
+    if (filterType === "unread") {
+      return notifications.filter(
+        (notification) => notification.status !== NOTIFICATION_STATUSES.READ
+      );
+    }
+
+    return notifications.filter((notification) => notification.type === filterType);
+  }, [filterType, notifications]);
 
   const stats = useMemo(() => {
     return {
-      total: activities.length,
-      bookings: activities.filter((activity) => activity.type === "booking")
-        .length,
-      listings: activities.filter((activity) => activity.type === "listing")
-        .length,
-      waitlist: activities.filter((activity) => activity.type === "waitlist")
-        .length,
-      messages: activities.filter((activity) => activity.type === "message")
-        .length,
+      total: notifications.length,
+      unread: unreadCount,
+      bookings: notifications.filter(
+        (notification) =>
+          notification.type === NOTIFICATION_TYPES.BOOKING ||
+          notification.type === NOTIFICATION_TYPES.WAITLIST
+      ).length,
+      messages: notifications.filter(
+        (notification) => notification.type === NOTIFICATION_TYPES.MESSAGE
+      ).length,
+      payments: notifications.filter(
+        (notification) => notification.type === NOTIFICATION_TYPES.PAYMENT
+      ).length,
+      reviews: notifications.filter(
+        (notification) => notification.type === NOTIFICATION_TYPES.REVIEW
+      ).length,
     };
-  }, [activities]);
+  }, [notifications, unreadCount]);
 
   function handleFilterChange(event, nextValue) {
     if (nextValue) {
       setFilterType(nextValue);
     }
+  }
+
+  async function handleRefresh() {
+    await storetApp?.actions?.refreshCurrentUserNotificationData?.();
+  }
+
+  async function handleMarkAllRead() {
+    await storetApp?.actions?.markAllNotificationsRead?.();
   }
 
   return (
@@ -297,7 +169,7 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
             <Stack spacing={1.5}>
               <Chip
                 icon={<NotificationsRoundedIcon />}
-                label="Activity center"
+                label="Backend notifications"
                 color="primary"
                 variant="outlined"
                 sx={{ width: "fit-content", fontWeight: 700 }}
@@ -316,32 +188,31 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
 
                 <Typography
                   color="text.secondary"
-                  sx={{ mt: 1, maxWidth: 680, fontSize: "1.05rem" }}
+                  sx={{ mt: 1, maxWidth: 720, fontSize: "1.05rem" }}
                 >
-                  Track reservation updates, saved spaces, listing activity, and
-                  waitlist changes in one clean feed.
+                  Storet now saves notifications in Supabase for booking updates,
+                  host messages, payments, listing activity, and reviews.
                 </Typography>
               </Box>
             </Stack>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
               <Button
-                component={RouterLink}
-                to={APP_ROUTES.explore}
+                onClick={handleRefresh}
                 variant="outlined"
-                startIcon={<WarehouseRoundedIcon />}
+                startIcon={<RefreshRoundedIcon />}
                 sx={{ bgcolor: "background.paper" }}
               >
-                Explore
+                Refresh
               </Button>
 
               <Button
-                component={RouterLink}
-                to={APP_ROUTES.createListing}
+                onClick={handleMarkAllRead}
                 variant="contained"
-                startIcon={<AddHomeWorkRoundedIcon />}
+                disabled={unreadCount === 0}
+                startIcon={<CheckCircleRoundedIcon />}
               >
-                List space
+                Mark all read
               </Button>
             </Stack>
           </Stack>
@@ -365,26 +236,20 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
               color="primary"
             />
             <StatCard
+              icon={<Badge color="error" badgeContent={stats.unread}><NotificationsRoundedIcon /></Badge>}
+              label="Unread"
+              value={stats.unread}
+              color="error"
+            />
+            <StatCard
               icon={<EventAvailableRoundedIcon />}
               label="Booking updates"
               value={stats.bookings}
               color="success"
             />
             <StatCard
-              icon={<HomeWorkRoundedIcon />}
-              label="Listing updates"
-              value={stats.listings}
-              color="secondary"
-            />
-            <StatCard
-              icon={<ScheduleRoundedIcon />}
-              label="Waitlist updates"
-              value={stats.waitlist}
-              color="warning"
-            />
-            <StatCard
               icon={<MailRoundedIcon />}
-              label="Message updates"
+              label="Messages"
               value={stats.messages}
               color="info"
             />
@@ -405,10 +270,10 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
                     justifyContent="space-between"
                   >
                     <Box>
-                      <Typography variant="h5">Recent activity</Typography>
+                      <Typography variant="h5">Recent notifications</Typography>
                       <Typography color="text.secondary">
-                        Showing {filteredActivities.length} update
-                        {filteredActivities.length === 1 ? "" : "s"}.
+                        Showing {filteredNotifications.length} update
+                        {filteredNotifications.length === 1 ? "" : "s"}.
                       </Typography>
                     </Box>
 
@@ -426,25 +291,33 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
                       }}
                     >
                       <ToggleButton value="all">All</ToggleButton>
+                      <ToggleButton value="unread">Unread</ToggleButton>
                       <ToggleButton value="booking">Bookings</ToggleButton>
-                      <ToggleButton value="listing">Listings</ToggleButton>
-                      <ToggleButton value="saved">Saved</ToggleButton>
-                      <ToggleButton value="waitlist">Waitlist</ToggleButton>
                       <ToggleButton value="message">Messages</ToggleButton>
+                      <ToggleButton value="payment">Payments</ToggleButton>
+                      <ToggleButton value="review">Reviews</ToggleButton>
                     </ToggleButtonGroup>
                   </Stack>
 
                   <Divider />
 
-                  {filteredActivities.length === 0 ? (
-                    <EmptyActivityState />
+                  {notificationsError && <Alert severity="warning">{notificationsError}</Alert>}
+
+                  {notificationsAreLoading ? (
+                    <Stack spacing={2} alignItems="center" sx={{ py: 5 }}>
+                      <CircularProgress />
+                      <Typography color="text.secondary">Loading notifications…</Typography>
+                    </Stack>
+                  ) : filteredNotifications.length === 0 ? (
+                    <EmptyNotificationState />
                   ) : (
                     <Stack spacing={0}>
-                      {filteredActivities.map((activity, index) => (
-                        <ActivityTimelineItem
-                          key={activity.id}
-                          activity={activity}
-                          isLast={index === filteredActivities.length - 1}
+                      {filteredNotifications.map((notification, index) => (
+                        <NotificationTimelineItem
+                          key={notification.id}
+                          notification={notification}
+                          isLast={index === filteredNotifications.length - 1}
+                          onMarkRead={storetApp?.actions?.markNotificationRead}
                         />
                       ))}
                     </Stack>
@@ -466,10 +339,10 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
 
                       <Box>
                         <Typography fontWeight={900}>
-                          {activeUser?.fullName || "Demo User"}
+                          {activeUser?.fullName || "Storet User"}
                         </Typography>
                         <Typography color="text.secondary">
-                          {activeUser?.role || "Renter"} activity
+                          {activeUser?.role || "Renter"} notifications
                         </Typography>
                       </Box>
                     </Stack>
@@ -477,8 +350,8 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
                     <Divider />
 
                     <Alert severity="info">
-                      This activity center now includes local booking, waitlist,
-                      saved-space, listing, and host message updates.
+                      New notifications are generated by Supabase when booking,
+                      message, payment, and review records change.
                     </Alert>
                   </Stack>
                 </CardContent>
@@ -525,36 +398,30 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
               <Card>
                 <CardContent sx={{ p: 3 }}>
                   <Stack spacing={2}>
-                    <Typography variant="h5">What appears here?</Typography>
+                    <Typography variant="h5">Notification types</Typography>
 
                     <InfoRow
-                      icon={<BoltRoundedIcon />}
-                      title="Instant bookings"
-                      description="Reservation confirmations and booking changes."
-                    />
-
-                    <InfoRow
-                      icon={<ScheduleRoundedIcon />}
-                      title="Waitlists"
-                      description="Updates when renters join or leave a waitlist."
-                    />
-
-                    <InfoRow
-                      icon={<FavoriteRoundedIcon />}
-                      title="Saved spaces"
-                      description="Saved listing and comparison activity."
+                      icon={<EventAvailableRoundedIcon />}
+                      title="Bookings"
+                      description="New requests, approvals, confirmations, cancellations, and completed stays."
                     />
 
                     <InfoRow
                       icon={<MailRoundedIcon />}
                       title="Host messages"
-                      description="Questions sent to hosts and inbox updates."
+                      description="Questions renters send to hosts about storage spaces."
                     />
 
                     <InfoRow
-                      icon={<HomeWorkRoundedIcon />}
-                      title="Host activity"
-                      description="New listings and host-side storage updates."
+                      icon={<PaymentsRoundedIcon />}
+                      title="Payments"
+                      description="Stripe payment confirmations and receipt updates."
+                    />
+
+                    <InfoRow
+                      icon={<RateReviewRoundedIcon />}
+                      title="Reviews"
+                      description="Verified reviews left after completed bookings."
                     />
                   </Stack>
                 </CardContent>
@@ -567,8 +434,13 @@ function NotificationsPage({ currentUser, bookingRequests, hostMessages }) {
   );
 }
 
-function ActivityTimelineItem({ activity, isLast }) {
-  const color = getActivityColor(activity.type);
+function NotificationTimelineItem({ notification, isLast, onMarkRead }) {
+  const color = getNotificationColor(notification.type);
+  const isUnread = notification.status !== NOTIFICATION_STATUSES.READ;
+
+  async function handleMarkRead() {
+    await onMarkRead?.(notification.id);
+  }
 
   return (
     <Box sx={{ display: "flex", gap: 2 }}>
@@ -581,7 +453,7 @@ function ActivityTimelineItem({ activity, isLast }) {
             height: 42,
           }}
         >
-          {getActivityIcon(activity.type)}
+          {getNotificationIcon(notification.type)}
         </Avatar>
 
         {!isLast && (
@@ -597,7 +469,14 @@ function ActivityTimelineItem({ activity, isLast }) {
       </Box>
 
       <Box sx={{ flex: 1, pb: isLast ? 0 : 3 }}>
-        <Card variant="outlined" sx={{ boxShadow: "none" }}>
+        <Card
+          variant="outlined"
+          sx={{
+            boxShadow: "none",
+            bgcolor: isUnread ? "action.hover" : "background.paper",
+            borderColor: isUnread ? "primary.light" : "divider",
+          }}
+        >
           <CardContent sx={{ p: 2.5 }}>
             <Stack spacing={1.5}>
               <Stack
@@ -606,39 +485,58 @@ function ActivityTimelineItem({ activity, isLast }) {
                 alignItems={{ xs: "flex-start", sm: "center" }}
                 justifyContent="space-between"
               >
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography fontWeight={900}>{activity.title}</Typography>
+                <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+                  <Typography fontWeight={900}>{notification.title}</Typography>
 
-                  {activity.status && (
-                    <Chip
-                      label={activity.status}
-                      size="small"
-                      color={color}
-                      variant="outlined"
-                      sx={{ fontWeight: 700 }}
-                    />
-                  )}
+                  <Chip
+                    label={isUnread ? "Unread" : "Read"}
+                    size="small"
+                    color={isUnread ? "primary" : "default"}
+                    variant={isUnread ? "filled" : "outlined"}
+                    sx={{ fontWeight: 700 }}
+                  />
+
+                  <Chip
+                    label={notification.type}
+                    size="small"
+                    color={color}
+                    variant="outlined"
+                    sx={{ fontWeight: 700, textTransform: "capitalize" }}
+                  />
                 </Stack>
 
                 <Typography variant="body2" color="text.secondary">
-                  {formatActivityTime(activity.time)}
+                  {formatNotificationTime(notification.createdAt || notification.time)}
                 </Typography>
               </Stack>
 
               <Typography color="text.secondary" lineHeight={1.7}>
-                {activity.description}
+                {notification.description}
               </Typography>
 
-              {activity.actionTo && activity.actionLabel && (
-                <Button
-                  component={RouterLink}
-                  to={activity.actionTo}
-                  endIcon={<ArrowForwardRoundedIcon />}
-                  sx={{ alignSelf: "flex-start" }}
-                >
-                  {activity.actionLabel}
-                </Button>
-              )}
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ xs: "stretch", sm: "center" }}>
+                {notification.actionTo && notification.actionLabel && (
+                  <Button
+                    component={RouterLink}
+                    to={notification.actionTo}
+                    endIcon={<ArrowForwardRoundedIcon />}
+                    sx={{ alignSelf: { xs: "stretch", sm: "flex-start" } }}
+                  >
+                    {notification.actionLabel}
+                  </Button>
+                )}
+
+                {isUnread && (
+                  <Button
+                    onClick={handleMarkRead}
+                    color="inherit"
+                    startIcon={<CheckCircleRoundedIcon />}
+                    sx={{ alignSelf: { xs: "stretch", sm: "flex-start" } }}
+                  >
+                    Mark read
+                  </Button>
+                )}
+              </Stack>
             </Stack>
           </CardContent>
         </Card>
@@ -695,7 +593,7 @@ function InfoRow({ icon, title, description }) {
   );
 }
 
-function EmptyActivityState() {
+function EmptyNotificationState() {
   return (
     <Box
       sx={{
@@ -712,11 +610,11 @@ function EmptyActivityState() {
           <NotificationsRoundedIcon />
         </Avatar>
 
-        <Typography variant="h6">No activity for this filter</Typography>
+        <Typography variant="h6">No notifications yet</Typography>
 
-        <Typography color="text.secondary" sx={{ maxWidth: 440 }}>
-          Try switching back to all activity, or continue using Storet to create
-          more booking, listing, and saved-space updates.
+        <Typography color="text.secondary" sx={{ maxWidth: 480 }}>
+          Booking requests, host messages, Stripe payments, and reviews will show up
+          here after the next backend events happen.
         </Typography>
 
         <Button

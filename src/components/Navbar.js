@@ -2,6 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   AppBar,
   Avatar,
+  Badge,
   Box,
   Button,
   Chip,
@@ -32,6 +33,7 @@ function Navbar({ currentUser, onLogout }) {
   const isLoggedIn = activeUser?.isAuthenticated;
   const userName = activeUser?.fullName || "Demo User";
   const userRole = activeUser?.role || "Renter";
+  const unreadNotificationsCount = storetApp?.unreadNotificationsCount || 0;
 
   const visibleNavItems = NAV_ITEMS.filter(
     (item) => !item.requiresAuth || isLoggedIn
@@ -124,7 +126,20 @@ function Navbar({ currentUser, onLogout }) {
                     px: 2,
                   }}
                 >
-                  {item.label}
+                  {item.to === APP_ROUTES.notifications && unreadNotificationsCount > 0 ? (
+                    <Badge
+                      color="error"
+                      badgeContent={unreadNotificationsCount}
+                      max={99}
+                      sx={{ "& .MuiBadge-badge": { right: -14 } }}
+                    >
+                      <Box component="span" sx={{ pr: 0.75 }}>
+                        {item.label}
+                      </Box>
+                    </Badge>
+                  ) : (
+                    item.label
+                  )}
                 </Button>
               );
             })}
