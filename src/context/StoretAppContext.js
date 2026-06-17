@@ -24,8 +24,10 @@ import { listingService } from "../services/listingService";
 import { listingImageService } from "../services/listingImageService";
 import { messageService } from "../services/messageService";
 import { paymentService } from "../services/paymentService";
+import { stripeCheckoutService } from "../services/stripeCheckoutService";
 import { storetDataService } from "../services/storetDataService";
 import { LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
+import { buildCheckoutPath } from "../routes/appRoutes";
 import { normalizeUserProfile } from "../models/storetModels";
 
 const StoretAppContext = createContext(null);
@@ -1095,6 +1097,51 @@ export function StoretAppProvider({ children }) {
     return { ok: true, message: savedMessage };
   }
 
+
+  async function startStripeCheckout(requestId) {
+    const request = allBookingRequests.find((item) => String(item.id) === String(requestId));
+
+    if (!request) {
+      return {
+        ok: false,
+        error: "We could not find that booking request.",
+      };
+    }
+
+    if (!currentUser?.isAuthenticated || !isBackendId(requestId)) {
+      return {
+        ok: false,
+        error: "Stripe checkout is only available for backend-backed bookings.",
+      };
+    }
+
+    setActivityError("");
+
+    const response = await stripeCheckoutService.createCheckoutSession({
+      requestId,
+      returnPath: buildCheckoutPath(requestId),
+    });
+
+    if (response.error || !response.data?.url) {
+      const message = getErrorMessage(
+        response.error || response.data?.error,
+        "We could not start Stripe Checkout yet."
+      );
+      setActivityError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    return {
+      ok: true,
+      url: response.data.url,
+      sessionId: response.data.sessionId,
+    };
+  }
+
   async function completeCheckout(requestId, paymentData = {}) {
     const request = allBookingRequests.find((item) => String(item.id) === String(requestId));
 
@@ -1244,6 +1291,7 @@ export function StoretAppProvider({ children }) {
       updateBookingLifecycle: updateBookingLifecycleById,
       submitHostMessage,
       updateHostMessageStatus: updateHostMessageStatusById,
+      startStripeCheckout,
       completeCheckout,
       refreshActiveListings,
       refreshCurrentUserListingData,
