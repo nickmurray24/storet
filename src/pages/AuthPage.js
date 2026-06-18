@@ -24,6 +24,7 @@ import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { APP_ROUTES, getSafeRedirectPath } from "../routes/appRoutes";
+import { USER_ROLES } from "../constants/appEnums";
 
 function AuthPage({ onLogin }) {
   const storetApp = useOptionalStoretApp();
@@ -35,7 +36,7 @@ function AuthPage({ onLogin }) {
   );
 
   const [authMode, setAuthMode] = useState("login");
-  const [role, setRole] = useState("Renter");
+  const [role, setRole] = useState(USER_ROLES.RENTER);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
@@ -422,11 +423,14 @@ function AuthPage({ onLogin }) {
                             },
                           }}
                         >
-                          <ToggleButton value="Renter" disabled={isSubmitting}>
+                          <ToggleButton value={USER_ROLES.RENTER} disabled={isSubmitting}>
                             Renter
                           </ToggleButton>
-                          <ToggleButton value="Host" disabled={isSubmitting}>
+                          <ToggleButton value={USER_ROLES.HOST} disabled={isSubmitting}>
                             Host
+                          </ToggleButton>
+                          <ToggleButton value={USER_ROLES.BOTH} disabled={isSubmitting}>
+                            Both
                           </ToggleButton>
                         </ToggleButtonGroup>
                       </Stack>

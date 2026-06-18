@@ -2,6 +2,7 @@ import { CURRENT_USER_KEY } from "../constants/storageKeys";
 import { normalizeUserProfile } from "../models/storetModels";
 import {
   getStoredCurrentUser,
+  readActiveMode,
   readBookingRequests,
   readHostMessages,
   readPaymentRecords,
@@ -9,6 +10,7 @@ import {
   readUserListings,
   safeRemoveItem,
   safeWriteJson,
+  writeActiveMode,
   writeBookingRequests,
   writeHostMessages,
   writePaymentRecords,
@@ -24,6 +26,7 @@ export function loadStoretState() {
     bookingRequests: readBookingRequests(),
     paymentRecords: readPaymentRecords(),
     hostMessages: readHostMessages(),
+    activeMode: readActiveMode(),
   };
 }
 
@@ -56,5 +59,9 @@ export const storetDataService = {
 
   saveHostMessages(hostMessages) {
     return writeHostMessages(hostMessages);
+  },
+
+  saveActiveMode(activeMode) {
+    return writeActiveMode(activeMode);
   },
 };

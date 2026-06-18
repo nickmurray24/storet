@@ -33,7 +33,7 @@ import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 
-import { NOTIFICATION_STATUSES } from "../constants/appEnums";
+import { APP_MODES, NOTIFICATION_STATUSES } from "../constants/appEnums";
 import { APP_ROUTES } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import {
@@ -100,6 +100,8 @@ function NotificationsPage() {
   const notificationsAreLoading = Boolean(storetApp?.notificationsAreLoading);
   const notificationsError = storetApp?.notificationsError || "";
   const unreadCount = storetApp?.unreadNotificationsCount || 0;
+  const activeMode = storetApp?.activeMode || APP_MODES.RENTER;
+  const isHostMode = activeMode === APP_MODES.HOST;
 
   const filteredNotifications = useMemo(() => {
     if (filterType === "all") {
@@ -372,25 +374,29 @@ function NotificationsPage() {
                       View profile
                     </Button>
 
-                    <Button
-                      component={RouterLink}
-                      to={APP_ROUTES.explore}
-                      variant="outlined"
-                      fullWidth
-                      startIcon={<Inventory2RoundedIcon />}
-                    >
-                      Browse spaces
-                    </Button>
+                    {!isHostMode && (
+                      <Button
+                        component={RouterLink}
+                        to={APP_ROUTES.explore}
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<Inventory2RoundedIcon />}
+                      >
+                        Browse spaces
+                      </Button>
+                    )}
 
-                    <Button
-                      component={RouterLink}
-                      to={APP_ROUTES.createListing}
-                      variant="outlined"
-                      fullWidth
-                      startIcon={<AddHomeWorkRoundedIcon />}
-                    >
-                      Create listing
-                    </Button>
+                    {isHostMode && (
+                      <Button
+                        component={RouterLink}
+                        to={APP_ROUTES.createListing}
+                        variant="outlined"
+                        fullWidth
+                        startIcon={<AddHomeWorkRoundedIcon />}
+                      >
+                        Create listing
+                      </Button>
+                    )}
                   </Stack>
                 </CardContent>
               </Card>
