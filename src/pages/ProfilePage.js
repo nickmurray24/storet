@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Link as RouterLink, useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   CardActionArea,
-  //CardActions,
   CardContent,
   Chip,
   Container,
@@ -31,11 +30,13 @@ import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
+import SwapHorizRoundedIcon from "@mui/icons-material/SwapHorizRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { getListingCatalog } from "../data/listingCatalog";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
+import { APP_MODES, USER_ROLES } from "../constants/appEnums";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import {
   getBookingRequestPrimaryAction,
@@ -69,15 +70,22 @@ function ProfilePage({
 }) {
   const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
+  const [hostUpgradeIsSubmitting, setHostUpgradeIsSubmitting] = useState(false);
 
   const storedUser = getStoredCurrentUser() || {
     fullName: "Demo User",
     email: "demo@storet.com",
-    role: "Renter",
+    role: USER_ROLES.RENTER,
     isAuthenticated: true,
   };
 
   const activeUser = currentUser || storetApp?.currentUser || storedUser;
+  const activeMode = storetApp?.activeMode || activeUser?.role || APP_MODES.RENTER;
+  const isHostMode = activeMode === APP_MODES.HOST;
+  const isRenterMode = activeMode === APP_MODES.RENTER;
+  const canUseHostMode = Boolean(storetApp?.canUseHostMode);
+  const canUseRenterMode = Boolean(storetApp?.canUseRenterMode ?? true);
+  const isRenterOnly = activeUser?.role === USER_ROLES.RENTER;
 
   const storedUserListings = useMemo(() => readUserListings(), []);
 
@@ -117,6 +125,12 @@ function ProfilePage({
   const waitlistHostListings = hostListings.filter(
     (listing) => listing.waitlist
   ).length;
+
+  const activeHostListings = hostListings.filter(
+    (listing) => listing.status !== "paused" && listing.status !== "archived"
+  ).length;
+  const hasHostedListings = hostListings.length > 0;
+  const hostEntryPath = hasHostedListings ? APP_ROUTES.hostDashboard : APP_ROUTES.createListing;
 
   const renterBookingRequests = useMemo(() => {
     return getRenterBookingRequests(
@@ -161,6 +175,44 @@ function ProfilePage({
     }
   }
 
+  function handleSwitchToRenter() {
+    const result = storetApp?.actions?.switchActiveMode?.(APP_MODES.RENTER);
+
+    if (result?.ok) {
+      navigate(APP_ROUTES.explore);
+    }
+  }
+
+  async function handleSwitchToHost() {
+    if (!hasHostedListings) {
+      setHostUpgradeIsSubmitting(true);
+      const result = await storetApp?.actions?.becomeHost?.();
+      setHostUpgradeIsSubmitting(false);
+
+      if (result?.ok) {
+        navigate(APP_ROUTES.createListing);
+      }
+
+      return;
+    }
+
+    const result = storetApp?.actions?.switchActiveMode?.(APP_MODES.HOST);
+
+    if (result?.ok) {
+      navigate(hostEntryPath);
+    }
+  }
+
+  async function handleBecomeHost() {
+    setHostUpgradeIsSubmitting(true);
+    const result = await storetApp?.actions?.becomeHost?.();
+    setHostUpgradeIsSubmitting(false);
+
+    if (result?.ok) {
+      navigate(APP_ROUTES.createListing);
+    }
+  }
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
       <Box
@@ -191,13 +243,21 @@ function ProfilePage({
               </Avatar>
 
               <Box>
-                <Chip
-                  icon={<PersonRoundedIcon />}
-                  label={`${activeUser?.role || "Renter"} account`}
-                  color="primary"
-                  variant="outlined"
-                  sx={{ mb: 1, fontWeight: 700 }}
-                />
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+                  <Chip
+                    icon={isHostMode ? <HomeWorkRoundedIcon /> : <PersonRoundedIcon />}
+                    label={`${activeMode} mode`}
+                    color="primary"
+                    variant={isHostMode ? "filled" : "outlined"}
+                    sx={{ fontWeight: 800 }}
+                  />
+
+                  <Chip
+                    label={`${activeUser?.role || USER_ROLES.RENTER} account`}
+                    variant="outlined"
+                    sx={{ fontWeight: 700 }}
+                  />
+                </Stack>
 
                 <Typography
                   variant="h2"
@@ -226,23 +286,61 @@ function ProfilePage({
                 Activity
               </Button>
 
-              <Button
-                component={RouterLink}
-                to={APP_ROUTES.createListing}
-                variant="contained"
-                startIcon={<AddHomeWorkRoundedIcon />}
-              >
-                List space
-              </Button>
+              {isHostMode && (
+                <>
+                  <Button
+                    component={RouterLink}
+                    to={APP_ROUTES.createListing}
+                    variant="contained"
+                    startIcon={<AddHomeWorkRoundedIcon />}
+                  >
+                    {hasHostedListings ? "List space" : "Create first listing"}
+                  </Button>
 
-              <Button
-                component={RouterLink}
-                to={APP_ROUTES.hostDashboard}
-                variant="outlined"
-                startIcon={<HomeWorkRoundedIcon />}
-              >
-                Host dashboard
-              </Button>
+                  {hasHostedListings && (
+                    <Button
+                      component={RouterLink}
+                      to={APP_ROUTES.hostDashboard}
+                      variant="outlined"
+                      startIcon={<HomeWorkRoundedIcon />}
+                    >
+                      Host dashboard
+                    </Button>
+                  )}
+                </>
+              )}
+
+              {isRenterMode && canUseHostMode && (
+                <Button
+                  variant="outlined"
+                  startIcon={<SwapHorizRoundedIcon />}
+                  onClick={handleSwitchToHost}
+                  disabled={!hasHostedListings && hostUpgradeIsSubmitting}
+                >
+                  {!hasHostedListings && hostUpgradeIsSubmitting ? "Opening setup..." : hasHostedListings ? "Switch to Host" : "Create first listing"}
+                </Button>
+              )}
+
+              {isRenterMode && !canUseHostMode && (
+                <Button
+                  variant="contained"
+                  startIcon={<HomeWorkRoundedIcon />}
+                  onClick={handleBecomeHost}
+                  disabled={hostUpgradeIsSubmitting}
+                >
+                  {hostUpgradeIsSubmitting ? "Updating..." : "Become a host"}
+                </Button>
+              )}
+
+              {isHostMode && canUseRenterMode && (
+                <Button
+                  variant="outlined"
+                  startIcon={<PersonRoundedIcon />}
+                  onClick={handleSwitchToRenter}
+                >
+                  Switch to Renter
+                </Button>
+              )}
 
               <Button
                 variant="text"
@@ -263,276 +361,349 @@ function ProfilePage({
             <Alert severity="warning">{storetApp.listingsError}</Alert>
           )}
 
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: {
-                xs: "1fr",
-                sm: "repeat(2, minmax(0, 1fr))",
-                md: "repeat(4, minmax(0, 1fr))",
-              },
-              gap: 2,
-            }}
-          >
-            <StatCard
-              icon={<FavoriteRoundedIcon />}
-              label="Saved spaces"
-              value={savedListings.length}
-              color="primary"
-            />
+          {storetApp?.authError && (
+            <Alert severity="warning">{storetApp.authError}</Alert>
+          )}
 
-            <StatCard
-              icon={<EventAvailableRoundedIcon />}
-              label="Reservations"
-              value={renterBookingRequests.length}
-              color="info"
-            />
+          {isRenterMode && (
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  md: "repeat(4, minmax(0, 1fr))",
+                },
+                gap: 2,
+              }}
+            >
+              <StatCard
+                icon={<FavoriteRoundedIcon />}
+                label="Saved spaces"
+                value={savedListings.length}
+                color="primary"
+              />
 
-            <StatCard
-              icon={<HomeWorkRoundedIcon />}
-              label="Your listings"
-              value={hostListings.length}
-              color="secondary"
-            />
+              <StatCard
+                icon={<EventAvailableRoundedIcon />}
+                label="Reservations"
+                value={renterBookingRequests.length}
+                color="info"
+              />
 
-            <StatCard
-              icon={<MailRoundedIcon />}
-              label="Messages sent"
-              value={renterHostMessages.length}
-              color="primary"
-            />
+              <StatCard
+                icon={<MailRoundedIcon />}
+                label="Messages sent"
+                value={renterHostMessages.length}
+                color="primary"
+              />
 
-            <StatCard
-              icon={<BoltRoundedIcon />}
-              label="Instant book"
-              value={instantHostListings}
-              color="success"
-            />
+              <StatCard
+                icon={<Inventory2RoundedIcon />}
+                label="Payments"
+                value={completedPaymentCount}
+                color="success"
+              />
+            </Box>
+          )}
 
-            <StatCard
-              icon={<EventAvailableRoundedIcon />}
-              label="Waitlist listings"
-              value={waitlistHostListings}
-              color="warning"
-            />
-          </Box>
+          {isHostMode && (
+            <Box
+              sx={{
+                display: "grid",
+                gridTemplateColumns: {
+                  xs: "1fr",
+                  sm: "repeat(2, minmax(0, 1fr))",
+                  md: "repeat(4, minmax(0, 1fr))",
+                },
+                gap: 2,
+              }}
+            >
+              <StatCard
+                icon={<HomeWorkRoundedIcon />}
+                label="Hosted listings"
+                value={hostListings.length}
+                color="secondary"
+              />
+
+              <StatCard
+                icon={<WarehouseRoundedIcon />}
+                label="Active listings"
+                value={activeHostListings}
+                color="primary"
+              />
+
+              <StatCard
+                icon={<BoltRoundedIcon />}
+                label="Instant book"
+                value={instantHostListings}
+                color="success"
+              />
+
+              <StatCard
+                icon={<EventAvailableRoundedIcon />}
+                label="Waitlist listings"
+                value={waitlistHostListings}
+                color="warning"
+              />
+            </Box>
+          )}
 
           <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
             <Box sx={{ flex: 1.4 }}>
               <Stack spacing={3}>
-                <Card>
-                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-                    <Stack spacing={2.5}>
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        spacing={2}
-                        alignItems={{ xs: "flex-start", sm: "center" }}
-                        justifyContent="space-between"
-                      >
-                        <Box>
-                          <Typography variant="h5">Saved spaces</Typography>
-                          <Typography color="text.secondary">
-                            Listings you have saved while browsing Storet.
-                          </Typography>
-                        </Box>
+                {isRenterMode && (
+                  <>
+                    <Card>
+                      <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                        <Stack spacing={2.5}>
+                          <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            spacing={2}
+                            alignItems={{ xs: "flex-start", sm: "center" }}
+                            justifyContent="space-between"
+                          >
+                            <Box>
+                              <Typography variant="h5">Saved spaces</Typography>
+                              <Typography color="text.secondary">
+                                Listings you have saved while browsing Storet.
+                              </Typography>
+                            </Box>
 
-                        <Button
-                          component={RouterLink}
-                          to={APP_ROUTES.explore}
-                          endIcon={<ArrowForwardRoundedIcon />}
-                        >
-                          Explore more
-                        </Button>
-                      </Stack>
+                            <Button
+                              component={RouterLink}
+                              to={APP_ROUTES.explore}
+                              endIcon={<ArrowForwardRoundedIcon />}
+                            >
+                              Explore more
+                            </Button>
+                          </Stack>
 
-                      <Divider />
+                          <Divider />
 
-                      {savedListings.length === 0 ? (
-                        <EmptyState
-                          icon={<FavoriteRoundedIcon />}
-                          title="No saved spaces yet"
-                          description="Save listings from Explore so you can compare them later."
-                          actionLabel="Browse listings"
-                          actionTo={APP_ROUTES.explore}
-                        />
-                      ) : (
-                        <Stack spacing={2}>
-                          {savedListings.map((listing) => (
-                            <ListingRow
-                              key={listing.id}
-                              listing={listing}
-                              action={
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  onClick={() => handleUnsave(listing.id)}
-                                >
-                                  Unsave
-                                </Button>
-                              }
+                          {savedListings.length === 0 ? (
+                            <EmptyState
+                              icon={<FavoriteRoundedIcon />}
+                              title="No saved spaces yet"
+                              description="Save listings from Explore so you can compare them later."
+                              actionLabel="Browse listings"
+                              actionTo={APP_ROUTES.explore}
                             />
-                          ))}
+                          ) : (
+                            <Stack spacing={2}>
+                              {savedListings.map((listing) => (
+                                <ListingRow
+                                  key={listing.id}
+                                  listing={listing}
+                                  action={
+                                    <Button
+                                      size="small"
+                                      variant="outlined"
+                                      onClick={() => handleUnsave(listing.id)}
+                                    >
+                                      Unsave
+                                    </Button>
+                                  }
+                                />
+                              ))}
+                            </Stack>
+                          )}
                         </Stack>
-                      )}
-                    </Stack>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
 
-                <Card>
-                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-                    <Stack spacing={2.5}>
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        spacing={2}
-                        alignItems={{ xs: "flex-start", sm: "center" }}
-                        justifyContent="space-between"
-                      >
-                        <Box>
-                          <Typography variant="h5">Reservation activity</Typography>
-                          <Typography color="text.secondary">
-                            Local booking requests created from listing details.
-                          </Typography>
-                        </Box>
+                    <Card>
+                      <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                        <Stack spacing={2.5}>
+                          <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            spacing={2}
+                            alignItems={{ xs: "flex-start", sm: "center" }}
+                            justifyContent="space-between"
+                          >
+                            <Box>
+                              <Typography variant="h5">Reservation activity</Typography>
+                              <Typography color="text.secondary">
+                                Booking requests you have created from listing details.
+                              </Typography>
+                            </Box>
 
-                        <Button
-                          component={RouterLink}
-                          to={APP_ROUTES.notifications}
-                          endIcon={<ArrowForwardRoundedIcon />}
-                        >
-                          View activity
-                        </Button>
-                      </Stack>
+                            <Button
+                              component={RouterLink}
+                              to={APP_ROUTES.notifications}
+                              endIcon={<ArrowForwardRoundedIcon />}
+                            >
+                              View activity
+                            </Button>
+                          </Stack>
 
-                      <Divider />
+                          <Divider />
 
-                      {renterBookingRequests.length === 0 ? (
-                        <EmptyState
-                          icon={<EventAvailableRoundedIcon />}
-                          title="No reservation activity yet"
-                          description="Reserve, request, or join the waitlist for a listing to see it here."
-                          actionLabel="Browse listings"
-                          actionTo={APP_ROUTES.explore}
-                        />
-                      ) : (
-                        <Stack spacing={2}>
-                          {renterBookingRequests.slice(0, 4).map((request) => (
-                            <BookingRequestRow
-                              key={request.id}
-                              request={request}
-                              onCancel={handleCancelBookingRequest}
+                          {renterBookingRequests.length === 0 ? (
+                            <EmptyState
+                              icon={<EventAvailableRoundedIcon />}
+                              title="No reservation activity yet"
+                              description="Reserve, request, or join the waitlist for a listing to see it here."
+                              actionLabel="Browse listings"
+                              actionTo={APP_ROUTES.explore}
                             />
-                          ))}
+                          ) : (
+                            <Stack spacing={2}>
+                              {renterBookingRequests.slice(0, 4).map((request) => (
+                                <BookingRequestRow
+                                  key={request.id}
+                                  request={request}
+                                  onCancel={handleCancelBookingRequest}
+                                />
+                              ))}
+                            </Stack>
+                          )}
                         </Stack>
-                      )}
-                    </Stack>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
 
-                <Card>
-                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-                    <Stack spacing={2.5}>
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        spacing={2}
-                        alignItems={{ xs: "flex-start", sm: "center" }}
-                        justifyContent="space-between"
-                      >
-                        <Box>
-                          <Typography variant="h5">Messages to hosts</Typography>
-                          <Typography color="text.secondary">
-                            Questions you have sent from listing detail pages.
-                          </Typography>
-                        </Box>
+                    <Card>
+                      <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                        <Stack spacing={2.5}>
+                          <Stack
+                            direction={{ xs: "column", sm: "row" }}
+                            spacing={2}
+                            alignItems={{ xs: "flex-start", sm: "center" }}
+                            justifyContent="space-between"
+                          >
+                            <Box>
+                              <Typography variant="h5">Messages to hosts</Typography>
+                              <Typography color="text.secondary">
+                                Questions you have sent from listing detail pages.
+                              </Typography>
+                            </Box>
 
-                        <Button
-                          component={RouterLink}
-                          to={APP_ROUTES.notifications}
-                          endIcon={<ArrowForwardRoundedIcon />}
-                        >
-                          View activity
-                        </Button>
-                      </Stack>
+                            <Button
+                              component={RouterLink}
+                              to={APP_ROUTES.notifications}
+                              endIcon={<ArrowForwardRoundedIcon />}
+                            >
+                              View activity
+                            </Button>
+                          </Stack>
 
-                      <Divider />
+                          <Divider />
 
-                      {renterHostMessages.length === 0 ? (
-                        <EmptyState
-                          icon={<MailRoundedIcon />}
-                          title="No host messages yet"
-                          description="Send a question from any listing detail page to see it here."
-                          actionLabel="Browse listings"
-                          actionTo={APP_ROUTES.explore}
-                        />
-                      ) : (
-                        <Stack spacing={2}>
-                          {renterHostMessages.slice(0, 4).map((message) => (
-                            <HostMessageRow key={message.id} message={message} />
-                          ))}
-                        </Stack>
-                      )}
-                    </Stack>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-                    <Stack spacing={2.5}>
-                      <Stack
-                        direction={{ xs: "column", sm: "row" }}
-                        spacing={2}
-                        alignItems={{ xs: "flex-start", sm: "center" }}
-                        justifyContent="space-between"
-                      >
-                        <Box>
-                          <Typography variant="h5">Your hosted spaces</Typography>
-                          <Typography color="text.secondary">
-                            Listings you have created for renters to find.
-                          </Typography>
-                        </Box>
-
-                        <Button
-                          component={RouterLink}
-                          to={APP_ROUTES.createListing}
-                          variant="contained"
-                          startIcon={<AddHomeWorkRoundedIcon />}
-                        >
-                          New listing
-                        </Button>
-                      </Stack>
-
-                      <Divider />
-
-                      {hostListings.length === 0 ? (
-                        <EmptyState
-                          icon={<WarehouseRoundedIcon />}
-                          title="No hosted spaces yet"
-                          description="Create your first listing to start offering storage through Storet."
-                          actionLabel="Create listing"
-                          actionTo={APP_ROUTES.createListing}
-                        />
-                      ) : (
-                        <Stack spacing={2}>
-                          {hostListings.map((listing) => (
-                            <ListingRow
-                              key={listing.id}
-                              listing={listing}
-                              action={
-                                <Button
-                                  size="small"
-                                  component={RouterLink}
-                                  to={buildListingPath(listing.id)}
-                                  endIcon={<ArrowForwardRoundedIcon />}
-                                >
-                                  View
-                                </Button>
-                              }
+                          {renterHostMessages.length === 0 ? (
+                            <EmptyState
+                              icon={<MailRoundedIcon />}
+                              title="No host messages yet"
+                              description="Send a question from any listing detail page to see it here."
+                              actionLabel="Browse listings"
+                              actionTo={APP_ROUTES.explore}
                             />
-                          ))}
+                          ) : (
+                            <Stack spacing={2}>
+                              {renterHostMessages.slice(0, 4).map((message) => (
+                                <HostMessageRow key={message.id} message={message} />
+                              ))}
+                            </Stack>
+                          )}
                         </Stack>
-                      )}
-                    </Stack>
-                  </CardContent>
-                </Card>
+                      </CardContent>
+                    </Card>
+
+                    {!canUseHostMode && (
+                      <Card
+                        sx={{
+                          background:
+                            "linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(20, 184, 166, 0.10))",
+                        }}
+                      >
+                        <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                          <Stack spacing={2}>
+                            <Avatar sx={{ bgcolor: "primary.main" }}>
+                              <HomeWorkRoundedIcon />
+                            </Avatar>
+                            <Box>
+                              <Typography variant="h5">Have extra space?</Typography>
+                              <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+                                Turn a garage, basement, spare room, or unused area into a
+                                Storet listing when you are ready to host.
+                              </Typography>
+                            </Box>
+                            <Button
+                              variant="contained"
+                              startIcon={<HomeWorkRoundedIcon />}
+                              onClick={handleBecomeHost}
+                              disabled={hostUpgradeIsSubmitting}
+                              sx={{ width: "fit-content" }}
+                            >
+                              {hostUpgradeIsSubmitting ? "Updating..." : "Become a host"}
+                            </Button>
+                          </Stack>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </>
+                )}
+
+                {isHostMode && (
+                  <Card>
+                    <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+                      <Stack spacing={2.5}>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={2}
+                          alignItems={{ xs: "flex-start", sm: "center" }}
+                          justifyContent="space-between"
+                        >
+                          <Box>
+                            <Typography variant="h5">Your hosted spaces</Typography>
+                            <Typography color="text.secondary">
+                              Listings you have created for renters to find.
+                            </Typography>
+                          </Box>
+
+                          <Button
+                            component={RouterLink}
+                            to={APP_ROUTES.createListing}
+                            variant="contained"
+                            startIcon={<AddHomeWorkRoundedIcon />}
+                          >
+                            {hasHostedListings ? "New listing" : "Create first listing"}
+                          </Button>
+                        </Stack>
+
+                        <Divider />
+
+                        {hostListings.length === 0 ? (
+                          <EmptyState
+                            icon={<WarehouseRoundedIcon />}
+                            title="No hosted spaces yet"
+                            description="Create your first listing to start offering storage through Storet."
+                            actionLabel="Create listing"
+                            actionTo={APP_ROUTES.createListing}
+                          />
+                        ) : (
+                          <Stack spacing={2}>
+                            {hostListings.map((listing) => (
+                              <ListingRow
+                                key={listing.id}
+                                listing={listing}
+                                action={
+                                  <Button
+                                    size="small"
+                                    component={RouterLink}
+                                    to={buildListingPath(listing.id)}
+                                    endIcon={<ArrowForwardRoundedIcon />}
+                                  >
+                                    View
+                                  </Button>
+                                }
+                              />
+                            ))}
+                          </Stack>
+                        )}
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                )}
               </Stack>
             </Box>
 
@@ -544,7 +715,7 @@ function ProfilePage({
                       <Box>
                         <Typography variant="h5">Account overview</Typography>
                         <Typography color="text.secondary">
-                          Your current Storet profile setup.
+                          Your current Storet setup and selected mode.
                         </Typography>
                       </Box>
 
@@ -558,43 +729,57 @@ function ProfilePage({
 
                       <ProfileInfoRow
                         icon={<ShieldRoundedIcon />}
-                        label="Role"
-                        value={activeUser?.role || "Renter"}
+                        label="Account role"
+                        value={activeUser?.role || USER_ROLES.RENTER}
                       />
 
                       <ProfileInfoRow
-                        icon={<Inventory2RoundedIcon />}
-                        label="Saved listings"
-                        value={`${savedListings.length} saved`}
+                        icon={isHostMode ? <HomeWorkRoundedIcon /> : <PersonRoundedIcon />}
+                        label="Current mode"
+                        value={activeMode}
                       />
 
-                      <ProfileInfoRow
-                        icon={<EventAvailableRoundedIcon />}
-                        label="Reservation requests"
-                        value={`${renterBookingRequests.length} local`}
-                      />
+                      {isRenterMode && (
+                        <>
+                          <ProfileInfoRow
+                            icon={<Inventory2RoundedIcon />}
+                            label="Saved listings"
+                            value={`${savedListings.length} saved`}
+                          />
 
-                      <ProfileInfoRow
-                        icon={<MailRoundedIcon />}
-                        label="Host messages"
-                        value={`${renterHostMessages.length} sent`}
-                      />
+                          <ProfileInfoRow
+                            icon={<EventAvailableRoundedIcon />}
+                            label="Reservation requests"
+                            value={`${renterBookingRequests.length} total`}
+                          />
 
-                      <ProfileInfoRow
-                        icon={<BoltRoundedIcon />}
-                        label="Mock payments"
-                        value={`${completedPaymentCount} completed`}
-                      />
+                          <ProfileInfoRow
+                            icon={<MailRoundedIcon />}
+                            label="Host messages"
+                            value={`${renterHostMessages.length} sent`}
+                          />
+                        </>
+                      )}
 
-                      <ProfileInfoRow
-                        icon={<HomeWorkRoundedIcon />}
-                        label="Hosted listings"
-                        value={`${hostListings.length} active`}
-                      />
+                      {isHostMode && (
+                        <>
+                          <ProfileInfoRow
+                            icon={<HomeWorkRoundedIcon />}
+                            label="Hosted listings"
+                            value={`${hostListings.length} total`}
+                          />
+
+                          <ProfileInfoRow
+                            icon={<BoltRoundedIcon />}
+                            label="Instant book listings"
+                            value={`${instantHostListings} listings`}
+                          />
+                        </>
+                      )}
 
                       <Alert severity="info">
-                        Profile details are still local-demo data for now. Later,
-                        this can connect to real account settings.
+                        Use the profile chip in the navbar to switch between renter
+                        and host mode when your account supports both.
                       </Alert>
                     </Stack>
                   </CardContent>
@@ -605,48 +790,104 @@ function ProfilePage({
                     <Stack spacing={2}>
                       <Typography variant="h5">Quick actions</Typography>
 
-                      <Button
-                        component={RouterLink}
-                        to={APP_ROUTES.explore}
-                        variant="outlined"
-                        fullWidth
-                        startIcon={<WarehouseRoundedIcon />}
-                      >
-                        Browse storage
-                      </Button>
+                      {isRenterMode && (
+                        <>
+                          <Button
+                            component={RouterLink}
+                            to={APP_ROUTES.explore}
+                            variant="outlined"
+                            fullWidth
+                            startIcon={<WarehouseRoundedIcon />}
+                          >
+                            Browse storage
+                          </Button>
 
-                      <Button
-                        component={RouterLink}
-                        to={APP_ROUTES.createListing}
-                        variant="outlined"
-                        fullWidth
-                        startIcon={<AddHomeWorkRoundedIcon />}
-                      >
-                        Create listing
-                      </Button>
+                          <Button
+                            component={RouterLink}
+                            to={APP_ROUTES.notifications}
+                            variant="outlined"
+                            fullWidth
+                            startIcon={<NotificationsRoundedIcon />}
+                          >
+                            View renter activity
+                          </Button>
 
-                      <Button
-                        component={RouterLink}
-                        to={APP_ROUTES.notifications}
-                        variant="outlined"
-                        fullWidth
-                        startIcon={<NotificationsRoundedIcon />}
-                      >
-                        View activity
-                      </Button>
+                          {canUseHostMode ? (
+                            <Button
+                              variant="contained"
+                              fullWidth
+                              startIcon={<SwapHorizRoundedIcon />}
+                              onClick={handleSwitchToHost}
+                              disabled={!hasHostedListings && hostUpgradeIsSubmitting}
+                            >
+                              {!hasHostedListings && hostUpgradeIsSubmitting ? "Opening setup..." : hasHostedListings ? "Switch to Host mode" : "Create first listing"}
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="contained"
+                              fullWidth
+                              startIcon={<HomeWorkRoundedIcon />}
+                              onClick={handleBecomeHost}
+                              disabled={hostUpgradeIsSubmitting}
+                            >
+                              {hostUpgradeIsSubmitting ? "Updating..." : "Become a host"}
+                            </Button>
+                          )}
+                        </>
+                      )}
 
-                      <Button
-                        component={RouterLink}
-                        to={APP_ROUTES.hostDashboard}
-                        variant="outlined"
-                        fullWidth
-                        startIcon={<HomeWorkRoundedIcon />}
-                      >
-                        Host dashboard
-                      </Button>
+                      {isHostMode && (
+                        <>
+                          {hasHostedListings && (
+                            <Button
+                              component={RouterLink}
+                              to={APP_ROUTES.hostDashboard}
+                              variant="outlined"
+                              fullWidth
+                              startIcon={<HomeWorkRoundedIcon />}
+                            >
+                              Host dashboard
+                            </Button>
+                          )}
+
+                          <Button
+                            component={RouterLink}
+                            to={APP_ROUTES.createListing}
+                            variant={hasHostedListings ? "outlined" : "contained"}
+                            fullWidth
+                            startIcon={<AddHomeWorkRoundedIcon />}
+                          >
+                            {hasHostedListings ? "Create listing" : "Create first listing"}
+                          </Button>
+
+                          {!hasHostedListings && (
+                            <Alert severity="info">
+                              Your Host Dashboard unlocks after you create your first listing.
+                            </Alert>
+                          )}
+
+                          {canUseRenterMode && (
+                            <Button
+                              variant="contained"
+                              fullWidth
+                              startIcon={<PersonRoundedIcon />}
+                              onClick={handleSwitchToRenter}
+                            >
+                              Switch to Renter mode
+                            </Button>
+                          )}
+                        </>
+                      )}
                     </Stack>
                   </CardContent>
                 </Card>
+
+                {isRenterOnly && (
+                  <Alert severity="info">
+                    Host tools stay hidden until you become a host, keeping renter
+                    browsing and booking separate from listing management.
+                  </Alert>
+                )}
               </Stack>
             </Box>
           </Stack>
@@ -745,7 +986,7 @@ function ListingRow({ listing, action }) {
 
               <Chip
                 icon={<StarRoundedIcon />}
-                label={listing.rating.toFixed(1)}
+                label={Number(listing.rating || listing.averageRating || 0).toFixed(1)}
                 size="small"
                 variant="outlined"
               />

@@ -1,6 +1,12 @@
 export const USER_ROLES = {
   RENTER: "Renter",
   HOST: "Host",
+  BOTH: "Both",
+};
+
+export const APP_MODES = {
+  RENTER: "Renter",
+  HOST: "Host",
 };
 
 export const LISTING_STATUSES = {

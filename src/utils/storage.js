@@ -2,6 +2,7 @@ import {
   BOOKING_REQUESTS_KEY,
   CURRENT_USER_KEY,
   HOST_MESSAGES_KEY,
+  ACTIVE_MODE_KEY,
   LEGACY_USER_LISTINGS_KEY,
   PAYMENT_RECORDS_KEY,
   SAVED_LISTINGS_KEY,
@@ -12,6 +13,7 @@ import { normalizeHostMessageList } from "./hostMessageUtils";
 import { normalizeListingList, normalizeSavedIds } from "./listingUtils";
 import { normalizePaymentRecordList } from "./paymentUtils";
 import { normalizeUserProfile } from "../models/storetModels";
+import { normalizeAppMode } from "./roleUtils";
 
 function canUseLocalStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
@@ -112,4 +114,16 @@ export function writeHostMessages(hostMessages) {
     HOST_MESSAGES_KEY,
     normalizeHostMessageList(hostMessages)
   );
+}
+
+export function readActiveMode() {
+  return normalizeAppMode(safeReadJson(ACTIVE_MODE_KEY, null));
+}
+
+export function writeActiveMode(activeMode) {
+  return safeWriteJson(ACTIVE_MODE_KEY, normalizeAppMode(activeMode));
+}
+
+export function clearActiveMode() {
+  return safeRemoveItem(ACTIVE_MODE_KEY);
 }

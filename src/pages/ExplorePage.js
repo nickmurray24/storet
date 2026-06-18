@@ -26,7 +26,6 @@ import {
   Typography,
 } from "@mui/material";
 
-import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import BusinessRoundedIcon from "@mui/icons-material/BusinessRounded";
@@ -42,12 +41,11 @@ import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { getPageListings } from "../data/listingCatalog";
-import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
+import { buildListingPath } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { normalizeSavedIds } from "../utils/listingUtils";
 import { getMonthlyEquivalentAmount } from "../utils/pricingUtils";
 import {
-  getStoredCurrentUser,
   readSavedListingIds,
   readUserListings,
   writeSavedListingIds,
@@ -55,19 +53,13 @@ import {
 
 function ExplorePage({
   listings,
-  currentUser,
   savedListingIds,
   onToggleSave,
   onSaveToggle,
 }) {
   const storetApp = useOptionalStoretApp();
 
-  const storedUser = getStoredCurrentUser() || {
-    fullName: "Demo User",
-    role: "Renter",
-  };
-
-  const activeUser = currentUser || storetApp?.currentUser || storedUser;
+  const activeMode = storetApp?.activeMode || "Renter";
   const userListings = useMemo(() => {
     if (Array.isArray(storetApp?.userListings)) {
       return storetApp.userListings;
@@ -243,7 +235,7 @@ function ExplorePage({
             <Stack spacing={1.5}>
               <Chip
                 icon={<WarehouseRoundedIcon />}
-                label={`${activeUser.role || "Renter"} mode`}
+                label={`${activeMode} mode`}
                 color="primary"
                 variant="outlined"
                 sx={{ width: "fit-content", fontWeight: 700 }}
@@ -270,15 +262,6 @@ function ExplorePage({
               </Box>
             </Stack>
 
-            <Button
-              component={RouterLink}
-              to={APP_ROUTES.createListing}
-              variant="contained"
-              size="large"
-              startIcon={<AddHomeWorkRoundedIcon />}
-            >
-              List your space
-            </Button>
           </Stack>
 
           <Stack

@@ -242,6 +242,45 @@ export const authService = {
     });
   },
 
+  async updateCurrentUserRole(role) {
+    const { supabase, error } = requireSupabase();
+
+    if (error) {
+      return formatServiceResponse(null, error);
+    }
+
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user?.id) {
+      return formatServiceResponse(null, normalizeAuthError(userError));
+    }
+
+    const { data: profile, error: updateError } = await supabase
+      .from("profiles")
+      .update({
+        role,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", user.id)
+      .select("*")
+      .single();
+
+    if (updateError) {
+      return formatServiceResponse(null, normalizeAuthError(updateError));
+    }
+
+    await supabase.auth.updateUser({
+      data: {
+        role,
+      },
+    });
+
+    return formatServiceResponse(buildProfileFromAuthUser(user, profile));
+  },
+
   async signOut() {
     const { supabase, error } = requireSupabase();
 

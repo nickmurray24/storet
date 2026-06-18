@@ -17,6 +17,7 @@ import CheckoutPage from "./pages/CheckoutPage";
 import NotFoundPage from "./pages/NotFoundPage";
 import { StoretAppProvider } from "./context/StoretAppContext";
 import { APP_ROUTES } from "./routes/appRoutes";
+import { APP_MODES } from "./constants/appEnums";
 
 function AppRoutes() {
   return (
@@ -32,7 +33,7 @@ function AppRoutes() {
         <Route
           path={APP_ROUTES.createListing}
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredMode={APP_MODES.HOST} allowHostSetup>
               <CreateListingPage />
             </ProtectedRoute>
           }
@@ -50,7 +51,7 @@ function AppRoutes() {
         <Route
           path={APP_ROUTES.hostDashboard}
           element={
-            <ProtectedRoute>
+            <ProtectedRoute requiredMode={APP_MODES.HOST} requiresHostedListing>
               <HostDashboardPanel />
             </ProtectedRoute>
           }
