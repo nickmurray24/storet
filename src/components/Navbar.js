@@ -29,20 +29,12 @@ import {
 import { APP_MODES } from "../constants/appEnums";
 
 function getNavItemsForMode({ isLoggedIn, activeMode, hostDashboardIsAvailable }) {
-  const baseItems = [
-    { label: "Home", to: APP_ROUTES.home },
-  ];
-
   if (!isLoggedIn) {
-    return [
-      ...baseItems,
-      { label: "Explore", to: APP_ROUTES.explore },
-    ];
+    return [{ label: "Explore", to: APP_ROUTES.explore }];
   }
 
   if (activeMode === APP_MODES.HOST) {
     return [
-      ...baseItems,
       { label: "Notifications", to: APP_ROUTES.notifications },
       hostDashboardIsAvailable
         ? { label: "Host Dashboard", to: APP_ROUTES.hostDashboard }
@@ -52,7 +44,6 @@ function getNavItemsForMode({ isLoggedIn, activeMode, hostDashboardIsAvailable }
   }
 
   return [
-    ...baseItems,
     { label: "Explore", to: APP_ROUTES.explore },
     { label: "Notifications", to: APP_ROUTES.notifications },
     { label: "Profile", to: APP_ROUTES.profile },
@@ -124,6 +115,14 @@ function Navbar({ currentUser, onLogout }) {
 
     if (location.pathname === APP_ROUTES.hostDashboard || location.pathname === APP_ROUTES.createListing) {
       navigate(APP_ROUTES.explore);
+    }
+  }
+
+  async function handleLogout() {
+    const result = await logoutAction?.();
+
+    if (result?.ok !== false) {
+      navigate(APP_ROUTES.auth, { replace: true });
     }
   }
 
@@ -283,7 +282,7 @@ function Navbar({ currentUser, onLogout }) {
                 </Menu>
 
                 {logoutAction && (
-                  <Button variant="outlined" color="primary" onClick={logoutAction}>
+                  <Button variant="outlined" color="primary" onClick={handleLogout}>
                     Log Out
                   </Button>
                 )}

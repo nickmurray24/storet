@@ -1,5 +1,5 @@
 import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 
 import "./App.css";
 
@@ -19,9 +19,21 @@ import { StoretAppProvider } from "./context/StoretAppContext";
 import { APP_ROUTES } from "./routes/appRoutes";
 import { APP_MODES } from "./constants/appEnums";
 
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [pathname]);
+
+  return null;
+}
+
 function AppRoutes() {
   return (
     <div className="app">
+      <ScrollToTop />
       <Navbar />
 
       <Routes>
