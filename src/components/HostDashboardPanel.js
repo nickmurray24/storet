@@ -1,6 +1,9 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
   Alert,
   Box,
   Button,
@@ -8,16 +11,18 @@ import {
   CardContent,
   Chip,
   Container,
-  Divider,
   LinearProgress,
   Skeleton,
   Stack,
+  Tab,
+  Tabs,
   Typography,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 
 import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
@@ -59,6 +64,63 @@ const BOOKED_STATUSES = [
   BOOKING_STATUSES.ACTIVE,
   BOOKING_STATUSES.COMPLETED,
 ];
+
+
+const DASHBOARD_SECTIONS = {
+  attention: "needs-attention",
+  requests: "reservation-requests",
+  active: "active-rentals",
+  listings: "hosted-listings",
+  messages: "messages",
+  analytics: "analytics",
+};
+
+const BOOKING_TABS = [
+  {
+    key: "pending",
+    label: "Pending",
+    statuses: [BOOKING_STATUSES.PENDING],
+    emptyTitle: "No pending requests",
+    emptyDescription: "New renter requests will appear here first.",
+  },
+  {
+    key: "waitlisted",
+    label: "Waitlisted",
+    statuses: [BOOKING_STATUSES.WAITLISTED],
+    emptyTitle: "No waitlisted renters",
+    emptyDescription: "Requests you move to the waitlist will appear here.",
+  },
+  {
+    key: "approved",
+    label: "Approved",
+    statuses: [BOOKING_STATUSES.APPROVED],
+    emptyTitle: "No approved requests awaiting checkout",
+    emptyDescription: "Approved renters will appear here until they complete checkout.",
+  },
+  {
+    key: "active",
+    label: "Confirmed / Active",
+    statuses: [BOOKING_STATUSES.CONFIRMED, BOOKING_STATUSES.ACTIVE],
+    emptyTitle: "No confirmed or active rentals",
+    emptyDescription: "Paid and active rentals will appear here.",
+  },
+  {
+    key: "completed",
+    label: "Completed",
+    statuses: [BOOKING_STATUSES.COMPLETED],
+    emptyTitle: "No completed rentals yet",
+    emptyDescription: "Completed rentals will be stored here for review and history.",
+  },
+  {
+    key: "closed",
+    label: "Closed",
+    statuses: [BOOKING_STATUSES.CANCELLED, BOOKING_STATUSES.DECLINED],
+    emptyTitle: "No closed requests",
+    emptyDescription: "Cancelled or declined requests will appear here.",
+  },
+];
+
+const DEFAULT_VISIBLE_ITEMS = 4;
 
 function formatDateTime(dateValue) {
   if (!dateValue) {
@@ -147,52 +209,47 @@ function getListingReviewCount(listing = {}) {
   return Number(listing.reviewCount || listing.reviews || 0);
 }
 
-function SectionHeader({ eyebrow, title, description, action }) {
-  return (
-    <Stack
-      direction={{ xs: "column", sm: "row" }}
-      spacing={2}
-      alignItems={{ xs: "flex-start", sm: "center" }}
-      justifyContent="space-between"
-      sx={{ mb: 2.5 }}
-    >
-      <Box>
-        {eyebrow && (
-          <Typography
-            variant="overline"
-            color="primary"
-            sx={{ fontWeight: 900, letterSpacing: 1.2 }}
-          >
-            {eyebrow}
-          </Typography>
-        )}
+function StatCard({ icon, label, value, helper, tone = "primary", onClick }) {
+  const clickableProps = onClick
+    ? {
+        role: "button",
+        tabIndex: 0,
+        onClick,
+        onKeyDown: (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onClick();
+          }
+        },
+      }
+    : {};
 
-        <Typography variant="h4" sx={{ fontSize: { xs: "1.45rem", md: "1.8rem" } }}>
-          {title}
-        </Typography>
-
-        {description && (
-          <Typography color="text.secondary" sx={{ mt: 0.5, maxWidth: 720 }}>
-            {description}
-          </Typography>
-        )}
-      </Box>
-
-      {action}
-    </Stack>
-  );
-}
-
-function StatCard({ icon, label, value, helper, tone = "primary" }) {
   return (
     <Card
       elevation={0}
+      {...clickableProps}
       sx={{
         height: "100%",
         border: "1px solid",
         borderColor: "divider",
         borderRadius: 4,
         bgcolor: "background.paper",
+        cursor: onClick ? "pointer" : "default",
+        transition: "transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease",
+        "&:hover": onClick
+          ? {
+              transform: "translateY(-2px)",
+              borderColor: `${tone}.main`,
+              boxShadow: 4,
+            }
+          : undefined,
+        "&:focus-visible": onClick
+          ? {
+              outline: "3px solid",
+              outlineColor: `${tone}.light`,
+              outlineOffset: 2,
+            }
+          : undefined,
       }}
     >
       <CardContent sx={{ p: 2.5 }}>
@@ -286,6 +343,167 @@ function MetricPill({ label, value }) {
       </Typography>
       <Typography sx={{ fontWeight: 900 }}>{value}</Typography>
     </Box>
+  );
+}
+
+
+function DashboardSection({
+  id,
+  title,
+  eyebrow,
+  description,
+  expanded,
+  onToggle,
+  summary,
+  children,
+}) {
+  return (
+    <Accordion
+      id={id}
+      disableGutters
+      elevation={0}
+      expanded={expanded}
+      onChange={onToggle}
+      sx={{
+        scrollMarginTop: { xs: 96, md: 112 },
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: "24px !important",
+        overflow: "hidden",
+        mb: 2,
+        bgcolor: "background.paper",
+        "&:before": { display: "none" },
+      }}
+    >
+      <AccordionSummary
+        expandIcon={<ExpandMoreRoundedIcon />}
+        sx={{
+          px: { xs: 2.5, md: 3.5 },
+          py: 1.5,
+          alignItems: "center",
+          "& .MuiAccordionSummary-content": {
+            my: 0,
+          },
+        }}
+      >
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          justifyContent="space-between"
+          sx={{ width: "100%", pr: 2 }}
+        >
+          <Box>
+            {eyebrow && (
+              <Typography
+                variant="overline"
+                color="primary"
+                sx={{ fontWeight: 900, letterSpacing: 1.2 }}
+              >
+                {eyebrow}
+              </Typography>
+            )}
+            <Typography variant="h5" sx={{ fontWeight: 900 }}>
+              {title}
+            </Typography>
+            {description && (
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+                {description}
+              </Typography>
+            )}
+          </Box>
+
+          {summary}
+        </Stack>
+      </AccordionSummary>
+
+      <AccordionDetails sx={{ px: { xs: 2.5, md: 3.5 }, pb: { xs: 2.5, md: 3.5 }, pt: 0 }}>
+        {children}
+      </AccordionDetails>
+    </Accordion>
+  );
+}
+
+function SectionNavChip({ label, count, onClick, active = false }) {
+  return (
+    <Chip
+      label={count !== undefined ? `${label} · ${count}` : label}
+      onClick={onClick}
+      variant={active ? "filled" : "outlined"}
+      color="primary"
+      sx={{
+        width: { md: "100%" },
+        justifyContent: { md: "flex-start" },
+        fontWeight: 900,
+        borderRadius: 999,
+        px: 0.5,
+        bgcolor: active ? "primary.main" : "background.paper",
+        color: active ? "primary.contrastText" : "primary.main",
+        "& .MuiChip-label": {
+          width: { md: "100%" },
+          textAlign: { md: "left" },
+        },
+      }}
+    />
+  );
+}
+
+function DashboardSectionNav({ activeSection, onOpenSection, counts }) {
+  const navItems = [
+    { id: DASHBOARD_SECTIONS.attention, label: "Needs attention", count: counts.actionNeededCount },
+    { id: DASHBOARD_SECTIONS.requests, label: "Requests", count: counts.requestCount },
+    { id: DASHBOARD_SECTIONS.active, label: "Active rentals", count: counts.activeRentalCount },
+    { id: DASHBOARD_SECTIONS.listings, label: "Listings", count: counts.listingCount },
+    { id: DASHBOARD_SECTIONS.messages, label: "Messages", count: counts.messageCount },
+    { id: DASHBOARD_SECTIONS.analytics, label: "Analytics" },
+  ];
+
+  return (
+    <Card
+      elevation={0}
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 4,
+        bgcolor: "background.paper",
+      }}
+    >
+      <CardContent sx={{ p: 2 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 900 }}>
+          Dashboard sections
+        </Typography>
+
+        <Stack
+          direction={{ xs: "row", md: "column" }}
+          spacing={1}
+          useFlexGap
+          flexWrap="wrap"
+          sx={{ mt: 1.25 }}
+        >
+          {navItems.map((item) => (
+            <SectionNavChip
+              key={item.id}
+              label={item.label}
+              count={item.count}
+              active={activeSection === item.id}
+              onClick={() => onOpenSection(item.id)}
+            />
+          ))}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ShowMoreButton({ visibleCount, totalCount, expanded, onClick, itemLabel = "items" }) {
+  if (totalCount <= visibleCount) {
+    return null;
+  }
+
+  return (
+    <Button variant="text" onClick={onClick} sx={{ alignSelf: "flex-start", fontWeight: 900 }}>
+      {expanded ? `Show fewer ${itemLabel}` : `Show all ${totalCount} ${itemLabel}`}
+    </Button>
   );
 }
 
@@ -941,6 +1159,20 @@ function HostDashboardPanel({
   onUpdateHostMessageStatus,
 }) {
   const storetApp = useOptionalStoretApp();
+  const [expandedSections, setExpandedSections] = useState({
+    [DASHBOARD_SECTIONS.attention]: true,
+    [DASHBOARD_SECTIONS.requests]: true,
+    [DASHBOARD_SECTIONS.listings]: false,
+    [DASHBOARD_SECTIONS.active]: false,
+    [DASHBOARD_SECTIONS.messages]: false,
+    [DASHBOARD_SECTIONS.analytics]: false,
+  });
+  const [activeSection, setActiveSection] = useState(DASHBOARD_SECTIONS.attention);
+  const [bookingTab, setBookingTab] = useState(BOOKING_TABS[0].key);
+  const [showAllBookings, setShowAllBookings] = useState(false);
+  const [showAllListings, setShowAllListings] = useState(false);
+  const [showAllMessages, setShowAllMessages] = useState(false);
+  const [showAllPerformance, setShowAllPerformance] = useState(false);
 
   const safeMyListings = Array.isArray(myListings)
     ? myListings
@@ -1145,6 +1377,146 @@ function HostDashboardPanel({
     localActionNeededCount
   );
 
+  const confirmedAndActiveRequests = sortedBookingRequests.filter((request) =>
+    [BOOKING_STATUSES.CONFIRMED, BOOKING_STATUSES.ACTIVE].includes(request.status)
+  );
+
+  const bookingTabCounts = BOOKING_TABS.reduce((counts, tab) => {
+    counts[tab.key] = sortedBookingRequests.filter((request) => tab.statuses.includes(request.status)).length;
+    return counts;
+  }, {});
+
+  const selectedBookingTab = BOOKING_TABS.find((tab) => tab.key === bookingTab) || BOOKING_TABS[0];
+  const selectedBookingRequests = sortedBookingRequests.filter((request) =>
+    selectedBookingTab.statuses.includes(request.status)
+  );
+  const visibleBookingRequests = showAllBookings
+    ? selectedBookingRequests
+    : selectedBookingRequests.slice(0, DEFAULT_VISIBLE_ITEMS);
+  const visibleListings = showAllListings
+    ? safeMyListings
+    : safeMyListings.slice(0, DEFAULT_VISIBLE_ITEMS);
+  const visibleMessages = showAllMessages
+    ? safeHostMessages
+    : safeHostMessages.slice(0, DEFAULT_VISIBLE_ITEMS);
+  const visiblePerformanceListings = showAllPerformance
+    ? displayedListingAnalytics
+    : displayedListingAnalytics.slice(0, DEFAULT_VISIBLE_ITEMS);
+
+  function toggleSection(sectionId) {
+    setActiveSection(sectionId);
+    setExpandedSections((current) => ({
+      ...current,
+      [sectionId]: !current[sectionId],
+    }));
+  }
+
+  function openSection(sectionId) {
+    setActiveSection(sectionId);
+    setExpandedSections((current) => ({
+      ...current,
+      [sectionId]: true,
+    }));
+
+    window.setTimeout(() => {
+      const section = document.getElementById(sectionId);
+
+      if (!section) {
+        return;
+      }
+
+      const navbarOffset = window.innerWidth >= 900 ? 108 : 92;
+      const sectionTop = section.getBoundingClientRect().top + window.scrollY - navbarOffset;
+
+      window.scrollTo({
+        top: Math.max(sectionTop, 0),
+        behavior: "smooth",
+      });
+    }, 120);
+  }
+
+  function handleBookingTabChange(event, nextTab) {
+    setBookingTab(nextTab);
+    setShowAllBookings(false);
+  }
+
+  useEffect(() => {
+    const sectionIds = Object.values(DASHBOARD_SECTIONS);
+    let animationFrameId = null;
+
+    function getScrollAnchor() {
+      return window.innerWidth >= 900 ? 126 : 104;
+    }
+
+    function updateActiveSectionFromScroll() {
+      animationFrameId = null;
+
+      const anchor = getScrollAnchor();
+      const sections = sectionIds
+        .map((sectionId) => {
+          const element = document.getElementById(sectionId);
+
+          if (!element) {
+            return null;
+          }
+
+          const rect = element.getBoundingClientRect();
+
+          return {
+            id: sectionId,
+            top: rect.top,
+            bottom: rect.bottom,
+          };
+        })
+        .filter(Boolean);
+
+      if (sections.length === 0) {
+        return;
+      }
+
+      const sectionAtAnchor = sections.find(
+        (section) => section.top <= anchor && section.bottom >= anchor
+      );
+
+      if (sectionAtAnchor) {
+        setActiveSection(sectionAtAnchor.id);
+        return;
+      }
+
+      const previousSection = [...sections]
+        .reverse()
+        .find((section) => section.top <= anchor);
+
+      if (previousSection) {
+        setActiveSection(previousSection.id);
+        return;
+      }
+
+      setActiveSection(sections[0].id);
+    }
+
+    function requestActiveSectionUpdate() {
+      if (animationFrameId !== null) {
+        return;
+      }
+
+      animationFrameId = window.requestAnimationFrame(updateActiveSectionFromScroll);
+    }
+
+    requestActiveSectionUpdate();
+    window.addEventListener("scroll", requestActiveSectionUpdate, { passive: true });
+    window.addEventListener("resize", requestActiveSectionUpdate);
+
+    return () => {
+      window.removeEventListener("scroll", requestActiveSectionUpdate);
+      window.removeEventListener("resize", requestActiveSectionUpdate);
+
+      if (animationFrameId !== null) {
+        window.cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, []);
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default", pb: 6 }}>
       <Box
@@ -1196,7 +1568,7 @@ function HostDashboardPanel({
         </Container>
       </Box>
 
-      <Container maxWidth="lg" sx={{ mt: { xs: 3, md: 4 } }}>
+      <Container maxWidth="xl" sx={{ mt: { xs: 3, md: 4 } }}>
         {storetApp?.hostAnalyticsError && (
           <Alert severity="warning" sx={{ mb: 2, borderRadius: 3 }}>
             {storetApp.hostAnalyticsError}
@@ -1219,7 +1591,7 @@ function HostDashboardPanel({
               lg: "repeat(4, 1fr)",
             },
             gap: 2,
-            mb: 4,
+            mb: 2,
           }}
         >
           <StatCard
@@ -1228,12 +1600,14 @@ function HostDashboardPanel({
             value={actionNeededCount}
             helper="Pending, waitlisted, unread, or paused"
             tone={actionNeededCount > 0 ? "warning" : "success"}
+            onClick={() => openSection(DASHBOARD_SECTIONS.attention)}
           />
           <StatCard
             icon={<Inventory2RoundedIcon />}
             label="Hosted listings"
             value={getHostAnalyticsSummaryValue(backendSummary, "hostedListings", safeMyListings.length)}
             helper={`${activeCount} active · ${pausedCount} paused`}
+            onClick={() => openSection(DASHBOARD_SECTIONS.listings)}
           />
           <StatCard
             icon={<PendingActionsRoundedIcon />}
@@ -1241,6 +1615,7 @@ function HostDashboardPanel({
             value={pendingRequestCount + waitlistedCount}
             helper={`${pendingRequestCount} pending · ${waitlistedCount} waitlisted`}
             tone="warning"
+            onClick={() => openSection(DASHBOARD_SECTIONS.requests)}
           />
           <StatCard
             icon={<TaskAltRoundedIcon />}
@@ -1248,20 +1623,326 @@ function HostDashboardPanel({
             value={confirmedCount + activeBookingCount}
             helper={`${completedCount} completed rentals`}
             tone="success"
+            onClick={() => openSection(DASHBOARD_SECTIONS.active)}
           />
         </Box>
 
-        <Card
-          elevation={0}
-          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
+        <Box
+          sx={{
+            display: { xs: "block", md: "grid" },
+            gridTemplateColumns: { md: "240px minmax(0, 1fr)" },
+            gap: 3,
+            alignItems: "start",
+          }}
         >
-          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-            <SectionHeader
-              eyebrow="Overview"
-              title="Host performance snapshot"
-              description="A simple summary of conversion, estimated booking volume, ratings, and inbox activity."
+          <Box
+            sx={{
+              position: { md: "sticky" },
+              top: { md: 96 },
+              zIndex: 2,
+              mb: { xs: 3, md: 0 },
+            }}
+          >
+            <DashboardSectionNav
+              activeSection={activeSection}
+              onOpenSection={openSection}
+              counts={{
+                actionNeededCount,
+                listingCount: safeMyListings.length,
+                requestCount: sortedBookingRequests.length,
+                activeRentalCount: confirmedAndActiveRequests.length,
+                messageCount: safeHostMessages.length,
+              }}
             />
+          </Box>
 
+          <Box sx={{ minWidth: 0 }}>
+            <DashboardSection
+          id={DASHBOARD_SECTIONS.attention}
+          eyebrow="Focus area"
+          title="Needs attention"
+          description="Only the listings that need action right now."
+          expanded={expandedSections[DASHBOARD_SECTIONS.attention]}
+          onToggle={() => toggleSection(DASHBOARD_SECTIONS.attention)}
+          summary={
+            <Chip
+              label={actionNeededCount > 0 ? `${actionNeededCount} items` : "Caught up"}
+              color={actionNeededCount > 0 ? "warning" : "success"}
+              size="small"
+              sx={{ fontWeight: 900 }}
+            />
+          }
+        >
+          {attentionListings.length > 0 ? (
+            <Stack spacing={1.5}>
+              {attentionListings.map((listing) => (
+                <AttentionItem key={listing.id} listing={listing} />
+              ))}
+            </Stack>
+          ) : (
+            <EmptyState
+              icon={<CheckCircleRoundedIcon />}
+              title="No urgent host items right now"
+              description="Your hosted spaces currently look caught up."
+            />
+          )}
+        </DashboardSection>
+
+        <DashboardSection
+          id={DASHBOARD_SECTIONS.requests}
+          eyebrow="Requests"
+          title="Reservation requests & bookings"
+          description="Use the tabs to focus on one booking status at a time."
+          expanded={expandedSections[DASHBOARD_SECTIONS.requests]}
+          onToggle={() => toggleSection(DASHBOARD_SECTIONS.requests)}
+          summary={
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              <Chip label={`${pendingRequestCount} pending`} color="warning" size="small" sx={{ fontWeight: 900 }} />
+              <Chip label={`${waitlistedCount} waitlisted`} color="info" size="small" sx={{ fontWeight: 900 }} />
+            </Stack>
+          }
+        >
+          {sortedBookingRequests.length > 0 ? (
+            <Stack spacing={2}>
+              <Tabs
+                value={bookingTab}
+                onChange={handleBookingTabChange}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  borderBottom: "1px solid",
+                  borderColor: "divider",
+                  minHeight: 44,
+                  "& .MuiTab-root": { fontWeight: 900, minHeight: 44 },
+                }}
+              >
+                {BOOKING_TABS.map((tab) => (
+                  <Tab
+                    key={tab.key}
+                    value={tab.key}
+                    label={`${tab.label} (${bookingTabCounts[tab.key] || 0})`}
+                  />
+                ))}
+              </Tabs>
+
+              {selectedBookingRequests.length > 0 ? (
+                <Stack spacing={2}>
+                  {visibleBookingRequests.map((request) => (
+                    <BookingRequestCard
+                      key={request.id}
+                      request={request}
+                      onUpdateBookingRequestStatus={updateBookingRequestStatusAction}
+                      onUpdateBookingLifecycle={updateBookingLifecycleAction}
+                    />
+                  ))}
+                  <ShowMoreButton
+                    visibleCount={DEFAULT_VISIBLE_ITEMS}
+                    totalCount={selectedBookingRequests.length}
+                    expanded={showAllBookings}
+                    onClick={() => setShowAllBookings((current) => !current)}
+                    itemLabel="bookings"
+                  />
+                </Stack>
+              ) : (
+                <EmptyState
+                  icon={<PendingActionsRoundedIcon />}
+                  title={selectedBookingTab.emptyTitle}
+                  description={selectedBookingTab.emptyDescription}
+                />
+              )}
+            </Stack>
+          ) : (
+            <EmptyState
+              icon={<PendingActionsRoundedIcon />}
+              title="No reservation requests yet"
+              description="When renters reserve your spaces, requests will show up here."
+            />
+          )}
+        </DashboardSection>
+
+        <DashboardSection
+          id={DASHBOARD_SECTIONS.active}
+          eyebrow="Rentals"
+          title="Confirmed and active rentals"
+          description="A focused view of paid or currently active rentals."
+          expanded={expandedSections[DASHBOARD_SECTIONS.active]}
+          onToggle={() => toggleSection(DASHBOARD_SECTIONS.active)}
+          summary={
+            <Chip
+              label={`${confirmedCount + activeBookingCount} current`}
+              color="success"
+              size="small"
+              sx={{ fontWeight: 900 }}
+            />
+          }
+        >
+          {confirmedAndActiveRequests.length > 0 ? (
+            <Stack spacing={2}>
+              {confirmedAndActiveRequests.slice(0, DEFAULT_VISIBLE_ITEMS).map((request) => (
+                <BookingRequestCard
+                  key={request.id}
+                  request={request}
+                  onUpdateBookingRequestStatus={updateBookingRequestStatusAction}
+                  onUpdateBookingLifecycle={updateBookingLifecycleAction}
+                />
+              ))}
+              {confirmedAndActiveRequests.length > DEFAULT_VISIBLE_ITEMS && (
+                <Button
+                  variant="text"
+                  onClick={() => {
+                    setBookingTab("active");
+                    openSection(DASHBOARD_SECTIONS.requests);
+                  }}
+                  sx={{ alignSelf: "flex-start", fontWeight: 900 }}
+                >
+                  View all active rentals in Requests
+                </Button>
+              )}
+            </Stack>
+          ) : (
+            <EmptyState
+              icon={<TaskAltRoundedIcon />}
+              title="No confirmed or active rentals"
+              description="Paid rentals will appear here after renters complete checkout."
+            />
+          )}
+        </DashboardSection>
+
+        <DashboardSection
+          id={DASHBOARD_SECTIONS.listings}
+          eyebrow="Listings"
+          title="Hosted listings"
+          description="Pause, resume, view, duplicate, or remove your spaces."
+          expanded={expandedSections[DASHBOARD_SECTIONS.listings]}
+          onToggle={() => toggleSection(DASHBOARD_SECTIONS.listings)}
+          summary={
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+              <Chip label={`${activeCount} active`} color="success" size="small" sx={{ fontWeight: 900 }} />
+              <Chip label={`${pausedCount} paused`} variant="outlined" size="small" sx={{ fontWeight: 900 }} />
+            </Stack>
+          }
+        >
+          {safeMyListings.length > 0 ? (
+            <Stack spacing={2}>
+              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                <Button
+                  component={RouterLink}
+                  to={APP_ROUTES.createListing}
+                  variant="contained"
+                  size="small"
+                  startIcon={<AddHomeWorkRoundedIcon />}
+                >
+                  Add listing
+                </Button>
+              </Box>
+
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                  gap: 2,
+                }}
+              >
+                {visibleListings.map((listing) => (
+                  <HostListingCard
+                    key={listing.id}
+                    listing={listing}
+                    onDeleteListing={deleteListingAction}
+                    onToggleListingStatus={toggleListingStatusAction}
+                  />
+                ))}
+              </Box>
+
+              <ShowMoreButton
+                visibleCount={DEFAULT_VISIBLE_ITEMS}
+                totalCount={safeMyListings.length}
+                expanded={showAllListings}
+                onClick={() => setShowAllListings((current) => !current)}
+                itemLabel="listings"
+              />
+            </Stack>
+          ) : (
+            <EmptyState
+              icon={<AddHomeWorkRoundedIcon />}
+              title="No listings yet"
+              description="Create your first storage listing to start the host side of Storet."
+              action={
+                <Button
+                  component={RouterLink}
+                  to={APP_ROUTES.createListing}
+                  variant="contained"
+                  startIcon={<AddHomeWorkRoundedIcon />}
+                >
+                  Create my first listing
+                </Button>
+              }
+            />
+          )}
+        </DashboardSection>
+
+        <DashboardSection
+          id={DASHBOARD_SECTIONS.messages}
+          eyebrow="Inbox"
+          title="Message inbox"
+          description="Renter questions sent from listing detail pages."
+          expanded={expandedSections[DASHBOARD_SECTIONS.messages]}
+          onToggle={() => toggleSection(DASHBOARD_SECTIONS.messages)}
+          summary={
+            <Chip
+              label={unreadMessageCount > 0 ? `${unreadMessageCount} unread` : `${safeHostMessages.length} total`}
+              color={unreadMessageCount > 0 ? "primary" : "default"}
+              size="small"
+              sx={{ fontWeight: 900 }}
+            />
+          }
+        >
+          {safeHostMessages.length > 0 ? (
+            <Stack spacing={2}>
+              {visibleMessages.map((message) => (
+                <MessageCard
+                  key={message.id}
+                  message={message}
+                  onUpdateHostMessageStatus={updateHostMessageStatusAction}
+                />
+              ))}
+              <ShowMoreButton
+                visibleCount={DEFAULT_VISIBLE_ITEMS}
+                totalCount={safeHostMessages.length}
+                expanded={showAllMessages}
+                onClick={() => setShowAllMessages((current) => !current)}
+                itemLabel="messages"
+              />
+            </Stack>
+          ) : (
+            <EmptyState
+              icon={<MailRoundedIcon />}
+              title="No messages yet"
+              description="Messages from renters will appear here after they contact you from a listing."
+            />
+          )}
+        </DashboardSection>
+
+        <DashboardSection
+          id={DASHBOARD_SECTIONS.analytics}
+          eyebrow="Analytics"
+          title="Performance and revenue"
+          description="Backend-powered revenue, pipeline, rating, and listing performance insights."
+          expanded={expandedSections[DASHBOARD_SECTIONS.analytics]}
+          onToggle={() => toggleSection(DASHBOARD_SECTIONS.analytics)}
+          summary={
+            backendAnalytics?.refreshedAt ? (
+              <Chip
+                label={`Updated ${formatDateTime(backendAnalytics.refreshedAt)}`}
+                variant="outlined"
+                size="small"
+                sx={{ fontWeight: 900 }}
+              />
+            ) : (
+              <Chip label="Snapshot" variant="outlined" size="small" sx={{ fontWeight: 900 }} />
+            )
+          }
+        >
+          <Stack spacing={2.5}>
             <Box
               sx={{
                 display: "grid",
@@ -1272,32 +1953,8 @@ function HostDashboardPanel({
               <MetricPill label="Booking conversion" value={formatPercent(conversionRate)} />
               <MetricPill label="Booked volume estimate" value={formatMoney(bookedVolumeEstimate)} />
               <MetricPill label="Average listing rating" value={averageRating.toFixed(1)} />
-              <MetricPill label="Unread messages" value={unreadMessageCount} />
+              <MetricPill label="Saved by renters" value={savedListingsCount} />
             </Box>
-          </CardContent>
-        </Card>
-
-
-        <Card
-          elevation={0}
-          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
-        >
-          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-            <SectionHeader
-              eyebrow="Backend analytics"
-              title="Revenue and booking pipeline"
-              description="These cards are powered by the Supabase host analytics function instead of only frontend-derived state."
-              action={
-                backendAnalytics?.refreshedAt ? (
-                  <Chip
-                    label={`Updated ${formatDateTime(backendAnalytics.refreshedAt)}`}
-                    variant="outlined"
-                    size="small"
-                    sx={{ fontWeight: 800 }}
-                  />
-                ) : null
-              }
-            />
 
             <Box
               sx={{
@@ -1323,103 +1980,28 @@ function HostDashboardPanel({
               />
             </Box>
 
-            <Box
-              sx={{
-                display: "grid",
-                gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" },
-                gap: 1.5,
-                mt: 2,
-              }}
-            >
-              <MetricPill label="Saved by renters" value={savedListingsCount} />
-              <MetricPill label="Paid payments" value={backendSummary.paidPaymentCount || 0} />
-              <MetricPill label="Total reviews" value={backendSummary.reviewCount || 0} />
-            </Box>
-          </CardContent>
-        </Card>
-
-        <Card
-          elevation={0}
-          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
-        >
-          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-            <SectionHeader
-              eyebrow="Focus area"
-              title="Needs attention"
-              description="These listings have open requests, waitlisted renters, unread messages, or are currently paused."
-            />
-
-            {attentionListings.length > 0 ? (
-              <Stack spacing={1.5}>
-                {attentionListings.map((listing) => (
-                  <AttentionItem key={listing.id} listing={listing} />
-                ))}
-              </Stack>
-            ) : (
-              <EmptyState
-                icon={<CheckCircleRoundedIcon />}
-                title="No urgent host items right now"
-                description="Your hosted spaces currently look caught up."
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card
-          elevation={0}
-          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
-        >
-          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-            <SectionHeader
-              eyebrow="Requests"
-              title="Reservation requests & bookings"
-              description="Move renters through the booking lifecycle: approve, waitlist, activate, complete, or cancel."
-            />
-
-            {sortedBookingRequests.length > 0 ? (
-              <Stack spacing={2}>
-                {sortedBookingRequests.map((request) => (
-                  <BookingRequestCard
-                    key={request.id}
-                    request={request}
-                    onUpdateBookingRequestStatus={updateBookingRequestStatusAction}
-                    onUpdateBookingLifecycle={updateBookingLifecycleAction}
-                  />
-                ))}
-              </Stack>
-            ) : (
-              <EmptyState
-                icon={<PendingActionsRoundedIcon />}
-                title="No reservation requests yet"
-                description="When renters reserve your spaces, requests will show up here."
-              />
-            )}
-          </CardContent>
-        </Card>
-
-        <Card
-          elevation={0}
-          sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5, mb: 4 }}
-        >
-          <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-            <SectionHeader
-              eyebrow="Analytics"
-              title="Listing performance"
-              description="See which spaces are generating activity and where renters are getting stuck."
-            />
-
             {displayedListingAnalytics.length > 0 ? (
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
-                  gap: 2,
-                }}
-              >
-                {displayedListingAnalytics.map((listing) => (
-                  <ListingPerformanceCard key={listing.id} listing={listing} />
-                ))}
-              </Box>
+              <Stack spacing={2}>
+                <Typography variant="h5">Listing performance</Typography>
+                <Box
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                    gap: 2,
+                  }}
+                >
+                  {visiblePerformanceListings.map((listing) => (
+                    <ListingPerformanceCard key={listing.id} listing={listing} />
+                  ))}
+                </Box>
+                <ShowMoreButton
+                  visibleCount={DEFAULT_VISIBLE_ITEMS}
+                  totalCount={displayedListingAnalytics.length}
+                  expanded={showAllPerformance}
+                  onClick={() => setShowAllPerformance((current) => !current)}
+                  itemLabel="performance cards"
+                />
+              </Stack>
             ) : (
               <EmptyState
                 icon={<QueryStatsRoundedIcon />}
@@ -1427,103 +2009,9 @@ function HostDashboardPanel({
                 description="Create listings and collect renter activity to populate analytics."
               />
             )}
-          </CardContent>
-        </Card>
-
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", lg: "0.95fr 1.05fr" },
-            gap: 4,
-          }}
-        >
-          <Card
-            elevation={0}
-            sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5 }}
-          >
-            <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-              <SectionHeader
-                eyebrow="Inbox"
-                title="Message inbox"
-                description="Renter questions sent from listing detail pages appear here as local host inbox records."
-              />
-
-              {safeHostMessages.length > 0 ? (
-                <Stack spacing={2}>
-                  {safeHostMessages.map((message) => (
-                    <MessageCard
-                      key={message.id}
-                      message={message}
-                      onUpdateHostMessageStatus={updateHostMessageStatusAction}
-                    />
-                  ))}
-                </Stack>
-              ) : (
-                <EmptyState
-                  icon={<MailRoundedIcon />}
-                  title="No messages yet"
-                  description="Messages from renters will appear here after they contact you from a listing."
-                />
-              )}
-            </CardContent>
-          </Card>
-
-          <Card
-            elevation={0}
-            sx={{ border: "1px solid", borderColor: "divider", borderRadius: 5 }}
-          >
-            <CardContent sx={{ p: { xs: 2.5, md: 3.5 } }}>
-              <SectionHeader
-                eyebrow="Listings"
-                title="Manage my listings"
-                description="Pause, resume, view, duplicate, or remove your hosted spaces."
-                action={
-                  safeMyListings.length > 0 ? (
-                    <Button
-                      component={RouterLink}
-                      to={APP_ROUTES.createListing}
-                      variant="contained"
-                      size="small"
-                      startIcon={<AddHomeWorkRoundedIcon />}
-                    >
-                      Add listing
-                    </Button>
-                  ) : null
-                }
-              />
-
-              {safeMyListings.length > 0 ? (
-                <Stack spacing={2}>
-                  {safeMyListings.map((listing) => (
-                    <React.Fragment key={listing.id}>
-                      <HostListingCard
-                        listing={listing}
-                        onDeleteListing={deleteListingAction}
-                        onToggleListingStatus={toggleListingStatusAction}
-                      />
-                      <Divider sx={{ display: { xs: "none", sm: "none" } }} />
-                    </React.Fragment>
-                  ))}
-                </Stack>
-              ) : (
-                <EmptyState
-                  icon={<AddHomeWorkRoundedIcon />}
-                  title="No listings yet"
-                  description="Create your first storage listing to start the host side of Storet."
-                  action={
-                    <Button
-                      component={RouterLink}
-                      to={APP_ROUTES.createListing}
-                      variant="contained"
-                      startIcon={<AddHomeWorkRoundedIcon />}
-                    >
-                      Create my first listing
-                    </Button>
-                  }
-                />
-              )}
-            </CardContent>
-          </Card>
+          </Stack>
+        </DashboardSection>
+          </Box>
         </Box>
       </Container>
     </Box>
