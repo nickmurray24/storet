@@ -69,7 +69,9 @@ function Navbar({ currentUser, onLogout }) {
   const userCapabilityModes = storetApp?.userCapabilityModes || [activeMode];
   const hasHostedListings = Boolean(storetApp?.hasHostedListings);
   const canSelectRenterMode = userCapabilityModes.includes(APP_MODES.RENTER);
-  const canSelectHostMode = userCapabilityModes.includes(APP_MODES.HOST) && hasHostedListings;
+  const canSelectHostMode =
+    userCapabilityModes.includes(APP_MODES.HOST) &&
+    (hasHostedListings || !canSelectRenterMode);
   const visibleModeOptions = [canSelectRenterMode, canSelectHostMode].filter(Boolean).length;
   const canSwitchModes = isLoggedIn && visibleModeOptions > 1;
   const unreadNotificationsCount = storetApp?.unreadNotificationsCount || 0;
@@ -79,6 +81,12 @@ function Navbar({ currentUser, onLogout }) {
     activeMode,
     hostDashboardIsAvailable,
   });
+  const brandDestination =
+    isLoggedIn && activeMode === APP_MODES.HOST
+      ? hostDashboardIsAvailable
+        ? APP_ROUTES.hostDashboard
+        : APP_ROUTES.createListing
+      : APP_ROUTES.explore;
 
   function isActiveRoute(to) {
     if (to === APP_ROUTES.home) {
@@ -109,7 +117,7 @@ function Navbar({ currentUser, onLogout }) {
     }
 
     if (nextMode === APP_MODES.HOST) {
-      navigate(APP_ROUTES.hostDashboard);
+      navigate(hostDashboardIsAvailable ? APP_ROUTES.hostDashboard : APP_ROUTES.createListing);
       return;
     }
 
@@ -150,7 +158,7 @@ function Navbar({ currentUser, onLogout }) {
         >
           <Box
             component={NavLink}
-            to={APP_ROUTES.explore}
+            to={brandDestination}
             sx={{
               color: "inherit",
               textDecoration: "none",

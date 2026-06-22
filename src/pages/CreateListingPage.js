@@ -40,9 +40,11 @@ import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { DEFAULT_USER_PROFILE } from "../models/storetModels";
+import { APP_MODES } from "../constants/appEnums";
 import { createListingRecord, parseNumber } from "../utils/listingUtils";
 import { getListingImageValidationMessage } from "../services/listingImageService";
 import { formatPricingSummary, normalizePricing, hasAnyPricing } from "../utils/pricingUtils";
+import { userCanUseRenterMode } from "../utils/roleUtils";
 
 const storageTypes = [
   "Garage",
@@ -91,6 +93,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
   );
 
   const activeUser = currentUser || storetApp?.currentUser || storedUser;
+  const canReturnToRenterExperience = userCanUseRenterMode(activeUser);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -200,6 +203,11 @@ function CreateListingPage({ currentUser, onAddListing }) {
     setSelectedImageFiles((currentFiles) =>
       currentFiles.filter((_, index) => index !== indexToRemove)
     );
+  }
+
+  function handleBackToExplore() {
+    storetApp?.actions?.switchActiveMode?.(APP_MODES.RENTER);
+    navigate(APP_ROUTES.explore);
   }
 
   function buildTags() {
@@ -352,13 +360,15 @@ function CreateListingPage({ currentUser, onAddListing }) {
       >
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
           <Stack spacing={3}>
-            <Button
-              onClick={() => navigate(APP_ROUTES.explore)}
-              startIcon={<ArrowBackRoundedIcon />}
-              sx={{ alignSelf: "flex-start" }}
-            >
-              Back to Explore
-            </Button>
+            {canReturnToRenterExperience && (
+              <Button
+                onClick={handleBackToExplore}
+                startIcon={<ArrowBackRoundedIcon />}
+                sx={{ alignSelf: "flex-start" }}
+              >
+                Back to Explore
+              </Button>
+            )}
 
             <Stack
               direction={{ xs: "column", md: "row" }}

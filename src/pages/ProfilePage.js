@@ -68,6 +68,7 @@ function ProfilePage({
   const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
   const [hostUpgradeIsSubmitting, setHostUpgradeIsSubmitting] = useState(false);
+  const [renterUpgradeIsSubmitting, setRenterUpgradeIsSubmitting] = useState(false);
 
   const storedUser = getStoredCurrentUser() || {
     fullName: "Demo User",
@@ -200,6 +201,16 @@ function ProfilePage({
     }
   }
 
+  async function handleBecomeRenter() {
+    setRenterUpgradeIsSubmitting(true);
+    const result = await storetApp?.actions?.becomeRenter?.();
+    setRenterUpgradeIsSubmitting(false);
+
+    if (result?.ok) {
+      navigate(APP_ROUTES.explore);
+    }
+  }
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
       <Box
@@ -303,6 +314,17 @@ function ProfilePage({
                   onClick={handleSwitchToRenter}
                 >
                   Switch to Renter
+                </Button>
+              )}
+
+              {isHostMode && !canUseRenterMode && (
+                <Button
+                  variant="outlined"
+                  startIcon={<PersonRoundedIcon />}
+                  onClick={handleBecomeRenter}
+                  disabled={renterUpgradeIsSubmitting}
+                >
+                  {renterUpgradeIsSubmitting ? "Updating..." : "Create renter account"}
                 </Button>
               )}
 
@@ -733,10 +755,28 @@ function ProfilePage({
                         </>
                       )}
 
-                      <Alert severity="info">
-                        Use the profile chip in the navbar to switch between renter
-                        and host mode when your account supports both.
-                      </Alert>
+                      {canUseRenterMode ? (
+                        <Alert severity="info">
+                          Use the profile chip in the navbar to switch between renter
+                          and host mode when your account supports both.
+                        </Alert>
+                      ) : (
+                        <Alert
+                          severity="info"
+                          action={
+                            <Button
+                              color="inherit"
+                              size="small"
+                              onClick={handleBecomeRenter}
+                              disabled={renterUpgradeIsSubmitting}
+                            >
+                              {renterUpgradeIsSubmitting ? "Updating..." : "Add renter access"}
+                            </Button>
+                          }
+                        >
+                          Add renter access to browse, save, and book storage spaces.
+                        </Alert>
+                      )}
                     </Stack>
                   </CardContent>
                 </Card>
