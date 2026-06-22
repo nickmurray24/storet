@@ -18,6 +18,7 @@ import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 import { useStoretApp } from "../context/StoretAppContext";
 import { APP_ROUTES } from "../routes/appRoutes";
 import { APP_MODES } from "../constants/appEnums";
+import { userCanUseRenterMode } from "../utils/roleUtils";
 
 function ProtectedRoute({ children, requiredMode = null, requiresHostedListing = false, allowHostSetup = false }) {
   const {
@@ -31,6 +32,7 @@ function ProtectedRoute({ children, requiredMode = null, requiresHostedListing =
   } = useStoretApp();
   const location = useLocation();
   const navigate = useNavigate();
+  const canUseRenterMode = userCanUseRenterMode(currentUser);
 
   if (authIsLoading) {
     return (
@@ -125,10 +127,13 @@ function ProtectedRoute({ children, requiredMode = null, requiresHostedListing =
               </Box>
 
               <Box>
-                <Typography variant="h4">Switch to host mode first</Typography>
+                <Typography variant="h4">
+                  {canUseHostMode ? "Create your first listing" : "Host tools are not available yet"}
+                </Typography>
                 <Typography color="text.secondary" sx={{ mt: 1 }}>
-                  Host tools are separated from the renter experience so each side of
-                  Storet stays clear and focused.
+                  {canUseHostMode
+                    ? "Finish your first listing before Storet unlocks the full host dashboard experience."
+                    : "Renter accounts stay focused on browsing and booking spaces. Become a host when you are ready to list extra space."}
                 </Typography>
               </Box>
 
@@ -148,13 +153,18 @@ function ProtectedRoute({ children, requiredMode = null, requiresHostedListing =
                   {canUseHostMode ? (hasHostedListings ? "Switch to Host" : "Create first listing") : "Become a host"}
                 </Button>
 
-                <Button
-                  variant="outlined"
-                  startIcon={<WarehouseRoundedIcon />}
-                  onClick={() => navigate(APP_ROUTES.explore)}
-                >
-                  Stay in renter mode
-                </Button>
+                {canUseRenterMode && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<WarehouseRoundedIcon />}
+                    onClick={() => {
+                      actions.switchActiveMode(APP_MODES.RENTER);
+                      navigate(APP_ROUTES.explore);
+                    }}
+                  >
+                    Stay in renter mode
+                  </Button>
+                )}
               </Stack>
             </Stack>
           </CardContent>
@@ -215,16 +225,18 @@ function ProtectedRoute({ children, requiredMode = null, requiresHostedListing =
                   Create first listing
                 </Button>
 
-                <Button
-                  variant="outlined"
-                  startIcon={<WarehouseRoundedIcon />}
-                  onClick={() => {
-                    actions.switchActiveMode(APP_MODES.RENTER);
-                    navigate(APP_ROUTES.explore);
-                  }}
-                >
-                  Back to renter mode
-                </Button>
+                {canUseRenterMode && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<WarehouseRoundedIcon />}
+                    onClick={() => {
+                      actions.switchActiveMode(APP_MODES.RENTER);
+                      navigate(APP_ROUTES.explore);
+                    }}
+                  >
+                    Back to renter mode
+                  </Button>
+                )}
               </Stack>
             </Stack>
           </CardContent>

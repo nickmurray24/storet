@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import {
   Alert,
   Avatar,
@@ -23,17 +23,16 @@ import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
-import { APP_ROUTES, getSafeRedirectPath } from "../routes/appRoutes";
-import { USER_ROLES } from "../constants/appEnums";
+import { APP_ROUTES } from "../routes/appRoutes";
+import { APP_MODES, USER_ROLES } from "../constants/appEnums";
 
 function AuthPage({ onLogin }) {
   const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
-  const location = useLocation();
-  const redirectAfterAuth = getSafeRedirectPath(
-    location.state?.from,
-    APP_ROUTES.explore
-  );
+  // The role toggle on this page is the user's explicit mode choice.
+  // Do not reuse a stale protected-route redirect from a previous session,
+  // because that can send renters to host guards or hosts to renter pages.
+  const redirectAfterAuth = "";
 
   const [authMode, setAuthMode] = useState("login");
   const [role, setRole] = useState(USER_ROLES.RENTER);
@@ -138,6 +137,8 @@ function AuthPage({ onLogin }) {
       email: trimmedEmail,
       password: formData.password,
       role,
+      preferredMode: role === USER_ROLES.HOST ? APP_MODES.HOST : APP_MODES.RENTER,
+      redirectAfterAuth,
     });
 
     setIsSubmitting(false);
@@ -155,7 +156,7 @@ function AuthPage({ onLogin }) {
       return;
     }
 
-    navigate(redirectAfterAuth, { replace: true });
+    navigate(result.redirectPath || redirectAfterAuth || APP_ROUTES.explore, { replace: true });
   }
 
   return (

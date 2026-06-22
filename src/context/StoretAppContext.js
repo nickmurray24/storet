@@ -33,11 +33,12 @@ import { hostAnalyticsService } from "../services/hostAnalyticsService";
 import { stripeCheckoutService } from "../services/stripeCheckoutService";
 import { storetDataService } from "../services/storetDataService";
 import { APP_MODES, LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
-import { buildCheckoutPath } from "../routes/appRoutes";
+import { APP_ROUTES, buildCheckoutPath, getSafeRedirectPath } from "../routes/appRoutes";
 import { normalizeUserProfile } from "../models/storetModels";
 import {
   getDefaultModeForUser,
   getNextRoleForHostUpgrade,
+  getNextRoleForRenterUpgrade,
   getUserCapabilityModes,
   userCanUseHostMode,
   userCanUseMode,
@@ -126,6 +127,96 @@ function isBackendId(value) {
   );
 }
 
+function getPreferredModeFromAuthInput(userOrCredentials = {}) {
+  if (userOrCredentials.preferredMode === APP_MODES.HOST) {
+    return APP_MODES.HOST;
+  }
+
+  if (userOrCredentials.role === USER_ROLES.HOST) {
+    return APP_MODES.HOST;
+  }
+
+  return APP_MODES.RENTER;
+}
+
+function routeRequiresHostAccess(pathname = "") {
+  return (
+    pathname === APP_ROUTES.hostDashboard ||
+    pathname === APP_ROUTES.createListing ||
+    pathname.startsWith(`${APP_ROUTES.hostDashboard}/`) ||
+    pathname.startsWith(`${APP_ROUTES.createListing}/`)
+  );
+}
+
+function routeIsAuthOrHome(pathname = "") {
+  return pathname === APP_ROUTES.home || pathname === APP_ROUTES.auth;
+}
+
+function getModeForUserSession(user, preferredMode = APP_MODES.RENTER, hostListingCount = 0) {
+  const normalizedPreferredMode = preferredMode === APP_MODES.HOST ? APP_MODES.HOST : APP_MODES.RENTER;
+  const hasHostListings = Number(hostListingCount) > 0;
+  const canHost = userCanUseHostMode(user);
+  const canRenter = userCanUseRenterMode(user);
+
+  if (normalizedPreferredMode === APP_MODES.HOST && canHost) {
+    if (hasHostListings || !canRenter) {
+      return APP_MODES.HOST;
+    }
+
+    return APP_MODES.RENTER;
+  }
+
+  if (canRenter) {
+    return APP_MODES.RENTER;
+  }
+
+  return getDefaultModeForUser(user, normalizedPreferredMode);
+}
+
+function getPostAuthRedirectPath(user, options = {}) {
+  const {
+    preferredMode = APP_MODES.RENTER,
+    requestedPath = "",
+    hostListingCount = 0,
+  } = options;
+
+  const safeRequestedPath = getSafeRedirectPath(requestedPath, "");
+  const hasHostListings = Number(hostListingCount) > 0;
+  const wantsHost = preferredMode === APP_MODES.HOST;
+  const canHost = userCanUseHostMode(user);
+  const canRenter = userCanUseRenterMode(user);
+
+  const hostDestination = hasHostListings
+    ? APP_ROUTES.hostDashboard
+    : APP_ROUTES.createListing;
+
+  if (safeRequestedPath && !routeIsAuthOrHome(safeRequestedPath)) {
+    if (routeRequiresHostAccess(safeRequestedPath)) {
+      if (canHost) {
+        return hasHostListings ? safeRequestedPath : APP_ROUTES.createListing;
+      }
+
+      return APP_ROUTES.explore;
+    }
+
+    if (!canRenter && canHost) {
+      return hostDestination;
+    }
+
+    return safeRequestedPath;
+  }
+
+  if (wantsHost && canHost) {
+    return hostDestination;
+  }
+
+  if (!canRenter && canHost) {
+    return hostDestination;
+  }
+
+  return APP_ROUTES.explore;
+}
+
 export function StoretAppProvider({ children }) {
   const initialState = useMemo(() => storetDataService.loadState(), []);
 
@@ -155,14 +246,20 @@ export function StoretAppProvider({ children }) {
   const [hostAnalyticsAreLoading, setHostAnalyticsAreLoading] = useState(false);
   const [hostAnalyticsError, setHostAnalyticsError] = useState("");
 
-  const persistAuthenticatedUser = useCallback((user) => {
+  const persistAuthenticatedUser = useCallback((user, options = {}) => {
     const normalizedUser = normalizeUserProfile({
       ...user,
       isAuthenticated: true,
       role: user?.role || USER_ROLES.RENTER,
     });
 
-    const nextMode = getDefaultModeForUser(normalizedUser, activeMode);
+    const preferredMode = options.preferredMode || activeMode;
+    const hostListingCount = options.hostListingCount ?? userListings.length;
+    const nextMode = getModeForUserSession(
+      normalizedUser,
+      preferredMode,
+      hostListingCount
+    );
 
     storetDataService.saveCurrentUser(normalizedUser);
     storetDataService.saveActiveMode(nextMode);
@@ -171,7 +268,7 @@ export function StoretAppProvider({ children }) {
     setAuthError("");
 
     return normalizedUser;
-  }, [activeMode]);
+  }, [activeMode, userListings.length]);
 
   const clearAuthenticatedUser = useCallback(() => {
     storetDataService.clearCurrentUser();
@@ -532,10 +629,12 @@ export function StoretAppProvider({ children }) {
   const hostDashboardIsAvailable = canUseHostMode && hasHostedListings;
   const currentActiveMode = useMemo(() => {
     const normalizedMode = getDefaultModeForUser(currentUser, activeMode);
+    const shouldFallbackToRenter =
+      normalizedMode === APP_MODES.HOST &&
+      !hasHostedListings &&
+      userCanUseRenterMode(currentUser);
 
-    return normalizedMode === APP_MODES.HOST && !hasHostedListings
-      ? APP_MODES.RENTER
-      : normalizedMode;
+    return shouldFallbackToRenter ? APP_MODES.RENTER : normalizedMode;
   }, [activeMode, currentUser, hasHostedListings]);
   const isHostMode = currentActiveMode === APP_MODES.HOST;
   const isRenterMode = currentActiveMode === APP_MODES.RENTER;
@@ -545,17 +644,17 @@ export function StoretAppProvider({ children }) {
       return;
     }
 
-    const normalizedMode = getDefaultModeForUser(currentUser, activeMode);
-    const nextMode =
-      normalizedMode === APP_MODES.HOST && !hasHostedListings
-        ? APP_MODES.RENTER
-        : normalizedMode;
+    const nextMode = getModeForUserSession(
+      currentUser,
+      activeMode,
+      allUserListings.length
+    );
 
     if (nextMode !== activeMode) {
       setActiveMode(nextMode);
       storetDataService.saveActiveMode(nextMode);
     }
-  }, [activeMode, currentUser, hasHostedListings]);
+  }, [activeMode, allUserListings.length, currentUser]);
 
   const hostBookingRequests = useMemo(() => {
     return getHostBookingRequests(allBookingRequests, allUserListings);
@@ -567,13 +666,23 @@ export function StoretAppProvider({ children }) {
 
   async function login(userOrCredentials = {}) {
     const hasPasswordCredentials = Boolean(userOrCredentials.password);
+    const preferredMode = getPreferredModeFromAuthInput(userOrCredentials);
 
     if (!hasPasswordCredentials) {
-      const loggedInUser = persistAuthenticatedUser(userOrCredentials);
+      const loggedInUser = persistAuthenticatedUser(userOrCredentials, {
+        preferredMode,
+        hostListingCount: userListings.length,
+      });
 
       return {
         ok: true,
         user: loggedInUser,
+        activeMode: getModeForUserSession(loggedInUser, preferredMode, userListings.length),
+        redirectPath: getPostAuthRedirectPath(loggedInUser, {
+          preferredMode,
+          requestedPath: userOrCredentials.redirectAfterAuth,
+          hostListingCount: userListings.length,
+        }),
       };
     }
 
@@ -585,14 +694,13 @@ export function StoretAppProvider({ children }) {
       ? await authService.signUp(userOrCredentials)
       : await authService.signIn(userOrCredentials);
 
-    setAuthIsLoading(false);
-
     if (authResponse.error) {
       const message = getErrorMessage(
         authResponse.error,
         "We could not finish signing you in. Please try again."
       );
       setAuthError(message);
+      setAuthIsLoading(false);
 
       return {
         ok: false,
@@ -601,6 +709,8 @@ export function StoretAppProvider({ children }) {
     }
 
     if (authResponse.data?.needsEmailConfirmation) {
+      setAuthIsLoading(false);
+
       return {
         ok: true,
         needsEmailConfirmation: true,
@@ -609,16 +719,54 @@ export function StoretAppProvider({ children }) {
     }
 
     if (authResponse.data?.user) {
-      const loggedInUser = persistAuthenticatedUser(authResponse.data.user);
+      const hostListingsResponse = await listingService.getCurrentUserListings();
+      const savedListingsResponse = await listingService.getSavedListingIds();
+
+      const hostListings = hostListingsResponse.error
+        ? []
+        : normalizeListingList(hostListingsResponse.data || []);
+      const nextSavedListingIds = savedListingsResponse.error
+        ? []
+        : normalizeSavedIds(savedListingsResponse.data);
+
+      if (hostListingsResponse.error || savedListingsResponse.error) {
+        const message = getErrorMessage(
+          hostListingsResponse.error || savedListingsResponse.error,
+          "You are signed in, but we could not load all of your account data yet."
+        );
+        setListingsError(message);
+      }
+
+      setUserListings(hostListings);
+      setSavedListingIds(nextSavedListingIds);
+
+      const loggedInUser = persistAuthenticatedUser(authResponse.data.user, {
+        preferredMode,
+        hostListingCount: hostListings.length,
+      });
+      const nextMode = getModeForUserSession(
+        loggedInUser,
+        preferredMode,
+        hostListings.length
+      );
+
+      setAuthIsLoading(false);
 
       return {
         ok: true,
         user: loggedInUser,
+        activeMode: nextMode,
+        redirectPath: getPostAuthRedirectPath(loggedInUser, {
+          preferredMode,
+          requestedPath: userOrCredentials.redirectAfterAuth,
+          hostListingCount: hostListings.length,
+        }),
       };
     }
 
     const fallbackMessage = "We could not finish signing you in. Please try again.";
     setAuthError(fallbackMessage);
+    setAuthIsLoading(false);
 
     return {
       ok: false,
@@ -660,7 +808,11 @@ export function StoretAppProvider({ children }) {
       };
     }
 
-    if (normalizedMode === APP_MODES.HOST && !hasHostedListings) {
+    if (
+      normalizedMode === APP_MODES.HOST &&
+      !hasHostedListings &&
+      userCanUseRenterMode(currentUser)
+    ) {
       return {
         ok: false,
         error: "Create your first listing before switching into host mode.",
@@ -730,6 +882,64 @@ export function StoretAppProvider({ children }) {
       user: upgradedUser,
       activeMode: nextMode,
       needsFirstListing: !hasHostedListings,
+    };
+  }
+
+  async function becomeRenter() {
+    if (!currentUser?.isAuthenticated) {
+      return {
+        ok: false,
+        error: "Please sign in before creating a renter account.",
+      };
+    }
+
+    const nextRole = getNextRoleForRenterUpgrade(currentUser.role);
+    const nextMode = APP_MODES.RENTER;
+
+    if (currentUser.role === nextRole && userCanUseRenterMode(currentUser)) {
+      setActiveMode(nextMode);
+      storetDataService.saveActiveMode(nextMode);
+
+      return {
+        ok: true,
+        user: currentUser,
+        activeMode: nextMode,
+      };
+    }
+
+    setAuthError("");
+
+    const response = await authService.updateCurrentUserRole(nextRole);
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not add renter access to your account yet."
+      );
+      setAuthError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const upgradedUser = persistAuthenticatedUser(
+      {
+        ...currentUser,
+        ...(response.data || {}),
+        role: nextRole,
+      },
+      { preferredMode: nextMode }
+    );
+
+    setActiveMode(nextMode);
+    storetDataService.saveActiveMode(nextMode);
+
+    return {
+      ok: true,
+      user: upgradedUser,
+      activeMode: nextMode,
     };
   }
 
@@ -1779,6 +1989,7 @@ export function StoretAppProvider({ children }) {
       logout,
       switchActiveMode,
       becomeHost,
+      becomeRenter,
       addListing,
       attachListingImages,
       toggleSave,

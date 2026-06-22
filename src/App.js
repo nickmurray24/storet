@@ -1,5 +1,5 @@
 import React from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import "./App.css";
 
@@ -15,7 +15,7 @@ import ProfilePage from "./pages/ProfilePage";
 import NotificationsPage from "./pages/NotificationsPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import NotFoundPage from "./pages/NotFoundPage";
-import { StoretAppProvider } from "./context/StoretAppContext";
+import { StoretAppProvider, useStoretApp } from "./context/StoretAppContext";
 import { APP_ROUTES } from "./routes/appRoutes";
 import { APP_MODES } from "./constants/appEnums";
 
@@ -30,6 +30,31 @@ function ScrollToTop() {
   return null;
 }
 
+
+function RenterExperienceRoute({ children }) {
+  const {
+    currentUser,
+    authIsLoading,
+    activeMode,
+    hostDashboardIsAvailable,
+  } = useStoretApp();
+
+  if (
+    !authIsLoading &&
+    currentUser?.isAuthenticated &&
+    activeMode === APP_MODES.HOST
+  ) {
+    return (
+      <Navigate
+        to={hostDashboardIsAvailable ? APP_ROUTES.hostDashboard : APP_ROUTES.createListing}
+        replace
+      />
+    );
+  }
+
+  return children;
+}
+
 function AppRoutes() {
   return (
     <div className="app">
@@ -39,7 +64,14 @@ function AppRoutes() {
       <Routes>
         <Route path={APP_ROUTES.home} element={<LandingPage />} />
         <Route path={APP_ROUTES.auth} element={<AuthPage />} />
-        <Route path={APP_ROUTES.explore} element={<ExplorePage />} />
+        <Route
+          path={APP_ROUTES.explore}
+          element={
+            <RenterExperienceRoute>
+              <ExplorePage />
+            </RenterExperienceRoute>
+          }
+        />
         <Route path={APP_ROUTES.listingDetails} element={<ListingDetailsPage />} />
 
         <Route

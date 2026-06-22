@@ -62,3 +62,14 @@ export function getNextRoleForHostUpgrade(role) {
 
   return normalizedRole;
 }
+
+
+export function getNextRoleForRenterUpgrade(role) {
+  const normalizedRole = normalizeUserRole(role);
+
+  if (normalizedRole === USER_ROLES.HOST) {
+    return USER_ROLES.BOTH;
+  }
+
+  return normalizedRole;
+}
