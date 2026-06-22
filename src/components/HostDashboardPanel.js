@@ -1191,16 +1191,6 @@ function HostDashboardPanel({
               >
                 Create listing
               </Button>
-              <Button
-                component={RouterLink}
-                to={APP_ROUTES.profile}
-                variant="outlined"
-                size="large"
-                startIcon={<Inventory2RoundedIcon />}
-                sx={{ bgcolor: "background.paper" }}
-              >
-                View profile
-              </Button>
             </Stack>
           </Stack>
         </Container>

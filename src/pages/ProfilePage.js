@@ -22,9 +22,7 @@ import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded
 import FavoriteRoundedIcon from "@mui/icons-material/FavoriteRounded";
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
-import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import MailRoundedIcon from "@mui/icons-material/MailRounded";
-import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import ShieldRoundedIcon from "@mui/icons-material/ShieldRounded";
@@ -66,7 +64,6 @@ function ProfilePage({
   hostMessages,
   onToggleSave,
   onUpdateBookingLifecycle,
-  onLogout,
 }) {
   const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
@@ -147,16 +144,6 @@ function ProfilePage({
   }, [activeUser, hostMessages, storetApp?.hostMessages]);
 
   const completedPaymentCount = (paymentRecords ?? storetApp?.paymentRecords ?? []).length;
-
-  function handleLogoutClick() {
-    const logoutAction = onLogout || storetApp?.actions?.logout;
-
-    if (logoutAction) {
-      logoutAction();
-    }
-
-    navigate(APP_ROUTES.home);
-  }
 
   function handleUnsave(listingId) {
     const toggleSaveAction = onToggleSave || storetApp?.actions?.toggleSave;
@@ -276,38 +263,15 @@ function ProfilePage({
             </Stack>
 
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
-              <Button
-                component={RouterLink}
-                to={APP_ROUTES.notifications}
-                variant="outlined"
-                startIcon={<NotificationsRoundedIcon />}
-                sx={{ bgcolor: "background.paper" }}
-              >
-                Activity
-              </Button>
-
               {isHostMode && (
-                <>
-                  <Button
-                    component={RouterLink}
-                    to={APP_ROUTES.createListing}
-                    variant="contained"
-                    startIcon={<AddHomeWorkRoundedIcon />}
-                  >
-                    {hasHostedListings ? "List space" : "Create first listing"}
-                  </Button>
-
-                  {hasHostedListings && (
-                    <Button
-                      component={RouterLink}
-                      to={APP_ROUTES.hostDashboard}
-                      variant="outlined"
-                      startIcon={<HomeWorkRoundedIcon />}
-                    >
-                      Host dashboard
-                    </Button>
-                  )}
-                </>
+                <Button
+                  component={RouterLink}
+                  to={APP_ROUTES.createListing}
+                  variant="contained"
+                  startIcon={<AddHomeWorkRoundedIcon />}
+                >
+                  {hasHostedListings ? "List space" : "Create first listing"}
+                </Button>
               )}
 
               {isRenterMode && canUseHostMode && (
@@ -342,14 +306,6 @@ function ProfilePage({
                 </Button>
               )}
 
-              <Button
-                variant="text"
-                color="inherit"
-                startIcon={<LogoutRoundedIcon />}
-                onClick={handleLogoutClick}
-              >
-                Log out
-              </Button>
             </Stack>
           </Stack>
         </Container>
@@ -781,103 +737,6 @@ function ProfilePage({
                         Use the profile chip in the navbar to switch between renter
                         and host mode when your account supports both.
                       </Alert>
-                    </Stack>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent sx={{ p: 3 }}>
-                    <Stack spacing={2}>
-                      <Typography variant="h5">Quick actions</Typography>
-
-                      {isRenterMode && (
-                        <>
-                          <Button
-                            component={RouterLink}
-                            to={APP_ROUTES.explore}
-                            variant="outlined"
-                            fullWidth
-                            startIcon={<WarehouseRoundedIcon />}
-                          >
-                            Browse storage
-                          </Button>
-
-                          <Button
-                            component={RouterLink}
-                            to={APP_ROUTES.notifications}
-                            variant="outlined"
-                            fullWidth
-                            startIcon={<NotificationsRoundedIcon />}
-                          >
-                            View renter activity
-                          </Button>
-
-                          {canUseHostMode ? (
-                            <Button
-                              variant="contained"
-                              fullWidth
-                              startIcon={<SwapHorizRoundedIcon />}
-                              onClick={handleSwitchToHost}
-                              disabled={!hasHostedListings && hostUpgradeIsSubmitting}
-                            >
-                              {!hasHostedListings && hostUpgradeIsSubmitting ? "Opening setup..." : hasHostedListings ? "Switch to Host mode" : "Create first listing"}
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="contained"
-                              fullWidth
-                              startIcon={<HomeWorkRoundedIcon />}
-                              onClick={handleBecomeHost}
-                              disabled={hostUpgradeIsSubmitting}
-                            >
-                              {hostUpgradeIsSubmitting ? "Updating..." : "Become a host"}
-                            </Button>
-                          )}
-                        </>
-                      )}
-
-                      {isHostMode && (
-                        <>
-                          {hasHostedListings && (
-                            <Button
-                              component={RouterLink}
-                              to={APP_ROUTES.hostDashboard}
-                              variant="outlined"
-                              fullWidth
-                              startIcon={<HomeWorkRoundedIcon />}
-                            >
-                              Host dashboard
-                            </Button>
-                          )}
-
-                          <Button
-                            component={RouterLink}
-                            to={APP_ROUTES.createListing}
-                            variant={hasHostedListings ? "outlined" : "contained"}
-                            fullWidth
-                            startIcon={<AddHomeWorkRoundedIcon />}
-                          >
-                            {hasHostedListings ? "Create listing" : "Create first listing"}
-                          </Button>
-
-                          {!hasHostedListings && (
-                            <Alert severity="info">
-                              Your Host Dashboard unlocks after you create your first listing.
-                            </Alert>
-                          )}
-
-                          {canUseRenterMode && (
-                            <Button
-                              variant="contained"
-                              fullWidth
-                              startIcon={<PersonRoundedIcon />}
-                              onClick={handleSwitchToRenter}
-                            >
-                              Switch to Renter mode
-                            </Button>
-                          )}
-                        </>
-                      )}
                     </Stack>
                   </CardContent>
                 </Card>

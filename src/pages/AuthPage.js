@@ -406,7 +406,9 @@ function AuthPage({ onLogin }) {
                           color="text.secondary"
                           fontWeight={700}
                         >
-                          I am using Storet as a:
+                          {isSignup
+                            ? "Create my Storet account as a:"
+                            : "Continue to Storet as a:"}
                         </Typography>
 
                         <ToggleButtonGroup
@@ -428,9 +430,6 @@ function AuthPage({ onLogin }) {
                           </ToggleButton>
                           <ToggleButton value={USER_ROLES.HOST} disabled={isSubmitting}>
                             Host
-                          </ToggleButton>
-                          <ToggleButton value={USER_ROLES.BOTH} disabled={isSubmitting}>
-                            Both
                           </ToggleButton>
                         </ToggleButtonGroup>
                       </Stack>
