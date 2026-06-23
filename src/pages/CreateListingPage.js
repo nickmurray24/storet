@@ -42,9 +42,11 @@ import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { DEFAULT_USER_PROFILE } from "../models/storetModels";
 import { APP_MODES } from "../constants/appEnums";
 import { createListingRecord, parseNumber } from "../utils/listingUtils";
+import VerifiedAddressField from "../components/VerifiedAddressField";
 import { getListingImageValidationMessage } from "../services/listingImageService";
 import { formatPricingSummary, normalizePricing, hasAnyPricing } from "../utils/pricingUtils";
 import { userCanUseRenterMode } from "../utils/roleUtils";
+import { EMPTY_VERIFIED_ADDRESS, hasVerifiedCoordinates } from "../utils/addressUtils";
 
 const storageTypes = [
   "Garage",
@@ -98,6 +100,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
   const [formData, setFormData] = useState({
     title: "",
     location: "",
+    ...EMPTY_VERIFIED_ADDRESS,
     storageType: "Garage",
     listingType: "Private host",
     dailyRate: "",
@@ -132,7 +135,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
 
     return {
       title: formData.title.trim() || "Your storage space",
-      location: formData.location.trim() || "Cincinnati, OH",
+      location: formData.displayLocation || formData.location.trim() || "Cincinnati, OH",
       storageType: formData.storageType,
       listingType: formData.listingType,
       pricing,
@@ -163,6 +166,37 @@ function CreateListingPage({ currentUser, onAddListing }) {
     setFormData((currentData) => ({
       ...currentData,
       [name]: value,
+    }));
+  }
+
+  function handleAddressInputChange(fieldName, value, options = {}) {
+    setFormData((currentData) => ({
+      ...currentData,
+      [fieldName]: value,
+      ...(options.keepVerified
+        ? {}
+        : {
+            location: "",
+            city: "",
+            state: "",
+            postalCode: "",
+            formattedAddress: "",
+            displayLocation: "",
+            latitude: null,
+            longitude: null,
+            addressVerified: false,
+            addressPlaceId: "",
+            addressAccuracy: "",
+          }),
+    }));
+  }
+
+  function handleAddressSelected(nextAddress) {
+    setFormData((currentData) => ({
+      ...currentData,
+      ...nextAddress,
+      addressLine2: currentData.addressLine2 || nextAddress.addressLine2 || "",
+      location: nextAddress.displayLocation || nextAddress.formattedAddress || "",
     }));
   }
 
@@ -210,6 +244,15 @@ function CreateListingPage({ currentUser, onAddListing }) {
     navigate(APP_ROUTES.explore);
   }
 
+  function handleCancel() {
+    if (canReturnToRenterExperience) {
+      handleBackToExplore();
+      return;
+    }
+
+    navigate(APP_ROUTES.profile);
+  }
+
   function buildTags() {
     const customTags = formData.customTags
       .split(",")
@@ -235,7 +278,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
     setSuccessMessage("");
 
     const title = formData.title.trim();
-    const location = formData.location.trim();
+    const location = (formData.displayLocation || formData.location || "").trim();
     const description = formData.description.trim();
     const pricing = normalizePricing({
       daily: formData.dailyRate,
@@ -249,8 +292,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
       return;
     }
 
-    if (!location) {
-      setError("Please enter a location.");
+    if (!location || !hasVerifiedCoordinates(formData)) {
+      setError("Please choose a verified address from the Mapbox suggestions so Storet can map the listing.");
       return;
     }
 
@@ -274,6 +317,19 @@ function CreateListingPage({ currentUser, onAddListing }) {
       listingData: {
         title,
         location,
+        addressLine1: formData.addressLine1.trim(),
+        addressLine2: formData.addressLine2.trim(),
+        city: formData.city,
+        state: formData.state,
+        postalCode: formData.postalCode,
+        country: formData.country,
+        formattedAddress: formData.formattedAddress,
+        displayLocation: formData.displayLocation || location,
+        latitude: formData.latitude,
+        longitude: formData.longitude,
+        addressVerified: formData.addressVerified,
+        addressPlaceId: formData.addressPlaceId,
+        addressAccuracy: formData.addressAccuracy,
         distance: "New listing",
         pricing,
         price: pricing.monthly || pricing.daily || pricing.yearly,
@@ -454,20 +510,18 @@ function CreateListingPage({ currentUser, onAddListing }) {
                       fullWidth
                     />
 
-                    <TextField
-                      label="Location"
-                      name="location"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      placeholder="Example: Oakley, Cincinnati, OH"
-                      fullWidth
-                      InputProps={{
-                        startAdornment: (
-                          <InputAdornment position="start">
-                            <PlaceRoundedIcon />
-                          </InputAdornment>
-                        ),
-                      }}
+                    <Stack spacing={1}>
+                      <Typography variant="h6">Verified address</Typography>
+                      <Typography color="text.secondary">
+                        Storet uses this verified address to place the listing on the map. Renters will see the city/neighborhood-level location publicly.
+                      </Typography>
+                    </Stack>
+
+                    <VerifiedAddressField
+                      address={formData}
+                      onAddressInputChange={handleAddressInputChange}
+                      onAddressSelected={handleAddressSelected}
+                      disabled={isSubmitting}
                     />
 
                     <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
@@ -791,10 +845,10 @@ function CreateListingPage({ currentUser, onAddListing }) {
                       <Button
                         type="button"
                         variant="outlined"
-                        onClick={() => navigate(APP_ROUTES.explore)}
+                        onClick={handleCancel}
                         disabled={isSubmitting}
                       >
-                        Cancel
+                        {canReturnToRenterExperience ? "Cancel" : "View profile"}
                       </Button>
 
                       <Button

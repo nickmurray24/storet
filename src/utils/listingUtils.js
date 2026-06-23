@@ -167,13 +167,28 @@ export function normalizeListing(listing = {}, index = 0) {
 
   const images = Array.isArray(listing.images) ? listing.images : [];
   const imageUrl = listing.imageUrl || listing.coverImageUrl || images[0] || "";
+  const displayLocation =
+    listing.displayLocation || listing.display_location || listing.location || listing.address || DEFAULT_LISTING_MODEL.displayLocation;
 
   return {
     ...DEFAULT_LISTING_MODEL,
     ...listing,
     id: String(listing.id ?? createModelId(MODEL_PREFIXES.LISTING) ?? `listing-${index + 1}`),
     title: listing.title ?? listing.name ?? DEFAULT_LISTING_MODEL.title,
-    location: listing.location ?? listing.address ?? DEFAULT_LISTING_MODEL.location,
+    location: displayLocation,
+    addressLine1: listing.addressLine1 ?? listing.address_line1 ?? DEFAULT_LISTING_MODEL.addressLine1,
+    addressLine2: listing.addressLine2 ?? listing.address_line2 ?? DEFAULT_LISTING_MODEL.addressLine2,
+    city: listing.city ?? DEFAULT_LISTING_MODEL.city,
+    state: listing.state ?? DEFAULT_LISTING_MODEL.state,
+    postalCode: listing.postalCode ?? listing.postal_code ?? DEFAULT_LISTING_MODEL.postalCode,
+    country: listing.country ?? DEFAULT_LISTING_MODEL.country,
+    formattedAddress: listing.formattedAddress ?? listing.formatted_address ?? DEFAULT_LISTING_MODEL.formattedAddress,
+    displayLocation,
+    latitude: listing.latitude ?? DEFAULT_LISTING_MODEL.latitude,
+    longitude: listing.longitude ?? DEFAULT_LISTING_MODEL.longitude,
+    addressVerified: Boolean(listing.addressVerified ?? listing.address_verified ?? DEFAULT_LISTING_MODEL.addressVerified),
+    addressPlaceId: listing.addressPlaceId ?? listing.address_place_id ?? DEFAULT_LISTING_MODEL.addressPlaceId,
+    addressAccuracy: listing.addressAccuracy ?? listing.address_accuracy ?? DEFAULT_LISTING_MODEL.addressAccuracy,
     distance: listing.distance ?? DEFAULT_LISTING_MODEL.distance,
     price,
     pricePeriod: preferredPricingOption?.period || PRICING_PERIODS.MONTHLY,
