@@ -70,12 +70,18 @@ function ListingDetailsPage({
   const params = useParams();
   const routeListingId = String(params.id || params.listingId || "");
 
-  const storedUser = getStoredCurrentUser() || {
-    fullName: "Demo User",
+  const storedUser = getStoredCurrentUser();
+  const guestUser = {
+    fullName: "Guest",
     role: "Renter",
+    isAuthenticated: false,
   };
 
-  const activeUser = currentUser || storetApp?.currentUser || storedUser;
+  const activeUser =
+    currentUser ||
+    storetApp?.currentUser ||
+    (storedUser?.isAuthenticated ? storedUser : guestUser);
+  const isAuthenticated = Boolean(activeUser?.isAuthenticated);
   const userListings = useMemo(() => {
     if (Array.isArray(storetApp?.userListings)) {
       return storetApp.userListings;
@@ -176,6 +182,16 @@ function ListingDetailsPage({
   function handleSaveClick() {
     if (!listing) return;
 
+    if (!isAuthenticated) {
+      navigate(APP_ROUTES.auth, {
+        state: {
+          from: `/listing/${routeListingId}`,
+          reason: "save-listing",
+        },
+      });
+      return;
+    }
+
     const toggleSaveAction =
       onToggleSave || onSaveToggle || storetApp?.actions?.toggleSave;
 
@@ -200,6 +216,13 @@ function ListingDetailsPage({
       return {
         ok: false,
         error: "We could not find that listing.",
+      };
+    }
+
+    if (!isAuthenticated) {
+      return {
+        ok: false,
+        error: "Please sign in before messaging a host.",
       };
     }
 
@@ -248,7 +271,7 @@ function ListingDetailsPage({
       return;
     }
 
-    if (!activeUser?.isAuthenticated) {
+    if (!isAuthenticated) {
       navigate(APP_ROUTES.auth, { state: { from: `/listing/${routeListingId}` } });
       return;
     }
@@ -370,7 +393,9 @@ function ListingDetailsPage({
   const canContinueToCheckout = canCheckoutBookingRequest(activeBookingRequest);
   const hasExistingOpenRequest = hasOpenBookingRequest(activeBookingRequest);
   const shouldDisableReservation = hasExistingOpenRequest && !canContinueToCheckout;
-  const activeActionLabel = canContinueToCheckout
+  const activeActionLabel = !isAuthenticated
+    ? "Sign in to reserve"
+    : canContinueToCheckout
     ? "Continue to checkout"
     : shouldDisableReservation
     ? `${activeBookingRequest.status} request`
@@ -491,7 +516,7 @@ function ListingDetailsPage({
                 onClick={handleSaveClick}
                 sx={{ bgcolor: isSaved ? undefined : "background.paper" }}
               >
-                {isSaved ? "Saved" : "Save listing"}
+                {!isAuthenticated ? "Sign in to save" : isSaved ? "Saved" : "Save listing"}
               </Button>
             </Stack>
           </Stack>
@@ -743,6 +768,14 @@ function ListingDetailsPage({
                     listingTitle={listing.title}
                     currentUser={activeUser}
                     onSubmitMessage={handleSubmitHostMessage}
+                    onRequireAuth={() =>
+                      navigate(APP_ROUTES.auth, {
+                        state: {
+                          from: `/listing/${routeListingId}`,
+                          reason: "message-host",
+                        },
+                      })
+                    }
                   />
                 </CardContent>
               </Card>
@@ -963,7 +996,7 @@ function ListingDetailsPage({
                     }
                     onClick={handleSaveClick}
                   >
-                    {isSaved ? "Saved" : "Save for later"}
+                    {!isAuthenticated ? "Sign in to save" : isSaved ? "Saved" : "Save for later"}
                   </Button>
 
                   <Typography
@@ -971,7 +1004,9 @@ function ListingDetailsPage({
                     color="text.secondary"
                     textAlign="center"
                   >
-                    You are browsing as {activeUser.fullName || "Demo User"}.
+                    {isAuthenticated
+                      ? `You are browsing as ${activeUser.fullName || "Storet user"}.`
+                      : "Sign in to save, message hosts, or reserve this space."}
                   </Typography>
                 </Stack>
               </CardContent>
