@@ -11,6 +11,7 @@ import {
   Typography,
 } from "@mui/material";
 
+import LockRoundedIcon from "@mui/icons-material/LockRounded";
 import MailRoundedIcon from "@mui/icons-material/MailRounded";
 import SendRoundedIcon from "@mui/icons-material/SendRounded";
 
@@ -19,6 +20,7 @@ function ContactHostForm({
   listingTitle,
   currentUser,
   onSubmitMessage = () => ({ ok: true }),
+  onRequireAuth,
 }) {
   const [formData, setFormData] = useState({
     fullName: currentUser?.isAuthenticated ? currentUser.fullName || "" : "",
@@ -98,6 +100,32 @@ function ContactHostForm({
       message: formData.message,
     });
     setFormData((prev) => ({ ...prev, message: "" }));
+  }
+
+  if (!currentUser?.isAuthenticated) {
+    return (
+      <Card variant="outlined" sx={{ boxShadow: "none", borderRadius: 4 }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Stack spacing={2} alignItems="flex-start">
+            <Alert severity="info" icon={<LockRoundedIcon />} sx={{ width: "100%" }}>
+              Sign in before messaging a host.
+            </Alert>
+
+            <Box>
+              <Typography variant="h6">Contact host</Typography>
+              <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+                Create or log into your Storet account to ask <strong>{hostName}</strong>{" "}
+                a question about <strong>{listingTitle}</strong>.
+              </Typography>
+            </Box>
+
+            <Button variant="contained" onClick={onRequireAuth}>
+              Sign in to message host
+            </Button>
+          </Stack>
+        </CardContent>
+      </Card>
+    );
   }
 
   if (submissionResult) {

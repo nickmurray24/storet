@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
   Avatar,
@@ -41,7 +41,7 @@ import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { getPageListings } from "../data/listingCatalog";
-import { buildListingPath } from "../routes/appRoutes";
+import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { normalizeSavedIds } from "../utils/listingUtils";
 import { getMonthlyEquivalentAmount } from "../utils/pricingUtils";
@@ -58,6 +58,9 @@ function ExplorePage({
   onSaveToggle,
 }) {
   const storetApp = useOptionalStoretApp();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isAuthenticated = Boolean(storetApp?.currentUser?.isAuthenticated);
 
   const activeMode = storetApp?.activeMode || "Renter";
   const userListings = useMemo(() => {
@@ -188,6 +191,16 @@ function ExplorePage({
   function handleSaveClick(event, listingId) {
     event.preventDefault();
     event.stopPropagation();
+
+    if (!isAuthenticated) {
+      navigate(APP_ROUTES.auth, {
+        state: {
+          from: location.pathname,
+          reason: "save-listing",
+        },
+      });
+      return;
+    }
 
     const toggleSaveAction =
       onToggleSave || onSaveToggle || storetApp?.actions?.toggleSave;
@@ -696,7 +709,7 @@ function ExplorePage({
                           }
                           onClick={(event) => handleSaveClick(event, listing.id)}
                         >
-                          {isSaved ? "Saved" : "Save"}
+                          {!isAuthenticated ? "Sign in to save" : isSaved ? "Saved" : "Save"}
                         </Button>
 
                         <Button
