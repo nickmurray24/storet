@@ -6,10 +6,12 @@ import {
   Box,
   Button,
   Card,
+  CardActionArea,
   CardContent,
   Chip,
   Container,
   Divider,
+  IconButton,
   LinearProgress,
   Rating,
   Stack,
@@ -18,6 +20,9 @@ import {
 
 import AccessTimeRoundedIcon from "@mui/icons-material/AccessTimeRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
+import ChevronLeftRoundedIcon from "@mui/icons-material/ChevronLeftRounded";
+import ChevronRightRoundedIcon from "@mui/icons-material/ChevronRightRounded";
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
@@ -33,10 +38,11 @@ import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import ContactHostForm from "../components/ContactHostForm";
+import Dialog from "../components/ui/Dialog";
 import ReviewForm from "../components/ReviewForm";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
-import { PRICING_PERIODS } from "../constants/appEnums";
+import { APP_MODES, PRICING_PERIODS } from "../constants/appEnums";
 import {
   canCheckoutBookingRequest,
   getBookingRequestCheckoutPath,
@@ -82,6 +88,10 @@ function ListingDetailsPage({
     storetApp?.currentUser ||
     (storedUser?.isAuthenticated ? storedUser : guestUser);
   const isAuthenticated = Boolean(activeUser?.isAuthenticated);
+  const activeMode = storetApp?.activeMode || activeUser?.activeMode || APP_MODES.RENTER;
+  const isHostMode = activeMode === APP_MODES.HOST;
+  const listingBackRoute = isHostMode ? APP_ROUTES.hostDashboard : APP_ROUTES.explore;
+  const listingBackLabel = isHostMode ? "Back to Host Dashboard" : "Back to Explore";
   const userListings = useMemo(() => {
     if (Array.isArray(storetApp?.userListings)) {
       return storetApp.userListings;
@@ -124,6 +134,7 @@ function ListingDetailsPage({
   const [submittedBookingRequest, setSubmittedBookingRequest] = useState(null);
   const [selectedRatePeriod, setSelectedRatePeriod] = useState("");
   const [bookingIsSubmitting, setBookingIsSubmitting] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(null);
 
   const activeBookingRequests = useMemo(
     () => bookingRequests ?? storetApp?.bookingRequests ?? [],
@@ -369,10 +380,10 @@ function ListingDetailsPage({
                 <Button
                   variant="contained"
                   component={RouterLink}
-                  to={APP_ROUTES.explore}
+                  to={listingBackRoute}
                   startIcon={<ArrowBackRoundedIcon />}
                 >
-                  Back to Explore
+                  {listingBackLabel}
                 </Button>
               </Stack>
             </CardContent>
@@ -401,7 +412,8 @@ function ListingDetailsPage({
     ? `${activeBookingRequest.status} request`
     : primaryActionLabel;
   const listingImages = Array.isArray(listing.images) ? listing.images.filter(Boolean) : [];
-  const heroImageUrl = listing.imageUrl || listingImages[0] || "";
+  const galleryImages = Array.from(new Set([listing.imageUrl, ...listingImages].filter(Boolean)));
+  const heroImageUrl = galleryImages[0] || "";
   const fallbackHeroGradient =
     listing.listingType === "Commercial"
       ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(37, 99, 235, 0.74))"
@@ -420,6 +432,36 @@ function ListingDetailsPage({
       request.status === BOOKING_STATUSES.COMPLETED
   );
 
+  const selectedGalleryImage = galleryIndex !== null ? galleryImages[galleryIndex] : "";
+  const hasMultipleGalleryImages = galleryImages.length > 1;
+
+  function openImageGallery(index) {
+    if (!galleryImages[index]) return;
+    setGalleryIndex(index);
+  }
+
+  function closeImageGallery() {
+    setGalleryIndex(null);
+  }
+
+  function showPreviousGalleryImage() {
+    setGalleryIndex((currentIndex) => {
+      if (currentIndex === null || galleryImages.length === 0) return currentIndex;
+      return (currentIndex - 1 + galleryImages.length) % galleryImages.length;
+    });
+  }
+
+  function showNextGalleryImage() {
+    setGalleryIndex((currentIndex) => {
+      if (currentIndex === null || galleryImages.length === 0) return currentIndex;
+      return (currentIndex + 1) % galleryImages.length;
+    });
+  }
+
+  function handleListingBackClick() {
+    navigate(listingBackRoute);
+  }
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
       <Box
@@ -432,11 +474,11 @@ function ListingDetailsPage({
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
           <Stack spacing={3}>
             <Button
-              onClick={() => navigate(APP_ROUTES.explore)}
+              onClick={handleListingBackClick}
               startIcon={<ArrowBackRoundedIcon />}
               sx={{ alignSelf: "flex-start" }}
             >
-              Back to Explore
+              {listingBackLabel}
             </Button>
 
             <Stack
@@ -528,21 +570,31 @@ function ListingDetailsPage({
           <Box sx={{ flex: 1 }}>
             <Stack spacing={3}>
               <Card sx={{ overflow: "hidden" }}>
-                <Box
+                <CardActionArea
+                  component="div"
+                  disabled={!heroImageUrl}
+                  onClick={() => openImageGallery(0)}
                   sx={{
-                    minHeight: { xs: 260, md: 390 },
-                    background: heroImageUrl
-                      ? `linear-gradient(135deg, rgba(15, 23, 42, 0.68), rgba(15, 23, 42, 0.18)), url(${heroImageUrl})`
-                      : fallbackHeroGradient,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    color: "white",
-                    p: { xs: 3, md: 4 },
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
+                    display: "block",
+                    cursor: heroImageUrl ? "zoom-in" : "default",
+                    "&.Mui-disabled": { opacity: 1 },
                   }}
                 >
+                  <Box
+                    sx={{
+                      minHeight: { xs: 260, md: 390 },
+                      background: heroImageUrl
+                        ? `linear-gradient(135deg, rgba(15, 23, 42, 0.68), rgba(15, 23, 42, 0.18)), url(${heroImageUrl})`
+                        : fallbackHeroGradient,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                      color: "white",
+                      p: { xs: 3, md: 4 },
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                    }}
+                  >
                   <Stack direction="row" justifyContent="space-between">
                     <Chip
                       label={listing.listingType}
@@ -570,11 +622,28 @@ function ListingDetailsPage({
                     <Typography sx={{ opacity: 0.9, maxWidth: 620 }}>
                       Hosted by {listing.host} · {listing.access}
                     </Typography>
+                    {heroImageUrl && (
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          alignSelf: "flex-start",
+                          mt: 2,
+                          px: 1.25,
+                          py: 0.65,
+                          borderRadius: 999,
+                          bgcolor: "rgba(15, 23, 42, 0.58)",
+                          fontWeight: 800,
+                        }}
+                      >
+                        Click image to view gallery
+                      </Typography>
+                    )}
                   </Box>
-                </Box>
+                  </Box>
+                </CardActionArea>
               </Card>
 
-              {listingImages.length > 1 && (
+              {galleryImages.length > 1 && (
                 <Box
                   sx={{
                     display: "grid",
@@ -585,19 +654,25 @@ function ListingDetailsPage({
                     gap: 1.5,
                   }}
                 >
-                  {listingImages.slice(1, 5).map((imageUrl, index) => (
+                  {galleryImages.slice(1, 5).map((imageUrl, index) => (
                     <Card key={imageUrl} sx={{ overflow: "hidden" }}>
-                      <Box
-                        component="img"
-                        src={imageUrl}
-                        alt={`${listing.title} photo ${index + 2}`}
-                        sx={{
-                          width: "100%",
-                          height: { xs: 120, sm: 140 },
-                          objectFit: "cover",
-                          display: "block",
-                        }}
-                      />
+                      <CardActionArea
+                        component="div"
+                        onClick={() => openImageGallery(index + 1)}
+                        sx={{ cursor: "zoom-in" }}
+                      >
+                        <Box
+                          component="img"
+                          src={imageUrl}
+                          alt={`${listing.title} photo ${index + 2}`}
+                          sx={{
+                            width: "100%",
+                            height: { xs: 120, sm: 140 },
+                            objectFit: "cover",
+                            display: "block",
+                          }}
+                        />
+                      </CardActionArea>
                     </Card>
                   ))}
                 </Box>
@@ -1014,6 +1089,92 @@ function ListingDetailsPage({
           </Box>
         </Stack>
       </Container>
+
+      <Dialog
+        open={galleryIndex !== null}
+        onOpenChange={(open) => {
+          if (!open) closeImageGallery();
+        }}
+        maxWidth="lg"
+        paperSx={{ bgcolor: "#020617" }}
+      >
+        <Box sx={{ position: "relative", bgcolor: "#020617", color: "white" }}>
+          <IconButton
+            aria-label="Close image gallery"
+            onClick={closeImageGallery}
+            sx={{
+              position: "absolute",
+              top: 12,
+              right: 12,
+              zIndex: 2,
+              bgcolor: "rgba(15,23,42,0.68)",
+              color: "white",
+              "&:hover": { bgcolor: "rgba(15,23,42,0.86)" },
+            }}
+          >
+            <CloseRoundedIcon />
+          </IconButton>
+
+          {hasMultipleGalleryImages && (
+            <IconButton
+              aria-label="Previous image"
+              onClick={showPreviousGalleryImage}
+              sx={{
+                position: "absolute",
+                top: "50%",
+                left: 12,
+                transform: "translateY(-50%)",
+                zIndex: 2,
+                bgcolor: "rgba(15,23,42,0.68)",
+                color: "white",
+                "&:hover": { bgcolor: "rgba(15,23,42,0.86)" },
+              }}
+            >
+              <ChevronLeftRoundedIcon />
+            </IconButton>
+          )}
+
+          {selectedGalleryImage && (
+            <Box
+              component="img"
+              src={selectedGalleryImage}
+              alt={`${listing.title} enlarged photo`}
+              sx={{
+                width: "100%",
+                maxHeight: { xs: "72vh", md: "78vh" },
+                objectFit: "contain",
+                display: "block",
+                bgcolor: "#020617",
+              }}
+            />
+          )}
+
+          {hasMultipleGalleryImages && (
+            <IconButton
+              aria-label="Next image"
+              onClick={showNextGalleryImage}
+              sx={{
+                position: "absolute",
+                top: "50%",
+                right: 12,
+                transform: "translateY(-50%)",
+                zIndex: 2,
+                bgcolor: "rgba(15,23,42,0.68)",
+                color: "white",
+                "&:hover": { bgcolor: "rgba(15,23,42,0.86)" },
+              }}
+            >
+              <ChevronRightRoundedIcon />
+            </IconButton>
+          )}
+
+          <Box sx={{ px: 2.5, py: 1.5, bgcolor: "rgba(15,23,42,0.96)" }}>
+            <Typography variant="body2" fontWeight={800}>
+              {galleryIndex !== null ? galleryIndex + 1 : 1} of {galleryImages.length}
+            </Typography>
+          </Box>
+        </Box>
+      </Dialog>
     </Box>
   );
 }
