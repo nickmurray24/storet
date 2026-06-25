@@ -18,7 +18,6 @@ import {
   LinearProgress,
   MenuItem,
   Select,
-  Slider,
   Stack,
   TextField,
   ToggleButton,
@@ -38,11 +37,14 @@ import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
 import TuneRoundedIcon from "@mui/icons-material/TuneRounded";
+import MapRoundedIcon from "@mui/icons-material/MapRounded";
+import ViewListRoundedIcon from "@mui/icons-material/ViewListRounded";
 import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 
 import { getPageListings } from "../data/listingCatalog";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
+import ExploreMapView from "../components/ExploreMapView";
 import { normalizeSavedIds } from "../utils/listingUtils";
 import { getMonthlyEquivalentAmount } from "../utils/pricingUtils";
 import {
@@ -50,6 +52,33 @@ import {
   readUserListings,
   writeSavedListingIds,
 } from "../utils/storage";
+
+const MIN_MONTHLY_EQUIVALENT_PRICE = 40;
+const MAX_MONTHLY_EQUIVALENT_PRICE = 5000;
+
+function getPriceInputError(value, label) {
+  const trimmedValue = value.trim();
+
+  if (!trimmedValue) {
+    return "";
+  }
+
+  const parsedValue = Number(trimmedValue);
+
+  if (!Number.isFinite(parsedValue)) {
+    return `${label} must be a number.`;
+  }
+
+  if (parsedValue < MIN_MONTHLY_EQUIVALENT_PRICE) {
+    return `${label} must be at least $${MIN_MONTHLY_EQUIVALENT_PRICE.toLocaleString()}/mo.`;
+  }
+
+  if (parsedValue > MAX_MONTHLY_EQUIVALENT_PRICE) {
+    return `${label} must be no more than $${MAX_MONTHLY_EQUIVALENT_PRICE.toLocaleString()}/mo.`;
+  }
+
+  return "";
+}
 
 function ExplorePage({
   listings,
@@ -103,12 +132,33 @@ function ExplorePage({
   const [listingType, setListingType] = useState("All");
   const [bookingType, setBookingType] = useState("All");
   const [sortBy, setSortBy] = useState("recommended");
-  const [maxPrice, setMaxPrice] = useState(180);
+  const [minPriceInput, setMinPriceInput] = useState("");
+  const [maxPriceInput, setMaxPriceInput] = useState("");
+  const [viewMode, setViewMode] = useState("list");
 
   const storageTypes = useMemo(() => {
     const uniqueTypes = new Set(allListings.map((listing) => listing.storageType));
     return ["All", ...Array.from(uniqueTypes)];
   }, [allListings]);
+
+  const minPriceError = getPriceInputError(minPriceInput, "Minimum price");
+  const maxPriceError = getPriceInputError(maxPriceInput, "Maximum price");
+  const parsedMinPrice = minPriceInput.trim() ? Number(minPriceInput) : null;
+  const parsedMaxPrice = maxPriceInput.trim() ? Number(maxPriceInput) : null;
+  const hasPriceRangeOrderError =
+    !minPriceError &&
+    !maxPriceError &&
+    parsedMinPrice !== null &&
+    parsedMaxPrice !== null &&
+    parsedMinPrice > parsedMaxPrice;
+  const effectiveMinPrice =
+    !minPriceError && !hasPriceRangeOrderError && parsedMinPrice !== null
+      ? parsedMinPrice
+      : MIN_MONTHLY_EQUIVALENT_PRICE;
+  const effectiveMaxPrice =
+    !maxPriceError && !hasPriceRangeOrderError && parsedMaxPrice !== null
+      ? parsedMaxPrice
+      : MAX_MONTHLY_EQUIVALENT_PRICE;
 
   const filteredListings = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -136,7 +186,10 @@ function ExplorePage({
         (bookingType === "Instant" && listing.instantBook) ||
         (bookingType === "Waitlist" && listing.waitlist);
       const monthlyEquivalentPrice = getMonthlyEquivalentAmount(listing.pricing);
-      const matchesPrice = monthlyEquivalentPrice > 0 && monthlyEquivalentPrice <= maxPrice;
+      const matchesPrice =
+        monthlyEquivalentPrice > 0 &&
+        monthlyEquivalentPrice >= effectiveMinPrice &&
+        monthlyEquivalentPrice <= effectiveMaxPrice;
 
       return (
         matchesSearch &&
@@ -163,7 +216,8 @@ function ExplorePage({
     allListings,
     bookingType,
     listingType,
-    maxPrice,
+    effectiveMaxPrice,
+    effectiveMinPrice,
     searchQuery,
     sortBy,
     storageType,
@@ -185,6 +239,12 @@ function ExplorePage({
   function handleBookingTypeChange(event, nextValue) {
     if (nextValue) {
       setBookingType(nextValue);
+    }
+  }
+
+  function handleViewModeChange(event, nextValue) {
+    if (nextValue) {
+      setViewMode(nextValue);
     }
   }
 
@@ -221,6 +281,163 @@ function ExplorePage({
     });
   }
 
+  const priceRangeHelperText = hasPriceRangeOrderError
+    ? "Minimum price must be less than maximum price."
+    : "Leave blank to include the full price range.";
+
+  const filterControls = (
+    <Stack spacing={2.5} sx={{ minWidth: 0 }}>
+      <TextField
+        label="Search by city, space, or keyword"
+        value={searchQuery}
+        onChange={(event) => setSearchQuery(event.target.value)}
+        fullWidth
+        InputProps={{
+          startAdornment: (
+            <InputAdornment position="start">
+              <SearchRoundedIcon />
+            </InputAdornment>
+          ),
+        }}
+      />
+
+      <FormControl fullWidth>
+        <InputLabel>Storage type</InputLabel>
+        <Select
+          value={storageType}
+          label="Storage type"
+          onChange={(event) => setStorageType(event.target.value)}
+        >
+          {storageTypes.map((type) => (
+            <MenuItem key={type} value={type}>
+              {type}
+            </MenuItem>
+          ))}
+        </Select>
+      </FormControl>
+
+      <FormControl fullWidth>
+        <InputLabel>Listing type</InputLabel>
+        <Select
+          value={listingType}
+          label="Listing type"
+          onChange={(event) => setListingType(event.target.value)}
+        >
+          <MenuItem value="All">All</MenuItem>
+          <MenuItem value="Private host">Private host</MenuItem>
+          <MenuItem value="Commercial">Commercial</MenuItem>
+        </Select>
+      </FormControl>
+
+      <Stack spacing={1}>
+        <Typography fontWeight={700}>Booking type</Typography>
+        <ToggleButtonGroup
+          value={bookingType}
+          exclusive
+          onChange={handleBookingTypeChange}
+          color="primary"
+          fullWidth
+          sx={{
+            "& .MuiToggleButton-root": {
+              textTransform: "none",
+              fontWeight: 700,
+            },
+          }}
+        >
+          <ToggleButton value="All">All</ToggleButton>
+          <ToggleButton value="Instant">Instant</ToggleButton>
+          <ToggleButton value="Waitlist">Waitlist</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+
+      <Stack spacing={1.15}>
+        <Box>
+          <Typography fontWeight={700} lineHeight={1.2}>
+            Monthly-equivalent price
+          </Typography>
+          <Typography
+            variant="caption"
+            color={hasPriceRangeOrderError ? "error" : "text.secondary"}
+          >
+            {priceRangeHelperText}
+          </Typography>
+        </Box>
+
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+          <TextField
+            label="Minimum"
+            placeholder={String(MIN_MONTHLY_EQUIVALENT_PRICE)}
+            value={minPriceInput}
+            onChange={(event) => setMinPriceInput(event.target.value)}
+            type="number"
+            fullWidth
+            error={Boolean(minPriceError || hasPriceRangeOrderError)}
+            helperText={minPriceError || (hasPriceRangeOrderError ? "Must be less than max." : " ")}
+            InputProps={{
+              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+              endAdornment: <InputAdornment position="end">/mo</InputAdornment>,
+            }}
+            inputProps={{
+              min: MIN_MONTHLY_EQUIVALENT_PRICE,
+              max: MAX_MONTHLY_EQUIVALENT_PRICE,
+              step: 25,
+            }}
+          />
+
+          <TextField
+            label="Maximum"
+            placeholder={String(MAX_MONTHLY_EQUIVALENT_PRICE)}
+            value={maxPriceInput}
+            onChange={(event) => setMaxPriceInput(event.target.value)}
+            type="number"
+            fullWidth
+            error={Boolean(maxPriceError || hasPriceRangeOrderError)}
+            helperText={maxPriceError || (hasPriceRangeOrderError ? "Must be greater than min." : " ")}
+            InputProps={{
+              startAdornment: <InputAdornment position="start">$</InputAdornment>,
+              endAdornment: <InputAdornment position="end">/mo</InputAdornment>,
+            }}
+            inputProps={{
+              min: MIN_MONTHLY_EQUIVALENT_PRICE,
+              max: MAX_MONTHLY_EQUIVALENT_PRICE,
+              step: 25,
+            }}
+          />
+        </Stack>
+      </Stack>
+
+      <FormControl fullWidth>
+        <InputLabel>Sort by</InputLabel>
+        <Select
+          value={sortBy}
+          label="Sort by"
+          onChange={(event) => setSortBy(event.target.value)}
+        >
+          <MenuItem value="recommended">Recommended</MenuItem>
+          <MenuItem value="priceLow">Price: low to high</MenuItem>
+          <MenuItem value="priceHigh">Price: high to low</MenuItem>
+          <MenuItem value="sqftHigh">Most space</MenuItem>
+          <MenuItem value="ratingHigh">Highest rated</MenuItem>
+        </Select>
+      </FormControl>
+
+      <Button
+        variant="outlined"
+        onClick={() => {
+          setSearchQuery("");
+          setStorageType("All");
+          setListingType("All");
+          setBookingType("All");
+          setSortBy("recommended");
+          setMinPriceInput("");
+          setMaxPriceInput("");
+        }}
+      >
+        Reset filters
+      </Button>
+    </Stack>
+  );
+
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
       {storetApp?.listingsAreLoading && <LinearProgress />}
@@ -231,6 +448,7 @@ function ExplorePage({
         </Container>
       )}
 
+      {viewMode !== "map" && (
       <Box
         sx={{
           borderBottom: "1px solid",
@@ -275,6 +493,33 @@ function ExplorePage({
               </Box>
             </Stack>
 
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={handleViewModeChange}
+              color="primary"
+              sx={{
+                bgcolor: "background.paper",
+                borderRadius: 999,
+                boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08)",
+                "& .MuiToggleButton-root": {
+                  px: 2.25,
+                  py: 1,
+                  borderRadius: 999,
+                  textTransform: "none",
+                  fontWeight: 800,
+                },
+              }}
+            >
+              <ToggleButton value="list">
+                <ViewListRoundedIcon fontSize="small" sx={{ mr: 1 }} />
+                List view
+              </ToggleButton>
+              <ToggleButton value="map">
+                <MapRoundedIcon fontSize="small" sx={{ mr: 1 }} />
+                Map view
+              </ToggleButton>
+            </ToggleButtonGroup>
           </Stack>
 
           <Stack
@@ -326,8 +571,53 @@ function ExplorePage({
           </Stack>
         </Container>
       </Box>
+      )}
 
-      <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
+      <Container
+        maxWidth={viewMode === "map" ? false : "lg"}
+        disableGutters={viewMode === "map"}
+        sx={{ py: viewMode === "map" ? { xs: 0, md: 0 } : { xs: 3, md: 4 } }}
+      >
+        {viewMode === "map" ? (
+          <ExploreMapView
+            listings={filteredListings}
+            filterPanel={filterControls}
+            savedIdSet={savedIdSet}
+            onSaveClick={handleSaveClick}
+            isAuthenticated={isAuthenticated}
+            viewToggle={
+              <ToggleButtonGroup
+                value={viewMode}
+                exclusive
+                onChange={handleViewModeChange}
+                color="primary"
+                size="small"
+                sx={{
+                  bgcolor: "background.paper",
+                  borderRadius: 999,
+                  boxShadow: "0 14px 36px rgba(15, 23, 42, 0.16)",
+                  "& .MuiToggleButton-root": {
+                    px: 1.75,
+                    py: 0.75,
+                    borderRadius: 999,
+                    textTransform: "none",
+                    fontWeight: 900,
+                    borderColor: "divider",
+                  },
+                }}
+              >
+                <ToggleButton value="list">
+                  <ViewListRoundedIcon fontSize="small" sx={{ mr: 0.75 }} />
+                  List
+                </ToggleButton>
+                <ToggleButton value="map">
+                  <MapRoundedIcon fontSize="small" sx={{ mr: 0.75 }} />
+                  Map
+                </ToggleButton>
+              </ToggleButtonGroup>
+            }
+          />
+        ) : (
         <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
           <Card
             sx={{
@@ -344,117 +634,7 @@ function ExplorePage({
                   <Typography variant="h6">Search filters</Typography>
                 </Stack>
 
-                <TextField
-                  label="Search by city, space, or keyword"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  fullWidth
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchRoundedIcon />
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-
-                <FormControl fullWidth>
-                  <InputLabel>Storage type</InputLabel>
-                  <Select
-                    value={storageType}
-                    label="Storage type"
-                    onChange={(event) => setStorageType(event.target.value)}
-                  >
-                    {storageTypes.map((type) => (
-                      <MenuItem key={type} value={type}>
-                        {type}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-
-                <FormControl fullWidth>
-                  <InputLabel>Listing type</InputLabel>
-                  <Select
-                    value={listingType}
-                    label="Listing type"
-                    onChange={(event) => setListingType(event.target.value)}
-                  >
-                    <MenuItem value="All">All</MenuItem>
-                    <MenuItem value="Private host">Private host</MenuItem>
-                    <MenuItem value="Commercial">Commercial</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <Stack spacing={1}>
-                  <Typography fontWeight={700}>Booking type</Typography>
-                  <ToggleButtonGroup
-                    value={bookingType}
-                    exclusive
-                    onChange={handleBookingTypeChange}
-                    color="primary"
-                    fullWidth
-                    sx={{
-                      "& .MuiToggleButton-root": {
-                        textTransform: "none",
-                        fontWeight: 700,
-                      },
-                    }}
-                  >
-                    <ToggleButton value="All">All</ToggleButton>
-                    <ToggleButton value="Instant">Instant</ToggleButton>
-                    <ToggleButton value="Waitlist">Waitlist</ToggleButton>
-                  </ToggleButtonGroup>
-                </Stack>
-
-                <Stack spacing={1}>
-                  <Stack
-                    direction="row"
-                    justifyContent="space-between"
-                    alignItems="center"
-                  >
-                    <Typography fontWeight={700}>Max monthly-equivalent price</Typography>
-                    <Chip label={`$${maxPrice}`} size="small" />
-                  </Stack>
-
-                  <Slider
-                    value={maxPrice}
-                    min={40}
-                    max={220}
-                    step={5}
-                    onChange={(event, value) => setMaxPrice(value)}
-                    valueLabelDisplay="auto"
-                  />
-                </Stack>
-
-                <FormControl fullWidth>
-                  <InputLabel>Sort by</InputLabel>
-                  <Select
-                    value={sortBy}
-                    label="Sort by"
-                    onChange={(event) => setSortBy(event.target.value)}
-                  >
-                    <MenuItem value="recommended">Recommended</MenuItem>
-                    <MenuItem value="priceLow">Price: low to high</MenuItem>
-                    <MenuItem value="priceHigh">Price: high to low</MenuItem>
-                    <MenuItem value="sqftHigh">Most space</MenuItem>
-                    <MenuItem value="ratingHigh">Highest rated</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <Button
-                  variant="outlined"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setStorageType("All");
-                    setListingType("All");
-                    setBookingType("All");
-                    setSortBy("recommended");
-                    setMaxPrice(180);
-                  }}
-                >
-                  Reset filters
-                </Button>
+                {filterControls}
               </Stack>
             </CardContent>
           </Card>
@@ -728,6 +908,8 @@ function ExplorePage({
             )}
           </Box>
         </Stack>
+
+        )}
       </Container>
     </Box>
   );
