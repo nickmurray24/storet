@@ -43,6 +43,7 @@ import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
+import AlertDialog from "./ui/AlertDialog";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import { getDefaultStatusBreakdown, getHostAnalyticsSummaryValue } from "../utils/hostAnalyticsUtils";
@@ -1043,19 +1044,26 @@ function AnalyticsBarList({ title, description, icon, items, valueFormatter = (v
 
 function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
   const isPaused = listing.status === "paused";
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  function handleDelete() {
-    const shouldDelete = window.confirm(
-      `Delete "${listing.title}"? This will remove the listing and its related activity.`
-    );
-
-    if (shouldDelete) {
-      onDeleteListing(listing.id);
-    }
+  function handleConfirmDelete() {
+    onDeleteListing(listing.id);
   }
 
   return (
-    <Card
+    <>
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete listing?"
+        description={`Delete "${listing.title}"? This will remove the listing and its related activity.`}
+        cancelText="Keep listing"
+        actionText="Delete listing"
+        actionColor="error"
+        onAction={handleConfirmDelete}
+      />
+
+      <Card
       elevation={0}
       sx={{
         height: "100%",
@@ -1138,13 +1146,14 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
             color="error"
             size="small"
             startIcon={<DeleteRoundedIcon />}
-            onClick={handleDelete}
+            onClick={() => setDeleteDialogOpen(true)}
           >
             Delete
           </Button>
         </Stack>
       </CardContent>
     </Card>
+    </>
   );
 }
 
@@ -1243,14 +1252,17 @@ function HostDashboardPanel({
     (request) => request.status === BOOKING_STATUSES.COMPLETED
   ).length;
 
-  const activeCount = getHostAnalyticsSummaryValue(backendSummary, "activeListings", localActiveCount);
-  const pausedCount = getHostAnalyticsSummaryValue(backendSummary, "pausedListings", localPausedCount);
-  const pendingRequestCount = getHostAnalyticsSummaryValue(backendSummary, "pendingRequests", localPendingRequestCount);
-  const waitlistedCount = getHostAnalyticsSummaryValue(backendSummary, "waitlistedRequests", localWaitlistedCount);
-  const unreadMessageCount = getHostAnalyticsSummaryValue(backendSummary, "unreadMessages", localUnreadMessageCount);
-  const confirmedCount = getHostAnalyticsSummaryValue(backendSummary, "confirmedBookings", localConfirmedCount);
-  const activeBookingCount = getHostAnalyticsSummaryValue(backendSummary, "activeBookings", localActiveBookingCount);
-  const completedCount = getHostAnalyticsSummaryValue(backendSummary, "completedBookings", localCompletedCount);
+  // The top dashboard cards should reflect the live React state immediately.
+  // Backend analytics are a snapshot and can lag until the RPC is refreshed, so keep
+  // analytics-only metrics below on backend values but use local state for these cards.
+  const activeCount = localActiveCount;
+  const pausedCount = localPausedCount;
+  const pendingRequestCount = localPendingRequestCount;
+  const waitlistedCount = localWaitlistedCount;
+  const unreadMessageCount = localUnreadMessageCount;
+  const confirmedCount = localConfirmedCount;
+  const activeBookingCount = localActiveBookingCount;
+  const completedCount = localCompletedCount;
 
   const approvedLikeCount = sortedBookingRequests.filter((request) =>
     APPROVED_OR_BETTER_STATUSES.includes(request.status)
@@ -1347,19 +1359,25 @@ function HostDashboardPanel({
       return getListingRating(b) - getListingRating(a);
     });
 
-  const displayedListingAnalytics = backendListingAnalytics.length > 0
-    ? backendListingAnalytics.map((backendListing) => {
-        const localListing = listingAnalytics.find(
-          (listing) => String(listing.id) === String(backendListing.listingId || backendListing.id)
-        );
+  const liveListingIdSet = new Set(safeMyListings.map((listing) => String(listing.id)));
 
-        return {
-          ...(localListing || {}),
-          ...backendListing,
-          id: backendListing.listingId || backendListing.id,
-          bookedEstimate: backendListing.paidRevenue || localListing?.bookedEstimate || 0,
-        };
-      })
+  const displayedListingAnalytics = backendListingAnalytics.length > 0
+    ? backendListingAnalytics
+        .filter((backendListing) =>
+          liveListingIdSet.has(String(backendListing.listingId || backendListing.id))
+        )
+        .map((backendListing) => {
+          const localListing = listingAnalytics.find(
+            (listing) => String(listing.id) === String(backendListing.listingId || backendListing.id)
+          );
+
+          return {
+            ...(localListing || {}),
+            ...backendListing,
+            id: backendListing.listingId || backendListing.id,
+            bookedEstimate: backendListing.paidRevenue || localListing?.bookedEstimate || 0,
+          };
+        })
     : listingAnalytics;
 
   const attentionListings = displayedListingAnalytics.filter(
@@ -1370,12 +1388,7 @@ function HostDashboardPanel({
       listing.status === "paused"
   );
 
-  const localActionNeededCount = pendingRequestCount + waitlistedCount + unreadMessageCount + pausedCount;
-  const actionNeededCount = getHostAnalyticsSummaryValue(
-    backendSummary,
-    "actionNeededCount",
-    localActionNeededCount
-  );
+  const actionNeededCount = pendingRequestCount + waitlistedCount + unreadMessageCount + pausedCount;
 
   const confirmedAndActiveRequests = sortedBookingRequests.filter((request) =>
     [BOOKING_STATUSES.CONFIRMED, BOOKING_STATUSES.ACTIVE].includes(request.status)
@@ -1605,7 +1618,7 @@ function HostDashboardPanel({
           <StatCard
             icon={<Inventory2RoundedIcon />}
             label="Hosted listings"
-            value={getHostAnalyticsSummaryValue(backendSummary, "hostedListings", safeMyListings.length)}
+            value={safeMyListings.length}
             helper={`${activeCount} active · ${pausedCount} paused`}
             onClick={() => openSection(DASHBOARD_SECTIONS.listings)}
           />

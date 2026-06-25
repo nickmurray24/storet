@@ -95,6 +95,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
   );
 
   const activeUser = currentUser || storetApp?.currentUser || storedUser;
+  const activeMode = storetApp?.activeMode || activeUser?.activeMode || APP_MODES.HOST;
+  const isHostMode = activeMode === APP_MODES.HOST;
   const canReturnToRenterExperience = userCanUseRenterMode(activeUser);
 
   const [formData, setFormData] = useState({
@@ -244,7 +246,17 @@ function CreateListingPage({ currentUser, onAddListing }) {
     navigate(APP_ROUTES.explore);
   }
 
+  function handleBackToHostDashboard() {
+    storetApp?.actions?.switchActiveMode?.(APP_MODES.HOST);
+    navigate(APP_ROUTES.hostDashboard);
+  }
+
   function handleCancel() {
+    if (isHostMode) {
+      handleBackToHostDashboard();
+      return;
+    }
+
     if (canReturnToRenterExperience) {
       handleBackToExplore();
       return;
@@ -416,13 +428,13 @@ function CreateListingPage({ currentUser, onAddListing }) {
       >
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
           <Stack spacing={3}>
-            {canReturnToRenterExperience && (
+            {(isHostMode || canReturnToRenterExperience) && (
               <Button
-                onClick={handleBackToExplore}
+                onClick={isHostMode ? handleBackToHostDashboard : handleBackToExplore}
                 startIcon={<ArrowBackRoundedIcon />}
                 sx={{ alignSelf: "flex-start" }}
               >
-                Back to Explore
+                {isHostMode ? "Back to Host Dashboard" : "Back to Explore"}
               </Button>
             )}
 
