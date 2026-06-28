@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import React, { useEffect, useMemo, useState } from "react";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
   Avatar,
@@ -25,27 +25,58 @@ import ArrowForwardRoundedIcon from "@mui/icons-material/ArrowForwardRounded";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { APP_ROUTES } from "../routes/appRoutes";
 import { APP_MODES, USER_ROLES } from "../constants/appEnums";
+import { authService } from "../services/authService";
+
+const AUTH_MODES = {
+  LOGIN: "login",
+  SIGNUP: "signup",
+  FORGOT_PASSWORD: "forgot-password",
+  RESET_PASSWORD: "reset-password",
+};
+
+const FAILED_LOGIN_RESET_PROMPT_THRESHOLD = 2;
+
+function getRecoveryModeFromLocation(location) {
+  const searchParams = new URLSearchParams(location.search || "");
+  const hashParams = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+  const requestedMode = searchParams.get("mode") || hashParams.get("mode");
+  const authType = searchParams.get("type") || hashParams.get("type");
+
+  return requestedMode === AUTH_MODES.RESET_PASSWORD || authType === "recovery";
+}
 
 function AuthPage({ onLogin }) {
   const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
+  const location = useLocation();
   // The role toggle on this page is the user's explicit mode choice.
   // Do not reuse a stale protected-route redirect from a previous session,
   // because that can send renters to host guards or hosts to renter pages.
   const redirectAfterAuth = "";
 
-  const [authMode, setAuthMode] = useState("login");
+  const [authMode, setAuthMode] = useState(() =>
+    getRecoveryModeFromLocation(window.location)
+      ? AUTH_MODES.RESET_PASSWORD
+      : AUTH_MODES.LOGIN
+  );
   const [role, setRole] = useState(USER_ROLES.RENTER);
   const [formData, setFormData] = useState({
     fullName: "",
     email: "",
     password: "",
+    confirmPassword: "",
   });
+  const [failedLoginAttempts, setFailedLoginAttempts] = useState(0);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isSignup = authMode === "signup";
+  const isLogin = authMode === AUTH_MODES.LOGIN;
+  const isSignup = authMode === AUTH_MODES.SIGNUP;
+  const isForgotPassword = authMode === AUTH_MODES.FORGOT_PASSWORD;
+  const isResetPassword = authMode === AUTH_MODES.RESET_PASSWORD;
+  const shouldShowForgotPasswordPrompt =
+    isLogin && failedLoginAttempts >= FAILED_LOGIN_RESET_PROMPT_THRESHOLD;
 
   const pageCopy = useMemo(() => {
     if (isSignup) {
@@ -54,9 +85,39 @@ function AuthPage({ onLogin }) {
         title: "Start storing or hosting with confidence.",
         description:
           "Create an account to save listings, reserve storage, manage bookings, or list extra space as a host.",
+        formTitle: "Create account",
+        formDescription: "Choose how you want to use Storet.",
         buttonLabel: "Create account",
         switchText: "Already have an account?",
         switchAction: "Log in",
+      };
+    }
+
+    if (isForgotPassword) {
+      return {
+        eyebrow: "Password help",
+        title: "Reset your Storet password.",
+        description:
+          "Enter your email and Storet will send a secure reset link if that email has an account.",
+        formTitle: "Forgot password",
+        formDescription: "We will email you a secure reset link.",
+        buttonLabel: "Send reset link",
+        switchText: "Remembered your password?",
+        switchAction: "Back to log in",
+      };
+    }
+
+    if (isResetPassword) {
+      return {
+        eyebrow: "Create a new password",
+        title: "Choose a new Storet password.",
+        description:
+          "Enter a new password for your Storet account, then log in with the updated password.",
+        formTitle: "New password",
+        formDescription: "Use at least 6 characters.",
+        buttonLabel: "Update password",
+        switchText: "Need to log in instead?",
+        switchAction: "Back to log in",
       };
     }
 
@@ -65,14 +126,42 @@ function AuthPage({ onLogin }) {
       title: "Log in to manage your Storet activity.",
       description:
         "Access your saved spaces, booking requests, notifications, and host tools.",
+      formTitle: "Log in",
+      formDescription: "Continue to your Storet dashboard.",
       buttonLabel: "Log in",
       switchText: "New to Storet?",
       switchAction: "Create an account",
     };
-  }, [isSignup]);
+  }, [isForgotPassword, isResetPassword, isSignup]);
+
+  useEffect(() => {
+    if (getRecoveryModeFromLocation(location)) {
+      setAuthMode(AUTH_MODES.RESET_PASSWORD);
+      setError("");
+      setSuccessMessage("Create a new password to finish resetting your Storet account.");
+    }
+  }, [location]);
+
+  useEffect(() => {
+    const subscription = authService.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setAuthMode(AUTH_MODES.RESET_PASSWORD);
+        setError("");
+        setSuccessMessage("Create a new password to finish resetting your Storet account.");
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe?.();
+    };
+  }, []);
 
   function handleInputChange(event) {
     const { name, value } = event.target;
+
+    if (name === "email") {
+      setFailedLoginAttempts(0);
+    }
 
     setFormData((currentData) => ({
       ...currentData,
@@ -86,12 +175,33 @@ function AuthPage({ onLogin }) {
     }
   }
 
-  function handleModeSwitch() {
+  function resetFeedback() {
     setError("");
     setSuccessMessage("");
-    setAuthMode((currentMode) =>
-      currentMode === "login" ? "signup" : "login"
-    );
+  }
+
+  function switchAuthMode(nextMode) {
+    resetFeedback();
+    setFormData((currentData) => ({
+      ...currentData,
+      password: "",
+      confirmPassword: "",
+    }));
+    setAuthMode(nextMode);
+  }
+
+  function handleModeSwitch() {
+    setFailedLoginAttempts(0);
+    switchAuthMode(isSignup ? AUTH_MODES.LOGIN : AUTH_MODES.SIGNUP);
+  }
+
+  function handleForgotPasswordClick() {
+    switchAuthMode(AUTH_MODES.FORGOT_PASSWORD);
+  }
+
+  function handleBackToLogin() {
+    setFailedLoginAttempts(0);
+    switchAuthMode(AUTH_MODES.LOGIN);
   }
 
   async function handleSubmit(event) {
@@ -105,8 +215,38 @@ function AuthPage({ onLogin }) {
       return;
     }
 
-    if (!trimmedEmail) {
+    if (!isResetPassword && !trimmedEmail) {
       setError("Please enter your email address.");
+      return;
+    }
+
+    if (isForgotPassword) {
+      setError("");
+      setSuccessMessage("");
+      setIsSubmitting(true);
+
+      const resetResponse = await authService.sendPasswordResetEmail(trimmedEmail);
+
+      setIsSubmitting(false);
+
+      if (resetResponse.error) {
+        setError(
+          resetResponse.error.message ||
+            "We could not send a reset link right now. Please try again."
+        );
+        return;
+      }
+
+      setFailedLoginAttempts(0);
+      setFormData((currentData) => ({
+        ...currentData,
+        password: "",
+        confirmPassword: "",
+      }));
+      setAuthMode(AUTH_MODES.LOGIN);
+      setSuccessMessage(
+        "If that email has a Storet account, a password reset link is on the way."
+      );
       return;
     }
 
@@ -115,8 +255,45 @@ function AuthPage({ onLogin }) {
       return;
     }
 
-    if (isSignup && formData.password.length < 6) {
+    if ((isSignup || isResetPassword) && formData.password.length < 6) {
       setError("Please use a password with at least 6 characters.");
+      return;
+    }
+
+    if (isResetPassword && formData.password !== formData.confirmPassword) {
+      setError("Please make sure both password fields match.");
+      return;
+    }
+
+    if (isResetPassword) {
+      setError("");
+      setSuccessMessage("");
+      setIsSubmitting(true);
+
+      const updateResponse = await authService.updatePassword(formData.password);
+
+      if (!updateResponse.error) {
+        await storetApp?.actions?.logout?.();
+      }
+
+      setIsSubmitting(false);
+
+      if (updateResponse.error) {
+        setError(
+          updateResponse.error.message ||
+            "We could not update your password. Open the latest reset link and try again."
+        );
+        return;
+      }
+
+      setFailedLoginAttempts(0);
+      setFormData((currentData) => ({
+        ...currentData,
+        password: "",
+        confirmPassword: "",
+      }));
+      setAuthMode(AUTH_MODES.LOGIN);
+      setSuccessMessage("Password updated. Please log in with your new password.");
       return;
     }
 
@@ -144,15 +321,21 @@ function AuthPage({ onLogin }) {
     setIsSubmitting(false);
 
     if (!result?.ok) {
+      if (isLogin) {
+        setFailedLoginAttempts((currentAttempts) => currentAttempts + 1);
+      }
+
       setError(result?.error || "We could not finish signing you in. Please try again.");
       return;
     }
+
+    setFailedLoginAttempts(0);
 
     if (result.needsEmailConfirmation) {
       setSuccessMessage(
         "Account created. Check your email to confirm your Storet account, then log in."
       );
-      setAuthMode("login");
+      setAuthMode(AUTH_MODES.LOGIN);
       return;
     }
 
@@ -345,13 +528,9 @@ function AuthPage({ onLogin }) {
                     </Avatar>
 
                     <Box>
-                      <Typography variant="h4">
-                        {isSignup ? "Create account" : "Log in"}
-                      </Typography>
+                      <Typography variant="h4">{pageCopy.formTitle}</Typography>
                       <Typography color="text.secondary">
-                        {isSignup
-                          ? "Choose how you want to use Storet."
-                          : "Continue to your Storet dashboard."}
+                        {pageCopy.formDescription}
                       </Typography>
                     </Box>
                   </Stack>
@@ -368,6 +547,25 @@ function AuthPage({ onLogin }) {
 
                   {error && <Alert severity="error">{error}</Alert>}
 
+                  {shouldShowForgotPasswordPrompt && (
+                    <Alert
+                      severity="info"
+                      action={
+                        <Button
+                          color="inherit"
+                          size="small"
+                          onClick={handleForgotPasswordClick}
+                          disabled={isSubmitting}
+                          sx={{ fontWeight: 800, whiteSpace: "nowrap" }}
+                        >
+                          Reset password
+                        </Button>
+                      }
+                    >
+                      Having trouble signing in? You can reset your password with a secure email link.
+                    </Alert>
+                  )}
+
                   <Box component="form" onSubmit={handleSubmit}>
                     <Stack spacing={2.25}>
                       {isSignup && (
@@ -381,59 +579,104 @@ function AuthPage({ onLogin }) {
                         />
                       )}
 
-                      <TextField
-                        label="Email address"
-                        name="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={handleInputChange}
-                        disabled={isSubmitting}
-                        fullWidth
-                      />
-
-                      <TextField
-                        label="Password"
-                        name="password"
-                        type="password"
-                        value={formData.password}
-                        onChange={handleInputChange}
-                        disabled={isSubmitting}
-                        fullWidth
-                      />
-
-                      <Stack spacing={1}>
-                        <Typography
-                          variant="body2"
-                          color="text.secondary"
-                          fontWeight={700}
-                        >
-                          {isSignup
-                            ? "Create my Storet account as a:"
-                            : "Continue to Storet as a:"}
-                        </Typography>
-
-                        <ToggleButtonGroup
-                          value={role}
-                          exclusive
-                          onChange={handleRoleChange}
+                      {!isResetPassword && (
+                        <TextField
+                          label="Email address"
+                          name="email"
+                          type="email"
+                          value={formData.email}
+                          onChange={handleInputChange}
+                          disabled={isSubmitting}
                           fullWidth
-                          color="primary"
-                          sx={{
-                            "& .MuiToggleButton-root": {
-                              py: 1.25,
-                              fontWeight: 700,
-                              textTransform: "none",
-                            },
-                          }}
-                        >
-                          <ToggleButton value={USER_ROLES.RENTER} disabled={isSubmitting}>
-                            Renter
-                          </ToggleButton>
-                          <ToggleButton value={USER_ROLES.HOST} disabled={isSubmitting}>
-                            Host
-                          </ToggleButton>
-                        </ToggleButtonGroup>
-                      </Stack>
+                        />
+                      )}
+
+                      {!isForgotPassword && (
+                        <Stack spacing={0.65}>
+                          <TextField
+                            label={isResetPassword ? "New password" : "Password"}
+                            name="password"
+                            type="password"
+                            value={formData.password}
+                            onChange={handleInputChange}
+                            disabled={isSubmitting}
+                            helperText={
+                              isSignup || isResetPassword
+                                ? "Use at least 6 characters."
+                                : ""
+                            }
+                            fullWidth
+                          />
+
+                          {isLogin && (
+                            <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+                              <Button
+                                size="small"
+                                onClick={handleForgotPasswordClick}
+                                disabled={isSubmitting}
+                                sx={{
+                                  minWidth: 0,
+                                  px: 0.5,
+                                  py: 0,
+                                  fontWeight: 800,
+                                  lineHeight: 1.35,
+                                  textTransform: "none",
+                                }}
+                              >
+                                Forgot password?
+                              </Button>
+                            </Box>
+                          )}
+                        </Stack>
+                      )}
+
+                      {isResetPassword && (
+                        <TextField
+                          label="Confirm new password"
+                          name="confirmPassword"
+                          type="password"
+                          value={formData.confirmPassword}
+                          onChange={handleInputChange}
+                          disabled={isSubmitting}
+                          fullWidth
+                        />
+                      )}
+
+                      {(isLogin || isSignup) && (
+                        <Stack spacing={1}>
+                          <Typography
+                            variant="body2"
+                            color="text.secondary"
+                            fontWeight={700}
+                          >
+                            {isSignup
+                              ? "Create my Storet account as a:"
+                              : "Continue to Storet as a:"}
+                          </Typography>
+
+                          <ToggleButtonGroup
+                            value={role}
+                            exclusive
+                            onChange={handleRoleChange}
+                            fullWidth
+                            color="primary"
+                            sx={{
+                              "& .MuiToggleButton-root": {
+                                py: 1.25,
+                                fontWeight: 700,
+                                textTransform: "none",
+                              },
+                            }}
+                          >
+                            <ToggleButton value={USER_ROLES.RENTER} disabled={isSubmitting}>
+                              Renter
+                            </ToggleButton>
+                            <ToggleButton value={USER_ROLES.HOST} disabled={isSubmitting}>
+                              Host
+                            </ToggleButton>
+                          </ToggleButtonGroup>
+                        </Stack>
+                      )}
 
                       <Button
                         type="submit"
@@ -449,20 +692,55 @@ function AuthPage({ onLogin }) {
 
                   <Divider />
 
-                  <Stack
-                    direction={{ xs: "column", sm: "row" }}
-                    alignItems="center"
-                    justifyContent="center"
-                    spacing={1}
+                  <Box
+                    sx={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 1,
+                      flexWrap: "wrap",
+                      textAlign: "center",
+                    }}
                   >
-                    <Typography color="text.secondary">
+                    <Typography
+                      component="span"
+                      color="text.secondary"
+                      sx={{ lineHeight: 1.4 }}
+                    >
                       {pageCopy.switchText}
                     </Typography>
 
-                    <Button onClick={handleModeSwitch} disabled={isSubmitting}>
+                    <Box
+                      component="button"
+                      type="button"
+                      onClick={
+                        isForgotPassword || isResetPassword
+                          ? handleBackToLogin
+                          : handleModeSwitch
+                      }
+                      disabled={isSubmitting}
+                      sx={{
+                        appearance: "none",
+                        border: 0,
+                        bgcolor: "transparent",
+                        color: "primary.main",
+                        cursor: isSubmitting ? "default" : "pointer",
+                        font: "inherit",
+                        fontWeight: 800,
+                        lineHeight: 1.4,
+                        p: 0,
+                        m: 0,
+                        opacity: isSubmitting ? 0.5 : 1,
+                        textAlign: "center",
+                        textDecoration: "none",
+                        '&:hover': {
+                          textDecoration: isSubmitting ? "none" : "underline",
+                        },
+                      }}
+                    >
                       {pageCopy.switchAction}
-                    </Button>
-                  </Stack>
+                    </Box>
+                  </Box>
                 </Stack>
               </CardContent>
             </Card>
