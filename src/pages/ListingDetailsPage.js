@@ -42,7 +42,7 @@ import Dialog from "../components/ui/Dialog";
 import ReviewForm from "../components/ReviewForm";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
-import { APP_MODES, PRICING_PERIODS } from "../constants/appEnums";
+import { APP_MODES, LISTING_STATUSES, PRICING_PERIODS } from "../constants/appEnums";
 import {
   canCheckoutBookingRequest,
   getBookingRequestCheckoutPath,
@@ -393,8 +393,14 @@ function ListingDetailsPage({
     );
   }
 
+  const listingIsActive = listing.status === LISTING_STATUSES.ACTIVE;
+  const listingIsDraft = listing.status === LISTING_STATUSES.DRAFT;
   const primaryActionLabel =
-    listing.waitlist && !listing.instantBook
+    listingIsDraft
+      ? "Draft listing"
+      : !listingIsActive
+      ? "Unavailable"
+      : listing.waitlist && !listing.instantBook
       ? "Join waitlist"
       : listing.instantBook
       ? "Reserve instantly"
@@ -403,13 +409,21 @@ function ListingDetailsPage({
   const activeBookingRequest = submittedBookingRequest || latestListingRequest;
   const canContinueToCheckout = canCheckoutBookingRequest(activeBookingRequest);
   const hasExistingOpenRequest = hasOpenBookingRequest(activeBookingRequest);
-  const shouldDisableReservation = hasExistingOpenRequest && !canContinueToCheckout;
+  const shouldDisableReservation =
+    (!listingIsActive && !canContinueToCheckout) ||
+    (hasExistingOpenRequest && !canContinueToCheckout);
+  const inactiveActionLabel = listingIsDraft ? "Draft listing" : "Unavailable";
+  const existingRequestActionLabel = activeBookingRequest?.status
+    ? `${activeBookingRequest.status} request`
+    : inactiveActionLabel;
   const activeActionLabel = !isAuthenticated
     ? "Sign in to reserve"
     : canContinueToCheckout
     ? "Continue to checkout"
+    : hasExistingOpenRequest && !canContinueToCheckout
+    ? existingRequestActionLabel
     : shouldDisableReservation
-    ? `${activeBookingRequest.status} request`
+    ? inactiveActionLabel
     : primaryActionLabel;
   const listingImages = Array.isArray(listing.images) ? listing.images.filter(Boolean) : [];
   const galleryImages = Array.from(new Set([listing.imageUrl, ...listingImages].filter(Boolean)));
@@ -997,6 +1011,14 @@ function ListingDetailsPage({
                   )}
 
                   <Divider />
+
+                  {!listingIsActive && (
+                    <Alert severity={listingIsDraft ? "warning" : "info"}>
+                      {listingIsDraft
+                        ? "This listing is saved as a draft and is hidden from renters until payout setup is complete."
+                        : "This listing is not currently available for new reservations."}
+                    </Alert>
+                  )}
 
                   {bookingStatus === BOOKING_STATUSES.APPROVED && (
                     <Alert severity="success">

@@ -40,7 +40,7 @@ import WarehouseRoundedIcon from "@mui/icons-material/WarehouseRounded";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { DEFAULT_USER_PROFILE } from "../models/storetModels";
-import { APP_MODES } from "../constants/appEnums";
+import { APP_MODES, AVAILABILITY_STATUSES, LISTING_STATUSES } from "../constants/appEnums";
 import { createListingRecord, parseNumber } from "../utils/listingUtils";
 import VerifiedAddressField from "../components/VerifiedAddressField";
 import AlertDialog from "../components/ui/AlertDialog";
@@ -48,6 +48,7 @@ import { getListingImageValidationMessage } from "../services/listingImageServic
 import { formatPricingSummary, normalizePricing, hasAnyPricing } from "../utils/pricingUtils";
 import { userCanUseRenterMode } from "../utils/roleUtils";
 import { EMPTY_VERIFIED_ADDRESS, hasVerifiedCoordinates } from "../utils/addressUtils";
+import { getHostPayoutStatus } from "../utils/payoutUtils";
 
 const storageTypes = [
   "Garage",
@@ -104,6 +105,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
   const activeMode = storetApp?.activeMode || activeUser?.activeMode || APP_MODES.HOST;
   const isHostMode = activeMode === APP_MODES.HOST;
   const canReturnToRenterExperience = userCanUseRenterMode(activeUser);
+  const hostPayoutStatus = getHostPayoutStatus(activeUser);
+  const hostPayoutsReady = hostPayoutStatus.isReady;
 
   const [formData, setFormData] = useState({
     title: "",
@@ -504,6 +507,10 @@ function CreateListingPage({ currentUser, onAddListing }) {
         bookingMode: formData.bookingType,
         instantBook: formData.bookingType === "instant",
         waitlist: formData.bookingType === "waitlist",
+        status: hostPayoutsReady ? LISTING_STATUSES.ACTIVE : LISTING_STATUSES.DRAFT,
+        availabilityStatus: hostPayoutsReady
+          ? AVAILABILITY_STATUSES.AVAILABLE
+          : AVAILABILITY_STATUSES.UNAVAILABLE,
         description,
         images: [],
         tags: buildTags(),
@@ -554,9 +561,13 @@ function CreateListingPage({ currentUser, onAddListing }) {
       leaveConfirmedRef.current = true;
       setListingWasCreated(true);
       setSuccessMessage(
-        selectedImageFiles.length > 0
-          ? "Listing and photos created successfully!"
-          : "Listing created successfully!"
+        hostPayoutsReady
+          ? selectedImageFiles.length > 0
+            ? "Listing and photos created successfully!"
+            : "Listing created successfully!"
+          : selectedImageFiles.length > 0
+          ? "Listing and photos saved as a draft. Set up payouts before activating it."
+          : "Listing saved as a draft. Set up payouts before activating it."
       );
 
       setTimeout(() => {
@@ -610,6 +621,26 @@ function CreateListingPage({ currentUser, onAddListing }) {
               >
                 {isHostMode ? "Back to Host Dashboard" : "Back to Explore"}
               </Button>
+            )}
+
+            {!hostPayoutsReady && (
+              <Alert
+                severity="warning"
+                icon={<PaymentsRoundedIcon />}
+                sx={{
+                  borderRadius: 4,
+                  alignItems: "flex-start",
+                  '& .MuiAlert-icon': { mt: 0.35 },
+                }}
+              >
+                <Typography fontWeight={950} sx={{ mb: 0.35 }}>
+                  Payout setup is required before this listing can go live.
+                </Typography>
+                <Typography variant="body2">
+                  You can finish this listing now, but Storet will save it as a draft.
+                  Renters will not see or book it until your Stripe payout setup is complete.
+                </Typography>
+              </Alert>
             )}
 
             <Stack
@@ -1044,7 +1075,11 @@ function CreateListingPage({ currentUser, onAddListing }) {
                         startIcon={<AddHomeWorkRoundedIcon />}
                         disabled={isSubmitting}
                       >
-                        {isSubmitting ? "Creating listing..." : "Create listing"}
+                        {isSubmitting
+                          ? "Saving..."
+                          : hostPayoutsReady
+                          ? "Create listing"
+                          : "Save draft listing"}
                       </Button>
                     </Stack>
                   </Stack>

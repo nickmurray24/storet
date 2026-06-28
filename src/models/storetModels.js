@@ -23,6 +23,12 @@ export const DEFAULT_USER_PROFILE = {
   email: "demo@storet.com",
   role: USER_ROLES.RENTER,
   isAuthenticated: true,
+  payoutSetupStatus: "not_started",
+  stripeConnectDetailsSubmitted: false,
+  stripeConnectChargesEnabled: false,
+  stripeConnectPayoutsEnabled: false,
+  stripeConnectOnboardingComplete: false,
+  payoutsReady: false,
 };
 
 export const DEFAULT_LISTING_MODEL = {

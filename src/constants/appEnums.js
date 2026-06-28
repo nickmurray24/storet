@@ -10,6 +10,7 @@ export const APP_MODES = {
 };
 
 export const LISTING_STATUSES = {
+  DRAFT: "draft",
   ACTIVE: "active",
   PAUSED: "paused",
   ARCHIVED: "archived",
@@ -67,4 +68,11 @@ export const HOST_MESSAGE_STATUSES = {
 export const NOTIFICATION_STATUSES = {
   UNREAD: "Unread",
   READ: "Read",
+};
+
+export const HOST_PAYOUT_STATUSES = {
+  NOT_STARTED: "not_started",
+  IN_PROGRESS: "in_progress",
+  RESTRICTED: "restricted",
+  READY: "ready",
 };

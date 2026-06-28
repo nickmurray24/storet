@@ -45,7 +45,9 @@ import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import AlertDialog from "./ui/AlertDialog";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
+import { LISTING_STATUSES } from "../constants/appEnums";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
+import { getHostPayoutStatus } from "../utils/payoutUtils";
 import { getDefaultStatusBreakdown, getHostAnalyticsSummaryValue } from "../utils/hostAnalyticsUtils";
 import {
   getBookingRequestPrimaryAction,
@@ -284,6 +286,49 @@ function StatCard({ icon, label, value, helper, tone = "primary", onClick }) {
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+function PayoutStatusBanner({ payoutStatus, draftCount = 0 }) {
+  const isReady = payoutStatus?.isReady;
+  const severity = payoutStatus?.severity || "warning";
+
+  return (
+    <Alert
+      severity={severity}
+      icon={<PaidRoundedIcon />}
+      sx={{
+        mb: 3,
+        borderRadius: 4,
+        alignItems: "flex-start",
+        '& .MuiAlert-icon': { mt: 0.35 },
+      }}
+      action={
+        isReady ? null : (
+          <Button
+            color="inherit"
+            size="small"
+            variant="outlined"
+            disabled
+            sx={{ whiteSpace: "nowrap", fontWeight: 900 }}
+          >
+            Stripe setup next
+          </Button>
+        )
+      }
+    >
+      <Typography fontWeight={950}>
+        {payoutStatus?.title || "Set up payouts before going live"}
+      </Typography>
+      <Typography variant="body2" sx={{ mt: 0.25 }}>
+        {isReady
+          ? "Your payout account is ready, so active listings can be booked and paid through Storet."
+          : "New listings are saved as drafts and hidden from renters until payout setup is complete."}
+        {!isReady && draftCount > 0
+          ? ` You currently have ${draftCount} draft ${draftCount === 1 ? "listing" : "listings"} waiting for payout setup.`
+          : ""}
+      </Typography>
+    </Alert>
   );
 }
 
@@ -771,7 +816,8 @@ function AttentionItem({ listing }) {
     listing.pending > 0 && { label: `${listing.pending} pending`, color: "warning" },
     listing.waitlisted > 0 && { label: `${listing.waitlisted} waitlisted`, color: "info" },
     listing.unreadMessages > 0 && { label: `${listing.unreadMessages} unread`, color: "error" },
-    listing.status === "paused" && { label: "Paused", color: "default" },
+    listing.status === LISTING_STATUSES.DRAFT && { label: "Draft", color: "warning" },
+    listing.status === LISTING_STATUSES.PAUSED && { label: "Paused", color: "default" },
   ].filter(Boolean);
 
   return (
@@ -1042,8 +1088,10 @@ function AnalyticsBarList({ title, description, icon, items, valueFormatter = (v
   );
 }
 
-function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
-  const isPaused = listing.status === "paused";
+function HostListingCard({ listing, onDeleteListing, onToggleListingStatus, payoutStatus }) {
+  const isDraft = listing.status === LISTING_STATUSES.DRAFT;
+  const isPaused = listing.status === LISTING_STATUSES.PAUSED;
+  const canActivateListing = Boolean(payoutStatus?.isReady);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   function handleConfirmDelete() {
@@ -1082,8 +1130,8 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
             sx={{ fontWeight: 800 }}
           />
           <Chip
-            label={isPaused ? "Paused" : "Active"}
-            color={isPaused ? "default" : "success"}
+            label={isDraft ? "Draft" : isPaused ? "Paused" : "Active"}
+            color={isDraft ? "warning" : isPaused ? "default" : "success"}
             size="small"
             sx={{ fontWeight: 800 }}
           />
@@ -1108,7 +1156,7 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
             value={listing.instantBook ? "Instant" : listing.waitlist ? "Waitlist" : "Approval"}
           />
           <MetricPill label="Waitlist" value={listing.waitlist ? "Enabled" : "Disabled"} />
-          <MetricPill label="Status" value={isPaused ? "Paused" : "Live"} />
+          <MetricPill label="Status" value={isDraft ? "Draft" : isPaused ? "Paused" : "Live"} />
         </Box>
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
@@ -1133,12 +1181,21 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus }) {
 
           <Button
             variant="outlined"
-            color={isPaused ? "success" : "warning"}
+            color={isDraft || isPaused ? "success" : "warning"}
             size="small"
-            startIcon={isPaused ? <PlayCircleRoundedIcon /> : <PauseCircleRoundedIcon />}
+            startIcon={isDraft || isPaused ? <PlayCircleRoundedIcon /> : <PauseCircleRoundedIcon />}
             onClick={() => onToggleListingStatus(listing.id)}
+            disabled={(isDraft || isPaused) && !canActivateListing}
           >
-            {isPaused ? "Resume" : "Pause"}
+            {isDraft
+              ? canActivateListing
+                ? "Activate"
+                : "Payout setup required"
+              : isPaused
+              ? canActivateListing
+                ? "Resume"
+                : "Payout setup required"
+              : "Pause"}
           </Button>
 
           <Button
@@ -1192,6 +1249,7 @@ function HostDashboardPanel({
   const safeHostMessages = Array.isArray(hostMessages)
     ? hostMessages
     : storetApp?.hostDashboardMessages ?? [];
+  const payoutStatus = storetApp?.hostPayoutStatus || getHostPayoutStatus(storetApp?.currentUser);
 
   const backendAnalytics = storetApp?.hostAnalytics || null;
   const backendSummary = backendAnalytics?.summary || {};
@@ -1233,8 +1291,9 @@ function HostDashboardPanel({
     storetApp?.actions?.updateHostMessageStatus ||
     (() => {});
 
-  const localActiveCount = safeMyListings.filter((listing) => listing.status !== "paused").length;
-  const localPausedCount = safeMyListings.filter((listing) => listing.status === "paused").length;
+  const localDraftCount = safeMyListings.filter((listing) => listing.status === LISTING_STATUSES.DRAFT).length;
+  const localActiveCount = safeMyListings.filter((listing) => listing.status === LISTING_STATUSES.ACTIVE).length;
+  const localPausedCount = safeMyListings.filter((listing) => listing.status === LISTING_STATUSES.PAUSED).length;
   const localPendingRequestCount = sortedBookingRequests.filter(
     (request) => request.status === BOOKING_STATUSES.PENDING
   ).length;
@@ -1255,6 +1314,7 @@ function HostDashboardPanel({
   // The top dashboard cards should reflect the live React state immediately.
   // Backend analytics are a snapshot and can lag until the RPC is refreshed, so keep
   // analytics-only metrics below on backend values but use local state for these cards.
+  const draftCount = localDraftCount;
   const activeCount = localActiveCount;
   const pausedCount = localPausedCount;
   const pendingRequestCount = localPendingRequestCount;
@@ -1385,10 +1445,11 @@ function HostDashboardPanel({
       listing.pending > 0 ||
       listing.waitlisted > 0 ||
       listing.unreadMessages > 0 ||
-      listing.status === "paused"
+      listing.status === LISTING_STATUSES.PAUSED ||
+      listing.status === LISTING_STATUSES.DRAFT
   );
 
-  const actionNeededCount = pendingRequestCount + waitlistedCount + unreadMessageCount + pausedCount;
+  const actionNeededCount = pendingRequestCount + waitlistedCount + unreadMessageCount + pausedCount + draftCount;
 
   const confirmedAndActiveRequests = sortedBookingRequests.filter((request) =>
     [BOOKING_STATUSES.CONFIRMED, BOOKING_STATUSES.ACTIVE].includes(request.status)
@@ -1595,6 +1656,8 @@ function HostDashboardPanel({
           </Stack>
         )}
 
+        <PayoutStatusBanner payoutStatus={payoutStatus} draftCount={draftCount} />
+
         <Box
           sx={{
             display: "grid",
@@ -1619,7 +1682,7 @@ function HostDashboardPanel({
             icon={<Inventory2RoundedIcon />}
             label="Hosted listings"
             value={safeMyListings.length}
-            helper={`${activeCount} active · ${pausedCount} paused`}
+            helper={`${activeCount} active · ${draftCount} draft · ${pausedCount} paused`}
             onClick={() => openSection(DASHBOARD_SECTIONS.listings)}
           />
           <StatCard
@@ -1862,6 +1925,7 @@ function HostDashboardPanel({
                     listing={listing}
                     onDeleteListing={deleteListingAction}
                     onToggleListingStatus={toggleListingStatusAction}
+                    payoutStatus={payoutStatus}
                   />
                 ))}
               </Box>
