@@ -10,6 +10,14 @@ function getAuthRedirectUrl() {
   return `${window.location.origin}/auth`;
 }
 
+function getPasswordResetRedirectUrl() {
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  return `${window.location.origin}/auth?mode=reset-password`;
+}
+
 function normalizeAuthError(error) {
   if (!error) {
     return null;
@@ -240,6 +248,37 @@ export const authService = {
       user: buildProfileFromAuthUser(data.user, profile),
       needsEmailConfirmation: false,
     });
+  },
+
+  async sendPasswordResetEmail(email) {
+    const { supabase, error } = requireSupabase();
+
+    if (error) {
+      return formatServiceResponse(null, error);
+    }
+
+    const { data, error: resetError } = await supabase.auth.resetPasswordForEmail(
+      email,
+      {
+        redirectTo: getPasswordResetRedirectUrl(),
+      }
+    );
+
+    return formatServiceResponse(data || true, normalizeAuthError(resetError));
+  },
+
+  async updatePassword(password) {
+    const { supabase, error } = requireSupabase();
+
+    if (error) {
+      return formatServiceResponse(null, error);
+    }
+
+    const { data, error: updateError } = await supabase.auth.updateUser({
+      password,
+    });
+
+    return formatServiceResponse(data || true, normalizeAuthError(updateError));
   },
 
   async updateCurrentUserRole(role) {
