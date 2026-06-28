@@ -33,6 +33,7 @@ import { hostAnalyticsService } from "../services/hostAnalyticsService";
 import { stripeCheckoutService } from "../services/stripeCheckoutService";
 import { storetDataService } from "../services/storetDataService";
 import { APP_MODES, LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
+import { getHostPayoutStatus } from "../utils/payoutUtils";
 import { APP_ROUTES, buildCheckoutPath, getSafeRedirectPath } from "../routes/appRoutes";
 import { normalizeUserProfile } from "../models/storetModels";
 import {
@@ -638,6 +639,11 @@ export function StoretAppProvider({ children }) {
   }, [activeMode, currentUser, hasHostedListings]);
   const isHostMode = currentActiveMode === APP_MODES.HOST;
   const isRenterMode = currentActiveMode === APP_MODES.RENTER;
+  const hostPayoutStatus = useMemo(
+    () => getHostPayoutStatus(currentUser),
+    [currentUser]
+  );
+  const hostPayoutsReady = hostPayoutStatus.isReady;
 
   useEffect(() => {
     if (!currentUser?.isAuthenticated) {
@@ -1141,11 +1147,28 @@ export function StoretAppProvider({ children }) {
       };
     }
 
-    const currentStatus = targetListing.status || LISTING_STATUSES.ACTIVE;
+    const currentStatus = targetListing.status || LISTING_STATUSES.DRAFT;
     const nextStatus =
-      currentStatus === LISTING_STATUSES.PAUSED
+      currentStatus === LISTING_STATUSES.DRAFT
+        ? LISTING_STATUSES.ACTIVE
+        : currentStatus === LISTING_STATUSES.PAUSED
         ? LISTING_STATUSES.ACTIVE
         : LISTING_STATUSES.PAUSED;
+
+    if (
+      nextStatus === LISTING_STATUSES.ACTIVE &&
+      !getHostPayoutStatus(currentUser).isReady
+    ) {
+      const message =
+        "Set up payouts before activating this listing. It will stay saved as a draft until payouts are ready.";
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
     const updatedListing = {
       ...targetListing,
       status: nextStatus,
@@ -1956,6 +1979,8 @@ export function StoretAppProvider({ children }) {
     canUseHostMode,
     canUseRenterMode,
     hasHostedListings,
+    hostPayoutStatus,
+    hostPayoutsReady,
     hostDashboardIsAvailable,
     isHostMode,
     isRenterMode,

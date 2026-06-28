@@ -79,6 +79,27 @@ export function mapDatabaseProfileToAppUser(profile = {}, options = {}) {
     email: profile.email || options.email || "",
     role: profile.role || "Renter",
     isAuthenticated: options.isAuthenticated ?? true,
+    payoutSetupStatus: profile.payout_setup_status || profile.payoutSetupStatus || "not_started",
+    stripeConnectDetailsSubmitted: Boolean(
+      profile.stripe_connect_details_submitted ?? profile.stripeConnectDetailsSubmitted
+    ),
+    stripeConnectChargesEnabled: Boolean(
+      profile.stripe_connect_charges_enabled ?? profile.stripeConnectChargesEnabled
+    ),
+    stripeConnectPayoutsEnabled: Boolean(
+      profile.stripe_connect_payouts_enabled ?? profile.stripeConnectPayoutsEnabled
+    ),
+    stripeConnectOnboardingComplete: Boolean(
+      profile.stripe_connect_onboarding_complete ?? profile.stripeConnectOnboardingComplete
+    ),
+    payoutsReady: Boolean(
+      profile.stripe_connect_onboarding_complete ||
+        profile.payoutSetupStatus === "ready" ||
+        profile.payout_setup_status === "ready" ||
+        (profile.stripe_connect_details_submitted &&
+          profile.stripe_connect_charges_enabled &&
+          profile.stripe_connect_payouts_enabled)
+    ),
     createdAt: profile.created_at || profile.createdAt || "",
     updatedAt: profile.updated_at || profile.updatedAt || "",
   };
@@ -90,6 +111,11 @@ export function mapAppUserToDatabaseProfile(user = {}) {
     full_name: user.fullName || user.name,
     email: user.email,
     role: user.role || "Renter",
+    payout_setup_status: user.payoutSetupStatus,
+    stripe_connect_details_submitted: user.stripeConnectDetailsSubmitted,
+    stripe_connect_charges_enabled: user.stripeConnectChargesEnabled,
+    stripe_connect_payouts_enabled: user.stripeConnectPayoutsEnabled,
+    stripe_connect_onboarding_complete: user.stripeConnectOnboardingComplete,
     updated_at: new Date().toISOString(),
   });
 }

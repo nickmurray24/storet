@@ -80,7 +80,11 @@ export function getListingAvailabilityStatus(listing = {}) {
     return AVAILABILITY_STATUSES.WAITLIST;
   }
 
-  if (listing.status === LISTING_STATUSES.PAUSED || listing.status === LISTING_STATUSES.ARCHIVED) {
+  if (
+    listing.status === LISTING_STATUSES.DRAFT ||
+    listing.status === LISTING_STATUSES.PAUSED ||
+    listing.status === LISTING_STATUSES.ARCHIVED
+  ) {
     return AVAILABILITY_STATUSES.UNAVAILABLE;
   }
 
