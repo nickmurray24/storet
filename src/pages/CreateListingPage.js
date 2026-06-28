@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Alert,
@@ -43,6 +43,7 @@ import { DEFAULT_USER_PROFILE } from "../models/storetModels";
 import { APP_MODES } from "../constants/appEnums";
 import { createListingRecord, parseNumber } from "../utils/listingUtils";
 import VerifiedAddressField from "../components/VerifiedAddressField";
+import AlertDialog from "../components/ui/AlertDialog";
 import { getListingImageValidationMessage } from "../services/listingImageService";
 import { formatPricingSummary, normalizePricing, hasAnyPricing } from "../utils/pricingUtils";
 import { userCanUseRenterMode } from "../utils/roleUtils";
@@ -80,6 +81,11 @@ const amenityOptions = [
 ];
 
 const MAX_LISTING_IMAGES = 5;
+const DEFAULT_SELECTED_AMENITIES = [
+  "Indoor space",
+  "Private access",
+  "Good for boxes",
+];
 
 function CreateListingPage({ currentUser, onAddListing }) {
   const storetApp = useOptionalStoretApp();
@@ -115,17 +121,17 @@ function CreateListingPage({ currentUser, onAddListing }) {
     customTags: "",
   });
 
-  const [selectedAmenities, setSelectedAmenities] = useState([
-    "Indoor space",
-    "Private access",
-    "Good for boxes",
-  ]);
+  const [selectedAmenities, setSelectedAmenities] = useState(DEFAULT_SELECTED_AMENITIES);
   const [selectedImageFiles, setSelectedImageFiles] = useState([]);
   const [imagePreviewUrls, setImagePreviewUrls] = useState([]);
 
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [listingWasCreated, setListingWasCreated] = useState(false);
+  const leaveConfirmedRef = useRef(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState(null);
 
   const previewListing = useMemo(() => {
     const pricing = normalizePricing({
@@ -152,6 +158,134 @@ function CreateListingPage({ currentUser, onAddListing }) {
         "A flexible local storage option for renters looking for extra space.",
     };
   }, [formData]);
+
+  const hasStartedListingDraft = useMemo(() => {
+    const editableTextFields = [
+      formData.title,
+      formData.location,
+      formData.addressLine1,
+      formData.addressLine2,
+      formData.city,
+      formData.state,
+      formData.postalCode,
+      formData.formattedAddress,
+      formData.displayLocation,
+      formData.dailyRate,
+      formData.monthlyRate,
+      formData.yearlyRate,
+      formData.sqft,
+      formData.description,
+      formData.customTags,
+    ];
+
+    const hasTextInput = editableTextFields.some((value) =>
+      String(value || "").trim()
+    );
+
+    const hasChangedDefaults =
+      formData.storageType !== "Garage" ||
+      formData.listingType !== "Private host" ||
+      formData.access !== "By appointment" ||
+      formData.bookingType !== "instant";
+
+    const hasChangedAmenities =
+      selectedAmenities.length !== DEFAULT_SELECTED_AMENITIES.length ||
+      selectedAmenities.some(
+        (amenity) => !DEFAULT_SELECTED_AMENITIES.includes(amenity)
+      );
+
+    return Boolean(
+      hasTextInput ||
+        hasChangedDefaults ||
+        hasChangedAmenities ||
+        selectedImageFiles.length > 0 ||
+        hasVerifiedCoordinates(formData)
+    );
+  }, [formData, selectedAmenities, selectedImageFiles.length]);
+
+  const shouldWarnBeforeLeave =
+    hasStartedListingDraft && !listingWasCreated && !isSubmitting;
+
+  useEffect(() => {
+    if (!shouldWarnBeforeLeave) {
+      return undefined;
+    }
+
+    function handleBeforeUnload(event) {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    }
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [shouldWarnBeforeLeave]);
+
+  useEffect(() => {
+    if (!shouldWarnBeforeLeave || leaveConfirmedRef.current) {
+      return undefined;
+    }
+
+    function handleDocumentClick(event) {
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      ) {
+        return;
+      }
+
+      const anchor = event.target.closest?.("a[href]");
+
+      if (!anchor) {
+        return;
+      }
+
+      const target = anchor.getAttribute("target");
+      const href = anchor.getAttribute("href");
+
+      if (
+        anchor.hasAttribute("download") ||
+        (target && target !== "_self") ||
+        !href ||
+        href.startsWith("#") ||
+        href.startsWith("mailto:") ||
+        href.startsWith("tel:")
+      ) {
+        return;
+      }
+
+      const nextUrl = new URL(href, window.location.href);
+
+      if (nextUrl.origin !== window.location.origin) {
+        return;
+      }
+
+      const nextPath = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+      const currentPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+
+      if (nextPath === currentPath) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      setPendingNavigation({ to: nextPath });
+      setLeaveDialogOpen(true);
+    }
+
+    document.addEventListener("click", handleDocumentClick, true);
+
+    return () => {
+      document.removeEventListener("click", handleDocumentClick, true);
+    };
+  }, [shouldWarnBeforeLeave]);
 
   useEffect(() => {
     const previewUrls = selectedImageFiles.map((file) => URL.createObjectURL(file));
@@ -241,14 +375,30 @@ function CreateListingPage({ currentUser, onAddListing }) {
     );
   }
 
+  function requestNavigation(to, options = {}) {
+    if (shouldWarnBeforeLeave && !leaveConfirmedRef.current) {
+      setPendingNavigation({
+        to,
+        beforeNavigate: options.beforeNavigate,
+      });
+      setLeaveDialogOpen(true);
+      return;
+    }
+
+    options.beforeNavigate?.();
+    navigate(to);
+  }
+
   function handleBackToExplore() {
-    storetApp?.actions?.switchActiveMode?.(APP_MODES.RENTER);
-    navigate(APP_ROUTES.explore);
+    requestNavigation(APP_ROUTES.explore, {
+      beforeNavigate: () => storetApp?.actions?.switchActiveMode?.(APP_MODES.RENTER),
+    });
   }
 
   function handleBackToHostDashboard() {
-    storetApp?.actions?.switchActiveMode?.(APP_MODES.HOST);
-    navigate(APP_ROUTES.hostDashboard);
+    requestNavigation(APP_ROUTES.hostDashboard, {
+      beforeNavigate: () => storetApp?.actions?.switchActiveMode?.(APP_MODES.HOST),
+    });
   }
 
   function handleCancel() {
@@ -262,7 +412,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
       return;
     }
 
-    navigate(APP_ROUTES.profile);
+    requestNavigation(APP_ROUTES.profile);
   }
 
   function buildTags() {
@@ -401,6 +551,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
         }
       }
 
+      leaveConfirmedRef.current = true;
+      setListingWasCreated(true);
       setSuccessMessage(
         selectedImageFiles.length > 0
           ? "Listing and photos created successfully!"
@@ -414,6 +566,28 @@ function CreateListingPage({ currentUser, onAddListing }) {
       setError(saveError?.message || "We could not save your listing. Please try again.");
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  function handleLeaveDialogOpenChange(open) {
+    setLeaveDialogOpen(open);
+
+    if (!open) {
+      setPendingNavigation(null);
+    }
+  }
+
+  function handleConfirmLeavePage() {
+    const navigation = pendingNavigation;
+
+    leaveConfirmedRef.current = true;
+    setLeaveDialogOpen(false);
+    setPendingNavigation(null);
+
+    navigation?.beforeNavigate?.();
+
+    if (navigation?.to) {
+      navigate(navigation.to);
     }
   }
 
@@ -998,6 +1172,17 @@ function CreateListingPage({ currentUser, onAddListing }) {
           </Box>
         </Stack>
       </Container>
+
+      <AlertDialog
+        open={leaveDialogOpen}
+        onOpenChange={handleLeaveDialogOpenChange}
+        title="Leave listing setup?"
+        description="Your listing has not been created yet. If you leave now, the details and photos you entered may be lost."
+        cancelText="Keep editing"
+        actionText="Leave page"
+        actionColor="warning"
+        onAction={handleConfirmLeavePage}
+      />
     </Box>
   );
 }
