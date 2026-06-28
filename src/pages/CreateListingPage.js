@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Alert,
   Avatar,
@@ -9,6 +9,7 @@ import {
   CardContent,
   Checkbox,
   Chip,
+  CircularProgress,
   Container,
   Divider,
   FormControl,
@@ -32,6 +33,7 @@ import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import ImageRoundedIcon from "@mui/icons-material/ImageRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
 import PhotoCameraRoundedIcon from "@mui/icons-material/PhotoCameraRounded";
 import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 import StraightenRoundedIcon from "@mui/icons-material/StraightenRounded";
@@ -91,6 +93,7 @@ const DEFAULT_SELECTED_AMENITIES = [
 function CreateListingPage({ currentUser, onAddListing }) {
   const storetApp = useOptionalStoretApp();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const storedUser = useMemo(
     () => ({
@@ -131,6 +134,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [payoutSetupIsStarting, setPayoutSetupIsStarting] = useState(false);
   const [listingWasCreated, setListingWasCreated] = useState(false);
   const leaveConfirmedRef = useRef(false);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
@@ -291,6 +295,43 @@ function CreateListingPage({ currentUser, onAddListing }) {
   }, [shouldWarnBeforeLeave]);
 
   useEffect(() => {
+    const payoutReturnState = new URLSearchParams(location.search).get("payout");
+
+    if (payoutReturnState !== "return" && payoutReturnState !== "refresh") {
+      return undefined;
+    }
+
+    let isMounted = true;
+    const refreshHostPayoutStatus = storetApp?.actions?.refreshHostPayoutStatus;
+
+    async function refreshAfterStripeReturn() {
+      if (!refreshHostPayoutStatus) {
+        return;
+      }
+
+      setError("");
+      setPayoutSetupIsStarting(true);
+
+      const result = await refreshHostPayoutStatus();
+
+      if (isMounted && result?.error) {
+        setError(result.error);
+      }
+
+      if (isMounted) {
+        setPayoutSetupIsStarting(false);
+        navigate(APP_ROUTES.createListing, { replace: true });
+      }
+    }
+
+    refreshAfterStripeReturn();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.search, navigate, storetApp?.actions]);
+
+  useEffect(() => {
     const previewUrls = selectedImageFiles.map((file) => URL.createObjectURL(file));
     setImagePreviewUrls(previewUrls);
 
@@ -402,6 +443,30 @@ function CreateListingPage({ currentUser, onAddListing }) {
     requestNavigation(APP_ROUTES.hostDashboard, {
       beforeNavigate: () => storetApp?.actions?.switchActiveMode?.(APP_MODES.HOST),
     });
+  }
+
+  async function handleStartPayoutOnboarding() {
+    const startPayoutOnboarding = storetApp?.actions?.startPayoutOnboarding;
+
+    if (!startPayoutOnboarding) {
+      setError("Stripe payout setup is not available yet.");
+      return;
+    }
+
+    setError("");
+    setPayoutSetupIsStarting(true);
+    leaveConfirmedRef.current = true;
+
+    const result = await startPayoutOnboarding({
+      returnPath: `${APP_ROUTES.createListing}?payout=return`,
+      refreshPath: `${APP_ROUTES.createListing}?payout=refresh`,
+    });
+
+    if (result?.error) {
+      leaveConfirmedRef.current = false;
+      setError(result.error);
+      setPayoutSetupIsStarting(false);
+    }
   }
 
   function handleCancel() {
@@ -632,13 +697,33 @@ function CreateListingPage({ currentUser, onAddListing }) {
                   alignItems: "flex-start",
                   '& .MuiAlert-icon': { mt: 0.35 },
                 }}
+                action={
+                  <Button
+                    color="inherit"
+                    variant="contained"
+                    size="small"
+                    onClick={handleStartPayoutOnboarding}
+                    disabled={payoutSetupIsStarting || isSubmitting}
+                    startIcon={
+                      payoutSetupIsStarting ? (
+                        <CircularProgress size={16} color="inherit" />
+                      ) : (
+                        <OpenInNewRoundedIcon />
+                      )
+                    }
+                    sx={{ whiteSpace: "nowrap", fontWeight: 900 }}
+                  >
+                    Set up payouts
+                  </Button>
+                }
               >
                 <Typography fontWeight={950} sx={{ mb: 0.35 }}>
                   Payout setup is required before this listing can go live.
                 </Typography>
                 <Typography variant="body2">
                   You can finish this listing now, but Storet will save it as a draft.
-                  Renters will not see or book it until your Stripe payout setup is complete.
+                  Renters will not see or book it until Stripe verifies your payout account.
+                  You can set up payouts now or save this draft first and finish setup from the Host Dashboard.
                 </Typography>
               </Alert>
             )}

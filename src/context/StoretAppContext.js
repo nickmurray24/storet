@@ -31,6 +31,7 @@ import { notificationService } from "../services/notificationService";
 import { reviewService } from "../services/reviewService";
 import { hostAnalyticsService } from "../services/hostAnalyticsService";
 import { stripeCheckoutService } from "../services/stripeCheckoutService";
+import { payoutService } from "../services/payoutService";
 import { storetDataService } from "../services/storetDataService";
 import { APP_MODES, LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
 import { getHostPayoutStatus } from "../utils/payoutUtils";
@@ -475,6 +476,81 @@ export function StoretAppProvider({ children }) {
       hostAnalytics: normalizedAnalytics,
     };
   }, [currentUser?.id, currentUser?.isAuthenticated]);
+
+  const refreshHostPayoutStatus = useCallback(async () => {
+    if (!currentUser?.isAuthenticated) {
+      return { ok: false, error: "Please sign in before checking payout setup." };
+    }
+
+    setListingsError("");
+
+    const response = await payoutService.refreshConnectAccountStatus();
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not refresh your payout setup status yet."
+      );
+      setListingsError(message);
+
+      return { ok: false, error: message };
+    }
+
+    const refreshedUser = response.data?.user;
+
+    if (refreshedUser) {
+      const nextUser = persistAuthenticatedUser({
+        ...currentUser,
+        ...refreshedUser,
+      });
+
+      return { ok: true, user: nextUser, payoutStatus: getHostPayoutStatus(nextUser) };
+    }
+
+    return { ok: true, payoutStatus: getHostPayoutStatus(currentUser) };
+  }, [currentUser, persistAuthenticatedUser]);
+
+  const startPayoutOnboarding = useCallback(async ({ returnPath, refreshPath } = {}) => {
+    if (!currentUser?.isAuthenticated) {
+      return { ok: false, error: "Please sign in before setting up payouts." };
+    }
+
+    setListingsError("");
+
+    const response = await payoutService.createConnectAccountLink({
+      returnPath,
+      refreshPath,
+    });
+
+    if (response.error) {
+      const message = getErrorMessage(
+        response.error,
+        "We could not start Stripe payout setup yet."
+      );
+      setListingsError(message);
+
+      return { ok: false, error: message };
+    }
+
+    const updatedUser = response.data?.user;
+
+    if (updatedUser) {
+      persistAuthenticatedUser({
+        ...currentUser,
+        ...updatedUser,
+      });
+    }
+
+    if (response.data?.url) {
+      window.location.assign(response.data.url);
+      return { ok: true, url: response.data.url };
+    }
+
+    return {
+      ok: false,
+      error: "Stripe did not return a payout setup link.",
+    };
+  }, [currentUser, persistAuthenticatedUser]);
 
   useEffect(() => {
     let isMounted = true;
@@ -2031,6 +2107,8 @@ export function StoretAppProvider({ children }) {
       markAllNotificationsRead,
       refreshCurrentUserNotificationData,
       refreshCurrentUserHostAnalyticsData,
+      refreshHostPayoutStatus,
+      startPayoutOnboarding,
       startStripeCheckout,
       completeCheckout,
       refreshActiveListings,

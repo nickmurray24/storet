@@ -80,6 +80,8 @@ export function mapDatabaseProfileToAppUser(profile = {}, options = {}) {
     role: profile.role || "Renter",
     isAuthenticated: options.isAuthenticated ?? true,
     payoutSetupStatus: profile.payout_setup_status || profile.payoutSetupStatus || "not_started",
+    stripeConnectAccountId:
+      profile.stripe_connect_account_id || profile.stripeConnectAccountId || "",
     stripeConnectDetailsSubmitted: Boolean(
       profile.stripe_connect_details_submitted ?? profile.stripeConnectDetailsSubmitted
     ),
@@ -112,6 +114,7 @@ export function mapAppUserToDatabaseProfile(user = {}) {
     email: user.email,
     role: user.role || "Renter",
     payout_setup_status: user.payoutSetupStatus,
+    stripe_connect_account_id: user.stripeConnectAccountId,
     stripe_connect_details_submitted: user.stripeConnectDetailsSubmitted,
     stripe_connect_charges_enabled: user.stripeConnectChargesEnabled,
     stripe_connect_payouts_enabled: user.stripeConnectPayoutsEnabled,
