@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Accordion,
   AccordionDetails,
@@ -10,6 +10,7 @@ import {
   Card,
   CardContent,
   Chip,
+  CircularProgress,
   Container,
   LinearProgress,
   Skeleton,
@@ -289,9 +290,18 @@ function StatCard({ icon, label, value, helper, tone = "primary", onClick }) {
   );
 }
 
-function PayoutStatusBanner({ payoutStatus, draftCount = 0 }) {
+function PayoutStatusBanner({
+  payoutStatus,
+  draftCount = 0,
+  onSetupPayouts,
+  onRefreshPayoutStatus,
+  isStarting = false,
+  isRefreshing = false,
+  actionError = "",
+}) {
   const isReady = payoutStatus?.isReady;
   const severity = payoutStatus?.severity || "warning";
+  const hasConnectAccount = Boolean(payoutStatus?.hasStripeConnectAccount);
 
   return (
     <Alert
@@ -305,15 +315,36 @@ function PayoutStatusBanner({ payoutStatus, draftCount = 0 }) {
       }}
       action={
         isReady ? null : (
-          <Button
-            color="inherit"
-            size="small"
-            variant="outlined"
-            disabled
-            sx={{ whiteSpace: "nowrap", fontWeight: 900 }}
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={1}
+            sx={{ minWidth: { sm: 270 } }}
           >
-            Stripe setup next
-          </Button>
+            <Button
+              color="inherit"
+              size="small"
+              variant="contained"
+              onClick={onSetupPayouts}
+              disabled={isStarting || isRefreshing}
+              startIcon={isStarting ? <CircularProgress size={16} color="inherit" /> : null}
+              sx={{ whiteSpace: "nowrap", fontWeight: 900 }}
+            >
+              {hasConnectAccount ? "Continue setup" : "Set up payouts"}
+            </Button>
+            {hasConnectAccount && (
+              <Button
+                color="inherit"
+                size="small"
+                variant="outlined"
+                onClick={onRefreshPayoutStatus}
+                disabled={isStarting || isRefreshing}
+                startIcon={isRefreshing ? <CircularProgress size={16} color="inherit" /> : null}
+                sx={{ whiteSpace: "nowrap", fontWeight: 900 }}
+              >
+                Check status
+              </Button>
+            )}
+          </Stack>
         )
       }
     >
@@ -323,11 +354,21 @@ function PayoutStatusBanner({ payoutStatus, draftCount = 0 }) {
       <Typography variant="body2" sx={{ mt: 0.25 }}>
         {isReady
           ? "Your payout account is ready, so active listings can be booked and paid through Storet."
-          : "New listings are saved as drafts and hidden from renters until payout setup is complete."}
+          : "New listings are saved as drafts and hidden from renters until Stripe verifies your payout account."}
         {!isReady && draftCount > 0
           ? ` You currently have ${draftCount} draft ${draftCount === 1 ? "listing" : "listings"} waiting for payout setup.`
           : ""}
       </Typography>
+      {!isReady && (
+        <Typography variant="body2" sx={{ mt: 0.75, fontWeight: 800 }}>
+          Click Set up payouts to complete Stripe Express onboarding. Storet does not store your bank account details.
+        </Typography>
+      )}
+      {actionError && (
+        <Typography color="error" variant="body2" sx={{ mt: 0.75, fontWeight: 800 }}>
+          {actionError}
+        </Typography>
+      )}
     </Alert>
   );
 }
@@ -1225,6 +1266,8 @@ function HostDashboardPanel({
   onUpdateHostMessageStatus,
 }) {
   const storetApp = useOptionalStoretApp();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [expandedSections, setExpandedSections] = useState({
     [DASHBOARD_SECTIONS.attention]: true,
     [DASHBOARD_SECTIONS.requests]: true,
@@ -1239,6 +1282,9 @@ function HostDashboardPanel({
   const [showAllListings, setShowAllListings] = useState(false);
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [showAllPerformance, setShowAllPerformance] = useState(false);
+  const [payoutActionError, setPayoutActionError] = useState("");
+  const [payoutSetupIsStarting, setPayoutSetupIsStarting] = useState(false);
+  const [payoutStatusIsRefreshing, setPayoutStatusIsRefreshing] = useState(false);
 
   const safeMyListings = Array.isArray(myListings)
     ? myListings
@@ -1290,6 +1336,85 @@ function HostDashboardPanel({
     onUpdateHostMessageStatus ||
     storetApp?.actions?.updateHostMessageStatus ||
     (() => {});
+
+  async function handleStartPayoutOnboarding() {
+    const startPayoutOnboarding = storetApp?.actions?.startPayoutOnboarding;
+
+    if (!startPayoutOnboarding) {
+      setPayoutActionError("Stripe payout setup is not available yet.");
+      return;
+    }
+
+    setPayoutActionError("");
+    setPayoutSetupIsStarting(true);
+
+    const result = await startPayoutOnboarding({
+      returnPath: `${APP_ROUTES.hostDashboard}?payout=return`,
+      refreshPath: `${APP_ROUTES.hostDashboard}?payout=refresh`,
+    });
+
+    if (result?.error) {
+      setPayoutActionError(result.error);
+      setPayoutSetupIsStarting(false);
+    }
+  }
+
+  async function handleRefreshPayoutStatus() {
+    const refreshHostPayoutStatus = storetApp?.actions?.refreshHostPayoutStatus;
+
+    if (!refreshHostPayoutStatus) {
+      setPayoutActionError("Payout status refresh is not available yet.");
+      return;
+    }
+
+    setPayoutActionError("");
+    setPayoutStatusIsRefreshing(true);
+
+    const result = await refreshHostPayoutStatus();
+
+    if (result?.error) {
+      setPayoutActionError(result.error);
+    }
+
+    setPayoutStatusIsRefreshing(false);
+  }
+
+  useEffect(() => {
+    const payoutReturnState = new URLSearchParams(location.search).get("payout");
+
+    if (payoutReturnState !== "return" && payoutReturnState !== "refresh") {
+      return undefined;
+    }
+
+    let isMounted = true;
+    const refreshHostPayoutStatus = storetApp?.actions?.refreshHostPayoutStatus;
+
+    async function refreshAfterStripeReturn() {
+      if (!refreshHostPayoutStatus) {
+        return;
+      }
+
+      setPayoutActionError("");
+      setPayoutStatusIsRefreshing(true);
+
+      const result = await refreshHostPayoutStatus();
+
+      if (isMounted && result?.error) {
+        setPayoutActionError(result.error);
+      }
+
+      if (isMounted) {
+        setPayoutStatusIsRefreshing(false);
+        navigate(APP_ROUTES.hostDashboard, { replace: true });
+      }
+    }
+
+    refreshAfterStripeReturn();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [location.search, navigate, storetApp?.actions]);
 
   const localDraftCount = safeMyListings.filter((listing) => listing.status === LISTING_STATUSES.DRAFT).length;
   const localActiveCount = safeMyListings.filter((listing) => listing.status === LISTING_STATUSES.ACTIVE).length;
@@ -1656,7 +1781,15 @@ function HostDashboardPanel({
           </Stack>
         )}
 
-        <PayoutStatusBanner payoutStatus={payoutStatus} draftCount={draftCount} />
+        <PayoutStatusBanner
+          payoutStatus={payoutStatus}
+          draftCount={draftCount}
+          onSetupPayouts={handleStartPayoutOnboarding}
+          onRefreshPayoutStatus={handleRefreshPayoutStatus}
+          isStarting={payoutSetupIsStarting}
+          isRefreshing={payoutStatusIsRefreshing}
+          actionError={payoutActionError}
+        />
 
         <Box
           sx={{

@@ -17,6 +17,8 @@ export function getHostPayoutStatus(user = {}) {
       user?.stripe_connect_payouts_enabled ||
       user?.payoutsEnabled
   );
+  const stripeConnectAccountId =
+    user?.stripeConnectAccountId || user?.stripe_connect_account_id || "";
   const onboardingComplete = Boolean(
     user?.stripeConnectOnboardingComplete ||
       user?.stripe_connect_onboarding_complete ||
@@ -71,6 +73,8 @@ export function getHostPayoutStatus(user = {}) {
     chargesEnabled,
     payoutsEnabled,
     onboardingComplete,
+    stripeConnectAccountId,
+    hasStripeConnectAccount: Boolean(stripeConnectAccountId),
     ...statusCopy[normalizedStatus],
   };
 }
