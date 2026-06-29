@@ -138,6 +138,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
   const [listingWasCreated, setListingWasCreated] = useState(false);
   const leaveConfirmedRef = useRef(false);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [payoutInfoDialogOpen, setPayoutInfoDialogOpen] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState(null);
 
   const previewListing = useMemo(() => {
@@ -445,6 +446,11 @@ function CreateListingPage({ currentUser, onAddListing }) {
     });
   }
 
+  function handleOpenPayoutSetupInfo() {
+    setError("");
+    setPayoutInfoDialogOpen(true);
+  }
+
   async function handleStartPayoutOnboarding() {
     const startPayoutOnboarding = storetApp?.actions?.startPayoutOnboarding;
 
@@ -702,7 +708,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
                     color="inherit"
                     variant="contained"
                     size="small"
-                    onClick={handleStartPayoutOnboarding}
+                    onClick={handleOpenPayoutSetupInfo}
                     disabled={payoutSetupIsStarting || isSubmitting}
                     startIcon={
                       payoutSetupIsStarting ? (
@@ -713,17 +719,17 @@ function CreateListingPage({ currentUser, onAddListing }) {
                     }
                     sx={{ whiteSpace: "nowrap", fontWeight: 900 }}
                   >
-                    Set up payouts
+                    Verify identity & set up payouts
                   </Button>
                 }
               >
                 <Typography fontWeight={950} sx={{ mb: 0.35 }}>
-                  Payout setup is required before this listing can go live.
+                  Identity verification and payout setup are required before this listing can go live.
                 </Typography>
                 <Typography variant="body2">
                   You can finish this listing now, but Storet will save it as a draft.
-                  Renters will not see or book it until Stripe verifies your payout account.
-                  You can set up payouts now or save this draft first and finish setup from the Host Dashboard.
+                  Renters will not see or book it until Stripe verifies your identity and payout method.
+                  Most hosts should choose Individual in Stripe unless they are listing through a registered business.
                 </Typography>
               </Alert>
             )}
@@ -1292,6 +1298,28 @@ function CreateListingPage({ currentUser, onAddListing }) {
           </Box>
         </Stack>
       </Container>
+
+      <AlertDialog
+        open={payoutInfoDialogOpen}
+        onOpenChange={setPayoutInfoDialogOpen}
+        title="Before you continue to Stripe"
+        description="Stripe needs to verify hosts before Storet can send rental payouts. Most hosts should select Individual unless they are listing through a registered business."
+        cancelText="Not now"
+        actionText="Continue to Stripe"
+        onAction={handleStartPayoutOnboarding}
+      >
+        <Stack spacing={1}>
+          <Typography variant="body2" color="text.secondary">
+            Stripe may ask for your date of birth, SSN details, and bank account or debit card information for identity verification, tax/compliance checks, and payouts.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Storet does not collect, see, or store your SSN or bank account details. Those details are handled directly by Stripe Express.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            For professional details, we prefill the activity as renting out storage space through Storet. In local testing, Stripe may still ask for a website because it requires a real public website URL and will not accept localhost.
+          </Typography>
+        </Stack>
+      </AlertDialog>
 
       <AlertDialog
         open={leaveDialogOpen}

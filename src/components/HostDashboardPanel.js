@@ -329,7 +329,7 @@ function PayoutStatusBanner({
               startIcon={isStarting ? <CircularProgress size={16} color="inherit" /> : null}
               sx={{ whiteSpace: "nowrap", fontWeight: 900 }}
             >
-              {hasConnectAccount ? "Continue setup" : "Set up payouts"}
+              {hasConnectAccount ? "Continue verification" : "Verify identity & set up payouts"}
             </Button>
             {hasConnectAccount && (
               <Button
@@ -349,19 +349,19 @@ function PayoutStatusBanner({
       }
     >
       <Typography fontWeight={950}>
-        {payoutStatus?.title || "Set up payouts before going live"}
+        {payoutStatus?.title || "Verify identity and payouts before going live"}
       </Typography>
       <Typography variant="body2" sx={{ mt: 0.25 }}>
         {isReady
           ? "Your payout account is ready, so active listings can be booked and paid through Storet."
-          : "New listings are saved as drafts and hidden from renters until Stripe verifies your payout account."}
+          : "New listings are saved as drafts and hidden from renters until Stripe verifies your identity and payout method."}
         {!isReady && draftCount > 0
           ? ` You currently have ${draftCount} draft ${draftCount === 1 ? "listing" : "listings"} waiting for payout setup.`
           : ""}
       </Typography>
       {!isReady && (
         <Typography variant="body2" sx={{ mt: 0.75, fontWeight: 800 }}>
-          Click Set up payouts to complete Stripe Express onboarding. Storet does not store your bank account details.
+          Stripe may ask for individual/business type, identity details, and payout information. Most Storet hosts should choose Individual unless they list through a registered business. Storet does not see or store your SSN or bank account details.
         </Typography>
       )}
       {actionError && (
@@ -1283,6 +1283,7 @@ function HostDashboardPanel({
   const [showAllMessages, setShowAllMessages] = useState(false);
   const [showAllPerformance, setShowAllPerformance] = useState(false);
   const [payoutActionError, setPayoutActionError] = useState("");
+  const [payoutInfoDialogOpen, setPayoutInfoDialogOpen] = useState(false);
   const [payoutSetupIsStarting, setPayoutSetupIsStarting] = useState(false);
   const [payoutStatusIsRefreshing, setPayoutStatusIsRefreshing] = useState(false);
 
@@ -1336,6 +1337,11 @@ function HostDashboardPanel({
     onUpdateHostMessageStatus ||
     storetApp?.actions?.updateHostMessageStatus ||
     (() => {});
+
+  function handleOpenPayoutSetupInfo() {
+    setPayoutActionError("");
+    setPayoutInfoDialogOpen(true);
+  }
 
   async function handleStartPayoutOnboarding() {
     const startPayoutOnboarding = storetApp?.actions?.startPayoutOnboarding;
@@ -1717,7 +1723,30 @@ function HostDashboardPanel({
   }, []);
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", pb: 6 }}>
+    <>
+      <AlertDialog
+        open={payoutInfoDialogOpen}
+        onOpenChange={setPayoutInfoDialogOpen}
+        title="Before you continue to Stripe"
+        description="Stripe needs to verify hosts before Storet can send rental payouts. Most hosts should select Individual unless they are listing through a registered business."
+        cancelText="Not now"
+        actionText="Continue to Stripe"
+        onAction={handleStartPayoutOnboarding}
+      >
+        <Stack spacing={1}>
+          <Typography variant="body2" color="text.secondary">
+            Stripe may ask for your date of birth, SSN details, and bank account or debit card information for identity verification, tax/compliance checks, and payouts.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Storet does not collect, see, or store your SSN or bank account details. Those details are handled directly by Stripe Express.
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            For professional details, we prefill the activity as renting out storage space through Storet. In local testing, Stripe may still ask for a website because it requires a real public website URL and will not accept localhost.
+          </Typography>
+        </Stack>
+      </AlertDialog>
+
+      <Box sx={{ minHeight: "100vh", bgcolor: "background.default", pb: 6 }}>
       <Box
         sx={(theme) => ({
           borderBottom: "1px solid",
@@ -2224,7 +2253,8 @@ function HostDashboardPanel({
           </Box>
         </Box>
       </Container>
-    </Box>
+      </Box>
+    </>
   );
 }
 
