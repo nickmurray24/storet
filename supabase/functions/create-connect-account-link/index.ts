@@ -38,6 +38,35 @@ function buildAppUrl(path = "/host-dashboard") {
   return `${appUrl.replace(/\/$/, "")}${safePath}`;
 }
 
+function buildAppBaseUrl() {
+  const appUrl = Deno.env.get("STORET_APP_URL") || "http://localhost:3000";
+  return appUrl.replace(/\/$/, "");
+}
+
+function getBusinessProfile() {
+  const appUrl = buildAppBaseUrl();
+  const businessProfile: Stripe.AccountCreateParams.BusinessProfile = {
+    // 4225 = Public Warehousing and Storage
+    mcc: "4225",
+    product_description:
+      "Storet hosts rent out storage space to renters through the Storet storage marketplace.",
+    name: "Storet host",
+  };
+
+  // Stripe expects business_profile.url to be a real public website.
+  // Keep localhost/dev URLs out of the connected account and rely on product_description locally.
+  if (
+    appUrl.startsWith("https://") &&
+    !appUrl.includes("localhost") &&
+    !appUrl.includes("127.0.0.1")
+  ) {
+    businessProfile.url = appUrl;
+  }
+
+  return businessProfile;
+}
+
+
 function getAccountStatus(account: Stripe.Account) {
   const detailsSubmitted = Boolean(account.details_submitted);
   const chargesEnabled = Boolean(account.charges_enabled);
@@ -160,11 +189,30 @@ Deno.serve(async (req) => {
       }
 
       account = retrievedAccount as Stripe.Account;
+
+      const nextBusinessProfile = getBusinessProfile();
+      const shouldRefreshBusinessProfile =
+        account.business_profile?.mcc !== nextBusinessProfile.mcc ||
+        account.business_profile?.product_description !== nextBusinessProfile.product_description ||
+        (!account.business_profile?.url && Boolean(nextBusinessProfile.url)) ||
+        account.business_profile?.name !== nextBusinessProfile.name;
+
+      if (shouldRefreshBusinessProfile) {
+        try {
+          account = await stripe.accounts.update(account.id, {
+            business_profile: nextBusinessProfile,
+          });
+        } catch (updateError) {
+          console.warn("Could not refresh connected account business profile.", updateError);
+        }
+      }
     } else {
       account = await stripe.accounts.create({
         type: "express",
         country: Deno.env.get("STRIPE_CONNECT_COUNTRY") || "US",
         email: user.email || existingProfile.email || undefined,
+        business_type: "individual",
+        business_profile: getBusinessProfile(),
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
@@ -172,6 +220,7 @@ Deno.serve(async (req) => {
         metadata: {
           storet_user_id: user.id,
           storet_profile_email: existingProfile.email || user.email || "",
+          storet_connected_account_type: "host_payouts",
         },
       });
     }
