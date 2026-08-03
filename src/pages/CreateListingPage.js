@@ -110,6 +110,12 @@ function CreateListingPage({ currentUser, onAddListing }) {
   const canReturnToRenterExperience = userCanUseRenterMode(activeUser);
   const hostPayoutStatus = getHostPayoutStatus(activeUser);
   const hostPayoutsReady = hostPayoutStatus.isReady;
+  const hostListingCount = Array.isArray(storetApp?.userListings)
+    ? storetApp.userListings.length
+    : 0;
+  const canReturnToHostDashboard = isHostMode && hostListingCount > 0;
+  const shouldShowBackNavigation =
+    canReturnToHostDashboard || (!isHostMode && canReturnToRenterExperience);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -684,13 +690,13 @@ function CreateListingPage({ currentUser, onAddListing }) {
       >
         <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
           <Stack spacing={3}>
-            {(isHostMode || canReturnToRenterExperience) && (
+            {shouldShowBackNavigation && (
               <Button
-                onClick={isHostMode ? handleBackToHostDashboard : handleBackToExplore}
+                onClick={canReturnToHostDashboard ? handleBackToHostDashboard : handleBackToExplore}
                 startIcon={<ArrowBackRoundedIcon />}
                 sx={{ alignSelf: "flex-start" }}
               >
-                {isHostMode ? "Back to Host Dashboard" : "Back to Explore"}
+                {canReturnToHostDashboard ? "Back to Host Dashboard" : "Back to Explore"}
               </Button>
             )}
 
