@@ -68,6 +68,7 @@ export const DEFAULT_LISTING_MODEL = {
   waitlist: false,
   bookingMode: BOOKING_MODES.REQUEST,
   availabilityStatus: AVAILABILITY_STATUSES.AVAILABLE,
+  postBookingActionRequired: false,
   status: LISTING_STATUSES.ACTIVE,
   host: "Storet Host",
   hostId: "",

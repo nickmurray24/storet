@@ -45,7 +45,8 @@ import { getPageListings } from "../data/listingCatalog";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import ExploreMapView from "../components/ExploreMapView";
-import { normalizeSavedIds } from "../utils/listingUtils";
+import { LISTING_STATUSES, normalizeSavedIds } from "../utils/listingUtils";
+import { AVAILABILITY_STATUSES } from "../constants/appEnums";
 import { getMonthlyEquivalentAmount } from "../utils/pricingUtils";
 import {
   readSavedListingIds,
@@ -80,6 +81,14 @@ function getPriceInputError(value, label) {
   return "";
 }
 
+function isExploreVisibleListing(listing = {}) {
+  return (
+    listing.status === LISTING_STATUSES.ACTIVE &&
+    listing.availabilityStatus !== AVAILABILITY_STATUSES.UNAVAILABLE &&
+    !listing.postBookingActionRequired
+  );
+}
+
 function ExplorePage({
   listings,
   savedListingIds,
@@ -107,6 +116,10 @@ function ExplorePage({
   const allListings = useMemo(() => {
     return getPageListings(listings ?? contextListings, userListings);
   }, [contextListings, listings, userListings]);
+  const exploreListings = useMemo(
+    () => allListings.filter(isExploreVisibleListing),
+    [allListings]
+  );
 
   const hasExternalSavedIds =
     savedListingIds !== undefined || storetApp?.savedListingIds !== undefined;
@@ -137,9 +150,11 @@ function ExplorePage({
   const [viewMode, setViewMode] = useState("list");
 
   const storageTypes = useMemo(() => {
-    const uniqueTypes = new Set(allListings.map((listing) => listing.storageType));
+    const uniqueTypes = new Set(
+      exploreListings.map((listing) => listing.storageType)
+    );
     return ["All", ...Array.from(uniqueTypes)];
-  }, [allListings]);
+  }, [exploreListings]);
 
   const minPriceError = getPriceInputError(minPriceInput, "Minimum price");
   const maxPriceError = getPriceInputError(maxPriceInput, "Maximum price");
@@ -163,7 +178,7 @@ function ExplorePage({
   const filteredListings = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    const filtered = allListings.filter((listing) => {
+    const filtered = exploreListings.filter((listing) => {
       const searchableText = [
         listing.title,
         listing.location,
@@ -213,8 +228,8 @@ function ExplorePage({
       return Number(b.instantBook) - Number(a.instantBook) || b.rating - a.rating;
     });
   }, [
-    allListings,
     bookingType,
+    exploreListings,
     listingType,
     effectiveMaxPrice,
     effectiveMinPrice,
@@ -224,17 +239,17 @@ function ExplorePage({
   ]);
 
   const stats = useMemo(() => {
-    const instantCount = allListings.filter((listing) => listing.instantBook).length;
-    const privateCount = allListings.filter(
+    const instantCount = exploreListings.filter((listing) => listing.instantBook).length;
+    const privateCount = exploreListings.filter(
       (listing) => listing.listingType === "Private host"
     ).length;
 
     return {
-      total: allListings.length,
+      total: exploreListings.length,
       instant: instantCount,
       private: privateCount,
     };
-  }, [allListings]);
+  }, [exploreListings]);
 
   function handleBookingTypeChange(event, nextValue) {
     if (nextValue) {

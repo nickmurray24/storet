@@ -12,6 +12,10 @@ import {
   Chip,
   CircularProgress,
   Container,
+  Dialog as MuiDialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   LinearProgress,
   Skeleton,
   Stack,
@@ -46,7 +50,10 @@ import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import AlertDialog from "./ui/AlertDialog";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
-import { LISTING_STATUSES } from "../constants/appEnums";
+import {
+  AVAILABILITY_STATUSES,
+  LISTING_STATUSES,
+} from "../constants/appEnums";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
 import { getHostPayoutStatus } from "../utils/payoutUtils";
 import { getDefaultStatusBreakdown, getHostAnalyticsSummaryValue } from "../utils/hostAnalyticsUtils";
@@ -67,6 +74,12 @@ const BOOKED_STATUSES = [
   BOOKING_STATUSES.CONFIRMED,
   BOOKING_STATUSES.ACTIVE,
   BOOKING_STATUSES.COMPLETED,
+];
+
+const LISTING_BLOCKING_BOOKING_STATUSES = [
+  BOOKING_STATUSES.APPROVED,
+  BOOKING_STATUSES.CONFIRMED,
+  BOOKING_STATUSES.ACTIVE,
 ];
 
 
@@ -727,26 +740,14 @@ function BookingActionButtons({ request, onUpdateBookingRequestStatus, onUpdateB
       )}
 
       {request.status === BOOKING_STATUSES.ACTIVE && (
-        <>
-          <Button
-            variant="contained"
-            size="small"
-            startIcon={<TaskAltRoundedIcon />}
-            onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.COMPLETED)}
-          >
-            Mark completed
-          </Button>
-
-          <Button
-            variant="outlined"
-            size="small"
-            color="error"
-            startIcon={<CancelRoundedIcon />}
-            onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.CANCELLED)}
-          >
-            Cancel
-          </Button>
-        </>
+        <Button
+          variant="contained"
+          size="small"
+          startIcon={<TaskAltRoundedIcon />}
+          onClick={() => onUpdateBookingLifecycle(request.id, BOOKING_STATUSES.COMPLETED)}
+        >
+          Mark completed
+        </Button>
       )}
 
       <Button
@@ -852,14 +853,23 @@ function BookingRequestCard({ request, onUpdateBookingRequestStatus, onUpdateBoo
   );
 }
 
-function AttentionItem({ listing }) {
+function AttentionItem({
+  listing,
+  onReviewRequests,
+  onReviewMessages,
+  onResolveAvailability,
+}) {
   const chips = [
     listing.pending > 0 && { label: `${listing.pending} pending`, color: "warning" },
     listing.waitlisted > 0 && { label: `${listing.waitlisted} waitlisted`, color: "info" },
     listing.unreadMessages > 0 && { label: `${listing.unreadMessages} unread`, color: "error" },
-    listing.status === LISTING_STATUSES.DRAFT && { label: "Draft", color: "warning" },
-    listing.status === LISTING_STATUSES.PAUSED && { label: "Paused", color: "default" },
+    listing.postBookingActionRequired && !listing.hasBlockingBooking && {
+      label: "Availability decision",
+      color: "warning",
+    },
   ].filter(Boolean);
+
+  const hasOpenRequests = listing.pending > 0 || listing.waitlisted > 0;
 
   return (
     <Card
@@ -891,6 +901,52 @@ function AttentionItem({ listing }) {
               />
             ))}
           </Stack>
+        </Stack>
+
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 2 }}>
+          {hasOpenRequests && (
+            <Button
+              variant="contained"
+              size="small"
+              startIcon={<PendingActionsRoundedIcon />}
+              onClick={onReviewRequests}
+            >
+              Review requests
+            </Button>
+          )}
+
+          {listing.unreadMessages > 0 && (
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<MailRoundedIcon />}
+              onClick={onReviewMessages}
+            >
+              Review messages
+            </Button>
+          )}
+
+          {listing.postBookingActionRequired && !listing.hasBlockingBooking && (
+            <Button
+              variant="contained"
+              color="warning"
+              size="small"
+              startIcon={<TaskAltRoundedIcon />}
+              onClick={onResolveAvailability}
+            >
+              Choose availability
+            </Button>
+          )}
+
+          <Button
+            component={RouterLink}
+            to={buildListingPath(listing.id)}
+            variant="text"
+            size="small"
+            endIcon={<ArrowForwardRoundedIcon />}
+          >
+            View listing
+          </Button>
         </Stack>
       </CardContent>
     </Card>
@@ -1129,20 +1185,67 @@ function AnalyticsBarList({ title, description, icon, items, valueFormatter = (v
   );
 }
 
-function HostListingCard({ listing, onDeleteListing, onToggleListingStatus, payoutStatus }) {
+function HostListingCard({
+  listing,
+  onDeleteListing,
+  onToggleListingStatus,
+  onResolveAvailability,
+  hasBlockingBooking,
+  payoutStatus,
+}) {
   const isDraft = listing.status === LISTING_STATUSES.DRAFT;
   const isPaused = listing.status === LISTING_STATUSES.PAUSED;
+  const isAwaitingAvailabilityDecision = Boolean(
+    listing.postBookingActionRequired && !hasBlockingBooking
+  );
+  const isUnavailableForRental =
+    listing.availabilityStatus === AVAILABILITY_STATUSES.UNAVAILABLE;
+  const isOccupied =
+    !isAwaitingAvailabilityDecision &&
+    isUnavailableForRental &&
+    hasBlockingBooking;
   const canActivateListing = Boolean(payoutStatus?.isReady);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const statusLabel = isDraft
+    ? "Draft"
+    : isPaused
+    ? "Paused"
+    : isAwaitingAvailabilityDecision
+    ? "Action needed"
+    : isOccupied
+    ? "Occupied"
+    : "Active";
+  const statusColor = isDraft
+    ? "warning"
+    : isPaused
+    ? "default"
+    : isAwaitingAvailabilityDecision
+    ? "warning"
+    : isOccupied
+    ? "info"
+    : "success";
+  const statusMetric = isDraft
+    ? "Draft"
+    : isPaused
+    ? "Paused"
+    : isAwaitingAvailabilityDecision
+    ? "Choose next status"
+    : isOccupied
+    ? "Hidden during rental"
+    : "Live";
 
   function handleConfirmDelete() {
+    if (hasBlockingBooking) {
+      return;
+    }
+
     onDeleteListing(listing.id);
   }
 
   return (
     <>
       <AlertDialog
-        open={deleteDialogOpen}
+        open={deleteDialogOpen && !hasBlockingBooking}
         onOpenChange={setDeleteDialogOpen}
         title="Delete listing?"
         description={`Delete "${listing.title}"? This will remove the listing and its related activity.`}
@@ -1171,8 +1274,8 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus, payo
             sx={{ fontWeight: 800 }}
           />
           <Chip
-            label={isDraft ? "Draft" : isPaused ? "Paused" : "Active"}
-            color={isDraft ? "warning" : isPaused ? "default" : "success"}
+            label={statusLabel}
+            color={statusColor}
             size="small"
             sx={{ fontWeight: 800 }}
           />
@@ -1197,7 +1300,7 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus, payo
             value={listing.instantBook ? "Instant" : listing.waitlist ? "Waitlist" : "Approval"}
           />
           <MetricPill label="Waitlist" value={listing.waitlist ? "Enabled" : "Disabled"} />
-          <MetricPill label="Status" value={isDraft ? "Draft" : isPaused ? "Paused" : "Live"} />
+          <MetricPill label="Status" value={statusMetric} />
         </Box>
 
         <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
@@ -1220,35 +1323,79 @@ function HostListingCard({ listing, onDeleteListing, onToggleListingStatus, payo
             Create similar
           </Button>
 
-          <Button
-            variant="outlined"
-            color={isDraft || isPaused ? "success" : "warning"}
-            size="small"
-            startIcon={isDraft || isPaused ? <PlayCircleRoundedIcon /> : <PauseCircleRoundedIcon />}
-            onClick={() => onToggleListingStatus(listing.id)}
-            disabled={(isDraft || isPaused) && !canActivateListing}
-          >
-            {isDraft
-              ? canActivateListing
-                ? "Activate"
-                : "Payout setup required"
-              : isPaused
-              ? canActivateListing
-                ? "Resume"
-                : "Payout setup required"
-              : "Pause"}
-          </Button>
+          {isAwaitingAvailabilityDecision ? (
+            <Button
+              variant="contained"
+              color="warning"
+              size="small"
+              startIcon={<TaskAltRoundedIcon />}
+              onClick={() => onResolveAvailability(listing.id)}
+            >
+              Choose availability
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              color={isDraft || isPaused ? "success" : "warning"}
+              size="small"
+              startIcon={
+                hasBlockingBooking ? (
+                  <HourglassTopRoundedIcon />
+                ) : isDraft || isPaused ? (
+                  <PlayCircleRoundedIcon />
+                ) : (
+                  <PauseCircleRoundedIcon />
+                )
+              }
+              onClick={() => {
+                if (!hasBlockingBooking) {
+                  onToggleListingStatus(listing.id);
+                }
+              }}
+              disabled={
+                hasBlockingBooking ||
+                ((isDraft || isPaused) && !canActivateListing)
+              }
+            >
+              {hasBlockingBooking
+                ? "Rental in progress"
+                : isDraft
+                ? canActivateListing
+                  ? "Activate"
+                  : "Payout setup required"
+                : isPaused
+                ? canActivateListing
+                  ? "Resume"
+                  : "Payout setup required"
+                : "Pause"}
+            </Button>
+          )}
 
           <Button
             variant="outlined"
             color="error"
             size="small"
             startIcon={<DeleteRoundedIcon />}
-            onClick={() => setDeleteDialogOpen(true)}
+            onClick={() => {
+              if (!hasBlockingBooking) {
+                setDeleteDialogOpen(true);
+              }
+            }}
+            disabled={hasBlockingBooking}
           >
             Delete
           </Button>
         </Stack>
+
+        {hasBlockingBooking && (
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mt: 1.25, fontWeight: 700 }}
+          >
+            Pause and delete are unavailable while this listing has a current rental.
+          </Typography>
+        )}
       </CardContent>
     </Card>
     </>
@@ -1286,6 +1433,10 @@ function HostDashboardPanel({
   const [payoutInfoDialogOpen, setPayoutInfoDialogOpen] = useState(false);
   const [payoutSetupIsStarting, setPayoutSetupIsStarting] = useState(false);
   const [payoutStatusIsRefreshing, setPayoutStatusIsRefreshing] = useState(false);
+  const [availabilityDecisionListingId, setAvailabilityDecisionListingId] = useState("");
+  const [deferredAvailabilityDecisionIds, setDeferredAvailabilityDecisionIds] = useState([]);
+  const [availabilityDecisionError, setAvailabilityDecisionError] = useState("");
+  const [availabilityDecisionIsSaving, setAvailabilityDecisionIsSaving] = useState(false);
 
   const safeMyListings = Array.isArray(myListings)
     ? myListings
@@ -1333,10 +1484,127 @@ function HostDashboardPanel({
     onUpdateBookingLifecycle ||
     storetApp?.actions?.updateBookingLifecycle ||
     (() => {});
+  const resolveCompletedListingAvailabilityAction =
+    storetApp?.actions?.resolveCompletedListingAvailability || (() => {});
   const updateHostMessageStatusAction =
     onUpdateHostMessageStatus ||
     storetApp?.actions?.updateHostMessageStatus ||
     (() => {});
+  const blockingBookingListingIds = new Set(
+    sortedBookingRequests
+      .filter((request) =>
+        LISTING_BLOCKING_BOOKING_STATUSES.includes(request.status)
+      )
+      .map((request) => String(request.listingId))
+  );
+  const pendingAvailabilityDecisionListings = safeMyListings.filter(
+    (listing) =>
+      listing.postBookingActionRequired &&
+      !blockingBookingListingIds.has(String(listing.id))
+  );
+  const availabilityDecisionListing = safeMyListings.find(
+    (listing) => String(listing.id) === String(availabilityDecisionListingId)
+  );
+  const nextPendingAvailabilityDecisionId = String(
+    pendingAvailabilityDecisionListings.find(
+      (listing) =>
+        !deferredAvailabilityDecisionIds.includes(String(listing.id))
+    )?.id || ""
+  );
+
+  function openAvailabilityDecision(listingId) {
+    const normalizedId = String(listingId || "");
+
+    if (!normalizedId) {
+      return;
+    }
+
+    setDeferredAvailabilityDecisionIds((currentIds) =>
+      currentIds.filter((id) => String(id) !== normalizedId)
+    );
+    setAvailabilityDecisionError("");
+    setAvailabilityDecisionListingId(normalizedId);
+  }
+
+  function deferAvailabilityDecision() {
+    if (availabilityDecisionListingId) {
+      setDeferredAvailabilityDecisionIds((currentIds) =>
+        currentIds.includes(availabilityDecisionListingId)
+          ? currentIds
+          : [...currentIds, availabilityDecisionListingId]
+      );
+    }
+
+    setAvailabilityDecisionError("");
+    setAvailabilityDecisionListingId("");
+  }
+
+  async function handleResolveCompletedListingAvailability(nextStatus) {
+    if (!availabilityDecisionListing) {
+      return;
+    }
+
+    setAvailabilityDecisionError("");
+    setAvailabilityDecisionIsSaving(true);
+
+    const result = await resolveCompletedListingAvailabilityAction(
+      availabilityDecisionListing.id,
+      nextStatus
+    );
+
+    setAvailabilityDecisionIsSaving(false);
+
+    if (result?.ok === false || result?.error) {
+      setAvailabilityDecisionError(
+        result?.error || "We could not update this listing yet."
+      );
+      return;
+    }
+
+    setDeferredAvailabilityDecisionIds((currentIds) =>
+      currentIds.filter(
+        (id) => String(id) !== String(availabilityDecisionListing.id)
+      )
+    );
+    setAvailabilityDecisionListingId("");
+  }
+
+  async function handleUpdateBookingLifecycle(requestId, status) {
+    const targetRequest = sortedBookingRequests.find(
+      (request) => String(request.id) === String(requestId)
+    );
+
+    if (
+      targetRequest?.status === BOOKING_STATUSES.ACTIVE &&
+      status === BOOKING_STATUSES.CANCELLED
+    ) {
+      return {
+        ok: false,
+        error: "Active rentals must be marked completed instead of cancelled.",
+      };
+    }
+
+    const result = await updateBookingLifecycleAction(requestId, status);
+
+    if (result?.ok === false || result?.error) {
+      return result;
+    }
+
+    if (status === BOOKING_STATUSES.COMPLETED && targetRequest) {
+      const hasOtherBlockingBooking = sortedBookingRequests.some(
+        (request) =>
+          String(request.id) !== String(requestId) &&
+          String(request.listingId) === String(targetRequest.listingId) &&
+          LISTING_BLOCKING_BOOKING_STATUSES.includes(request.status)
+      );
+
+      if (!hasOtherBlockingBooking) {
+        openAvailabilityDecision(targetRequest.listingId);
+      }
+    }
+
+    return result;
+  }
 
   function handleOpenPayoutSetupInfo() {
     setPayoutActionError("");
@@ -1421,6 +1689,26 @@ function HostDashboardPanel({
       isMounted = false;
     };
   }, [location.search, navigate, storetApp?.actions]);
+
+  useEffect(() => {
+    if (
+      availabilityDecisionListingId ||
+      availabilityDecisionIsSaving ||
+      storetApp?.activityIsLoading
+    ) {
+      return;
+    }
+
+    if (nextPendingAvailabilityDecisionId) {
+      setAvailabilityDecisionError("");
+      setAvailabilityDecisionListingId(nextPendingAvailabilityDecisionId);
+    }
+  }, [
+    availabilityDecisionIsSaving,
+    availabilityDecisionListingId,
+    nextPendingAvailabilityDecisionId,
+    storetApp?.activityIsLoading,
+  ]);
 
   const localDraftCount = safeMyListings.filter((listing) => listing.status === LISTING_STATUSES.DRAFT).length;
   const localActiveCount = safeMyListings.filter((listing) => listing.status === LISTING_STATUSES.ACTIVE).length;
@@ -1527,6 +1815,9 @@ function HostDashboardPanel({
 
       return {
         ...listing,
+        hasBlockingBooking: listingRequests.some((request) =>
+          LISTING_BLOCKING_BOOKING_STATUSES.includes(request.status)
+        ),
         totalRequests: listingRequests.length,
         pending,
         waitlisted,
@@ -1550,37 +1841,44 @@ function HostDashboardPanel({
       return getListingRating(b) - getListingRating(a);
     });
 
-  const liveListingIdSet = new Set(safeMyListings.map((listing) => String(listing.id)));
+  const backendListingAnalyticsById = new Map(
+    backendListingAnalytics.map((listing) => [
+      String(listing.listingId || listing.id),
+      listing,
+    ])
+  );
 
-  const displayedListingAnalytics = backendListingAnalytics.length > 0
-    ? backendListingAnalytics
-        .filter((backendListing) =>
-          liveListingIdSet.has(String(backendListing.listingId || backendListing.id))
-        )
-        .map((backendListing) => {
-          const localListing = listingAnalytics.find(
-            (listing) => String(listing.id) === String(backendListing.listingId || backendListing.id)
-          );
+  // Keep the dashboard responsive by treating the current React state as the source
+  // of truth for listing status, requests, and messages. The analytics RPC enriches
+  // those live rows with backend-only values such as saved counts and paid revenue.
+  const displayedListingAnalytics = listingAnalytics.map((localListing) => {
+    const backendListing = backendListingAnalyticsById.get(String(localListing.id));
 
-          return {
-            ...(localListing || {}),
-            ...backendListing,
-            id: backendListing.listingId || backendListing.id,
-            bookedEstimate: backendListing.paidRevenue || localListing?.bookedEstimate || 0,
-          };
-        })
-    : listingAnalytics;
+    return {
+      ...(backendListing || {}),
+      ...localListing,
+      id: localListing.id,
+      savedCount: backendListing?.savedCount ?? 0,
+      paidRevenueCents: backendListing?.paidRevenueCents ?? 0,
+      paidRevenue: backendListing?.paidRevenue ?? 0,
+      bookedEstimate: backendListing?.paidRevenue ?? localListing.bookedEstimate ?? 0,
+    };
+  });
 
   const attentionListings = displayedListingAnalytics.filter(
     (listing) =>
       listing.pending > 0 ||
       listing.waitlisted > 0 ||
       listing.unreadMessages > 0 ||
-      listing.status === LISTING_STATUSES.PAUSED ||
-      listing.status === LISTING_STATUSES.DRAFT
+      (listing.postBookingActionRequired &&
+        !blockingBookingListingIds.has(String(listing.id)))
   );
 
-  const actionNeededCount = pendingRequestCount + waitlistedCount + unreadMessageCount + pausedCount + draftCount;
+  const actionNeededCount =
+    pendingRequestCount +
+    waitlistedCount +
+    unreadMessageCount +
+    pendingAvailabilityDecisionListings.length;
 
   const confirmedAndActiveRequests = sortedBookingRequests.filter((request) =>
     [BOOKING_STATUSES.CONFIRMED, BOOKING_STATUSES.ACTIVE].includes(request.status)
@@ -1746,6 +2044,93 @@ function HostDashboardPanel({
         </Stack>
       </AlertDialog>
 
+      <MuiDialog
+        open={Boolean(availabilityDecisionListing)}
+        onClose={deferAvailabilityDecision}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            border: "1px solid",
+            borderColor: "divider",
+            boxShadow: "0 24px 80px rgba(15, 23, 42, 0.28)",
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, fontWeight: 950, letterSpacing: "-0.03em" }}>
+          Make this listing available again?
+        </DialogTitle>
+
+        <DialogContent>
+          <Stack spacing={2}>
+            <Typography color="text.secondary" lineHeight={1.7}>
+              The rental for <strong>{availabilityDecisionListing?.title}</strong> is complete.
+              Storet will keep the listing hidden from Explore until you choose what should happen next.
+            </Typography>
+
+            <Alert severity="info" sx={{ borderRadius: 3 }}>
+              Keep it active to return it to Explore now, or pause it if you are not ready for another renter.
+            </Alert>
+
+            {availabilityDecisionError && (
+              <Alert severity="error" sx={{ borderRadius: 3 }}>
+                {availabilityDecisionError}
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+
+        <DialogActions
+          sx={{
+            px: 3,
+            pb: 2.5,
+            pt: 1,
+            gap: 1,
+            flexWrap: "wrap",
+          }}
+        >
+          <Button
+            color="inherit"
+            onClick={deferAvailabilityDecision}
+            disabled={availabilityDecisionIsSaving}
+          >
+            Decide later
+          </Button>
+          <Button
+            variant="outlined"
+            color="warning"
+            startIcon={<PauseCircleRoundedIcon />}
+            onClick={() =>
+              handleResolveCompletedListingAvailability(
+                LISTING_STATUSES.PAUSED
+              )
+            }
+            disabled={availabilityDecisionIsSaving}
+          >
+            Pause listing
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={
+              availabilityDecisionIsSaving ? (
+                <CircularProgress size={18} color="inherit" />
+              ) : (
+                <PlayCircleRoundedIcon />
+              )
+            }
+            onClick={() =>
+              handleResolveCompletedListingAvailability(
+                LISTING_STATUSES.ACTIVE
+              )
+            }
+            disabled={availabilityDecisionIsSaving}
+          >
+            Keep active
+          </Button>
+        </DialogActions>
+      </MuiDialog>
+
       <Box sx={{ minHeight: "100vh", bgcolor: "background.default", pb: 6 }}>
       <Box
         sx={(theme) => ({
@@ -1836,7 +2221,7 @@ function HostDashboardPanel({
             icon={<WarningAmberRoundedIcon />}
             label="Needs attention"
             value={actionNeededCount}
-            helper="Pending, waitlisted, unread, or paused"
+            helper="Pending, waitlisted, or unread"
             tone={actionNeededCount > 0 ? "warning" : "success"}
             onClick={() => openSection(DASHBOARD_SECTIONS.attention)}
           />
@@ -1899,7 +2284,7 @@ function HostDashboardPanel({
           id={DASHBOARD_SECTIONS.attention}
           eyebrow="Focus area"
           title="Needs attention"
-          description="Only the listings that need action right now."
+          description="Open renter requests, unread messages, and completed-rental availability decisions."
           expanded={expandedSections[DASHBOARD_SECTIONS.attention]}
           onToggle={() => toggleSection(DASHBOARD_SECTIONS.attention)}
           summary={
@@ -1914,7 +2299,19 @@ function HostDashboardPanel({
           {attentionListings.length > 0 ? (
             <Stack spacing={1.5}>
               {attentionListings.map((listing) => (
-                <AttentionItem key={listing.id} listing={listing} />
+                <AttentionItem
+                  key={listing.id}
+                  listing={listing}
+                  onReviewRequests={() => {
+                    setBookingTab(listing.pending > 0 ? "pending" : "waitlisted");
+                    setShowAllBookings(false);
+                    openSection(DASHBOARD_SECTIONS.requests);
+                  }}
+                  onReviewMessages={() => openSection(DASHBOARD_SECTIONS.messages)}
+                  onResolveAvailability={() =>
+                    openAvailabilityDecision(listing.id)
+                  }
+                />
               ))}
             </Stack>
           ) : (
@@ -1970,7 +2367,7 @@ function HostDashboardPanel({
                       key={request.id}
                       request={request}
                       onUpdateBookingRequestStatus={updateBookingRequestStatusAction}
-                      onUpdateBookingLifecycle={updateBookingLifecycleAction}
+                      onUpdateBookingLifecycle={handleUpdateBookingLifecycle}
                     />
                   ))}
                   <ShowMoreButton
@@ -2021,7 +2418,7 @@ function HostDashboardPanel({
                   key={request.id}
                   request={request}
                   onUpdateBookingRequestStatus={updateBookingRequestStatusAction}
-                  onUpdateBookingLifecycle={updateBookingLifecycleAction}
+                  onUpdateBookingLifecycle={handleUpdateBookingLifecycle}
                 />
               ))}
               {confirmedAndActiveRequests.length > DEFAULT_VISIBLE_ITEMS && (
@@ -2050,7 +2447,7 @@ function HostDashboardPanel({
           id={DASHBOARD_SECTIONS.listings}
           eyebrow="Listings"
           title="Hosted listings"
-          description="Pause, resume, view, duplicate, or remove your spaces."
+          description="Manage your spaces. Pause and delete are locked while a rental is in progress."
           expanded={expandedSections[DASHBOARD_SECTIONS.listings]}
           onToggle={() => toggleSection(DASHBOARD_SECTIONS.listings)}
           summary={
@@ -2087,6 +2484,10 @@ function HostDashboardPanel({
                     listing={listing}
                     onDeleteListing={deleteListingAction}
                     onToggleListingStatus={toggleListingStatusAction}
+                    onResolveAvailability={openAvailabilityDecision}
+                    hasBlockingBooking={blockingBookingListingIds.has(
+                      String(listing.id)
+                    )}
                     payoutStatus={payoutStatus}
                   />
                 ))}

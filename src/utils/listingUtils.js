@@ -72,6 +72,10 @@ export function getListingBookingMode(listing = {}) {
 }
 
 export function getListingAvailabilityStatus(listing = {}) {
+  if (listing.postBookingActionRequired || listing.post_booking_action_required) {
+    return AVAILABILITY_STATUSES.UNAVAILABLE;
+  }
+
   if (listing.availabilityStatus) {
     return listing.availabilityStatus;
   }
@@ -218,6 +222,9 @@ export function normalizeListing(listing = {}, index = 0) {
     bookingMode,
     availability: listing.availability || (waitlist ? "Waitlist" : "Available"),
     availabilityStatus: getListingAvailabilityStatus({ ...listing, waitlist, bookingMode }),
+    postBookingActionRequired: Boolean(
+      listing.postBookingActionRequired ?? listing.post_booking_action_required
+    ),
     status: listing.status || LISTING_STATUSES.ACTIVE,
     host: hostName,
     hostName,

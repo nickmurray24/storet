@@ -33,7 +33,12 @@ import { hostAnalyticsService } from "../services/hostAnalyticsService";
 import { stripeCheckoutService } from "../services/stripeCheckoutService";
 import { payoutService } from "../services/payoutService";
 import { storetDataService } from "../services/storetDataService";
-import { APP_MODES, LISTING_STATUSES, USER_ROLES } from "../constants/appEnums";
+import {
+  APP_MODES,
+  AVAILABILITY_STATUSES,
+  LISTING_STATUSES,
+  USER_ROLES,
+} from "../constants/appEnums";
 import { getHostPayoutStatus } from "../utils/payoutUtils";
 import { APP_ROUTES, buildCheckoutPath, getSafeRedirectPath } from "../routes/appRoutes";
 import { normalizeUserProfile } from "../models/storetModels";
@@ -101,6 +106,48 @@ function replaceRecordById(records = [], recordId, nextRecord) {
 
 function removeRecordById(records = [], recordId) {
   return ensureArray(records).filter((record) => String(record.id) !== String(recordId));
+}
+
+function getAvailableListingAvailabilityStatus(listing = {}) {
+  return listing.waitlist
+    ? AVAILABILITY_STATUSES.WAITLIST
+    : AVAILABILITY_STATUSES.AVAILABLE;
+}
+
+function bookingStatusBlocksListing(status) {
+  return [
+    BOOKING_STATUSES.APPROVED,
+    BOOKING_STATUSES.CONFIRMED,
+    BOOKING_STATUSES.ACTIVE,
+  ].includes(status);
+}
+
+function syncListingWithBookingState(listing, requests = [], options = {}) {
+  if (!listing?.id) {
+    return listing;
+  }
+
+  const listingRequests = ensureArray(requests).filter(
+    (request) => String(request.listingId) === String(listing.id)
+  );
+  const hasBlockingBooking = listingRequests.some((request) =>
+    bookingStatusBlocksListing(request.status)
+  );
+  const postBookingActionRequired = Boolean(
+    listing.postBookingActionRequired || options.markPostBookingActionRequired
+  );
+  const shouldStayUnavailable = hasBlockingBooking || postBookingActionRequired;
+
+  return {
+    ...listing,
+    availabilityStatus: shouldStayUnavailable
+      ? AVAILABILITY_STATUSES.UNAVAILABLE
+      : listing.status === LISTING_STATUSES.ACTIVE
+      ? getAvailableListingAvailabilityStatus(listing)
+      : AVAILABILITY_STATUSES.UNAVAILABLE,
+    postBookingActionRequired,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function attachPaymentRecordIdsToBookings(bookings = [], payments = []) {
@@ -1230,6 +1277,11 @@ export function StoretAppProvider({ children }) {
         : currentStatus === LISTING_STATUSES.PAUSED
         ? LISTING_STATUSES.ACTIVE
         : LISTING_STATUSES.PAUSED;
+    const hasBlockingBooking = allBookingRequests.some(
+      (request) =>
+        String(request.listingId) === normalizedId &&
+        bookingStatusBlocksListing(request.status)
+    );
 
     if (
       nextStatus === LISTING_STATUSES.ACTIVE &&
@@ -1245,11 +1297,25 @@ export function StoretAppProvider({ children }) {
       };
     }
 
+    if (nextStatus === LISTING_STATUSES.ACTIVE && hasBlockingBooking) {
+      const message =
+        "This listing has an approved or active rental and must stay hidden until that rental is completed or cancelled.";
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
     const updatedListing = {
       ...targetListing,
       status: nextStatus,
       availabilityStatus:
-        nextStatus === LISTING_STATUSES.ACTIVE ? "available" : "unavailable",
+        nextStatus === LISTING_STATUSES.ACTIVE
+          ? getAvailableListingAvailabilityStatus(targetListing)
+          : AVAILABILITY_STATUSES.UNAVAILABLE,
+      postBookingActionRequired: false,
       updatedAt: new Date().toISOString(),
     };
 
@@ -1286,6 +1352,7 @@ export function StoretAppProvider({ children }) {
     const response = await listingService.updateListing(normalizedId, {
       status: nextStatus,
       availabilityStatus: updatedListing.availabilityStatus,
+      postBookingActionRequired: false,
     });
 
     if (response.error) {
@@ -1294,6 +1361,129 @@ export function StoretAppProvider({ children }) {
       const message = getErrorMessage(
         response.error,
         "We could not update that listing status yet."
+      );
+      setListingsError(message);
+
+      return {
+        ok: false,
+        error: message,
+      };
+    }
+
+    const savedListing = response.data || updatedListing;
+
+    setUserListings((currentListings) =>
+      ensureArray(currentListings).map((listing) =>
+        String(listing.id) === normalizedId ? savedListing : listing
+      )
+    );
+
+    if (savedListing.status === LISTING_STATUSES.ACTIVE) {
+      setListings((currentListings) =>
+        mergeListingsById([savedListing], currentListings)
+      );
+    }
+
+    return {
+      ok: true,
+      listing: savedListing,
+    };
+  }
+
+  async function resolveCompletedListingAvailability(listingId, nextStatus) {
+    const normalizedId = String(listingId);
+    const normalizedStatus =
+      nextStatus === LISTING_STATUSES.PAUSED
+        ? LISTING_STATUSES.PAUSED
+        : LISTING_STATUSES.ACTIVE;
+    const targetListing = allUserListings.find(
+      (listing) => String(listing.id) === normalizedId
+    );
+
+    if (!targetListing) {
+      return {
+        ok: false,
+        error: "We could not find that listing.",
+      };
+    }
+
+    const hasBlockingBooking = allBookingRequests.some(
+      (request) =>
+        String(request.listingId) === normalizedId &&
+        bookingStatusBlocksListing(request.status)
+    );
+
+    if (hasBlockingBooking) {
+      return {
+        ok: false,
+        error:
+          "This listing still has an approved or active rental. Finish that rental before choosing its next availability.",
+      };
+    }
+
+    if (
+      normalizedStatus === LISTING_STATUSES.ACTIVE &&
+      !getHostPayoutStatus(currentUser).isReady
+    ) {
+      return {
+        ok: false,
+        error: "Set up payouts before returning this listing to Explore.",
+      };
+    }
+
+    const updatedListing = {
+      ...targetListing,
+      status: normalizedStatus,
+      availabilityStatus:
+        normalizedStatus === LISTING_STATUSES.ACTIVE
+          ? getAvailableListingAvailabilityStatus(targetListing)
+          : AVAILABILITY_STATUSES.UNAVAILABLE,
+      postBookingActionRequired: false,
+      updatedAt: new Date().toISOString(),
+    };
+    const previousHostListings = allUserListings;
+    const previousActiveListings = activeBackendListings;
+
+    setUserListings((currentListings) =>
+      ensureArray(currentListings).map((listing) =>
+        String(listing.id) === normalizedId ? updatedListing : listing
+      )
+    );
+
+    setListings((currentListings) => {
+      const withoutListing = ensureArray(currentListings).filter(
+        (listing) => String(listing.id) !== normalizedId
+      );
+
+      return normalizedStatus === LISTING_STATUSES.ACTIVE
+        ? mergeListingsById([updatedListing], withoutListing)
+        : withoutListing;
+    });
+
+    if (!isBackendId(normalizedId)) {
+      storetDataService.saveUserListings(
+        previousHostListings.map((listing) =>
+          String(listing.id) === normalizedId ? updatedListing : listing
+        )
+      );
+
+      return { ok: true, listing: updatedListing };
+    }
+
+    setListingsError("");
+
+    const response = await listingService.updateListing(normalizedId, {
+      status: normalizedStatus,
+      availabilityStatus: updatedListing.availabilityStatus,
+      postBookingActionRequired: false,
+    });
+
+    if (response.error) {
+      setUserListings(previousHostListings);
+      setListings(previousActiveListings);
+      const message = getErrorMessage(
+        response.error,
+        "We could not update this listing's availability yet."
       );
       setListingsError(message);
 
@@ -1406,6 +1596,30 @@ export function StoretAppProvider({ children }) {
     return { ok: true };
   }
 
+  function syncListingCollectionsAfterBookingChange(
+    listingId,
+    nextRequests,
+    options = {}
+  ) {
+    const normalizedListingId = String(listingId);
+
+    setUserListings((currentListings) =>
+      ensureArray(currentListings).map((listing) =>
+        String(listing.id) === normalizedListingId
+          ? syncListingWithBookingState(listing, nextRequests, options)
+          : listing
+      )
+    );
+
+    setListings((currentListings) =>
+      ensureArray(currentListings).map((listing) =>
+        String(listing.id) === normalizedListingId
+          ? syncListingWithBookingState(listing, nextRequests, options)
+          : listing
+      )
+    );
+  }
+
   async function submitBookingRequest(listing, requestData = {}) {
     if (!listing) {
       return {
@@ -1419,6 +1633,17 @@ export function StoretAppProvider({ children }) {
       currentUser,
       requestData,
     });
+    const previousHostListings = allUserListings;
+    const previousActiveListings = activeBackendListings;
+
+    const optimisticRequests = mergeRecordsById([request], allBookingRequests);
+
+    if (bookingStatusBlocksListing(request.status)) {
+      syncListingCollectionsAfterBookingChange(
+        request.listingId,
+        optimisticRequests
+      );
+    }
 
     if (!currentUser?.isAuthenticated || !isBackendId(request.listingId)) {
       setBookingRequests((currentRequests) => {
@@ -1438,6 +1663,8 @@ export function StoretAppProvider({ children }) {
     const response = await bookingService.createBookingRequest(request);
 
     if (response.error) {
+      setUserListings(previousHostListings);
+      setListings(previousActiveListings);
       const message = getErrorMessage(
         response.error,
         "We could not submit that booking request yet."
@@ -1477,15 +1704,24 @@ export function StoretAppProvider({ children }) {
     }
 
     const previousRequests = allBookingRequests;
+    const previousHostListings = allUserListings;
+    const previousActiveListings = activeBackendListings;
     const updatedRequest = updateBookingRequestStatus(targetRequest, status);
+    const nextRequests = replaceRecordById(previousRequests, requestId, updatedRequest);
 
     setBookingRequests((currentRequests) =>
       replaceRecordById(currentRequests, requestId, updatedRequest)
     );
+    syncListingCollectionsAfterBookingChange(targetRequest.listingId, nextRequests);
 
     if (!isBackendId(requestId)) {
-      storetDataService.saveBookingRequests(
-        replaceRecordById(previousRequests, requestId, updatedRequest)
+      storetDataService.saveBookingRequests(nextRequests);
+      storetDataService.saveUserListings(
+        previousHostListings.map((listing) =>
+          String(listing.id) === String(targetRequest.listingId)
+            ? syncListingWithBookingState(listing, nextRequests)
+            : listing
+        )
       );
       return { ok: true, request: updatedRequest };
     }
@@ -1496,6 +1732,8 @@ export function StoretAppProvider({ children }) {
 
     if (response.error) {
       setBookingRequests(previousRequests);
+      setUserListings(previousHostListings);
+      setListings(previousActiveListings);
       const message = getErrorMessage(
         response.error,
         "We could not update that booking request yet."
@@ -1531,15 +1769,35 @@ export function StoretAppProvider({ children }) {
     }
 
     const previousRequests = allBookingRequests;
+    const previousHostListings = allUserListings;
+    const previousActiveListings = activeBackendListings;
     const updatedRequest = updateBookingLifecycle(targetRequest, status);
+    const nextRequests = replaceRecordById(previousRequests, requestId, updatedRequest);
+    const bookingSyncOptions = {
+      markPostBookingActionRequired: status === BOOKING_STATUSES.COMPLETED,
+    };
 
     setBookingRequests((currentRequests) =>
       replaceRecordById(currentRequests, requestId, updatedRequest)
     );
+    syncListingCollectionsAfterBookingChange(
+      targetRequest.listingId,
+      nextRequests,
+      bookingSyncOptions
+    );
 
     if (!isBackendId(requestId)) {
-      storetDataService.saveBookingRequests(
-        replaceRecordById(previousRequests, requestId, updatedRequest)
+      storetDataService.saveBookingRequests(nextRequests);
+      storetDataService.saveUserListings(
+        previousHostListings.map((listing) =>
+          String(listing.id) === String(targetRequest.listingId)
+            ? syncListingWithBookingState(
+                listing,
+                nextRequests,
+                bookingSyncOptions
+              )
+            : listing
+        )
       );
       return { ok: true, request: updatedRequest };
     }
@@ -1550,6 +1808,8 @@ export function StoretAppProvider({ children }) {
 
     if (response.error) {
       setBookingRequests(previousRequests);
+      setUserListings(previousHostListings);
+      setListings(previousActiveListings);
       const message = getErrorMessage(
         response.error,
         "We could not update that booking yet."
@@ -2095,6 +2355,7 @@ export function StoretAppProvider({ children }) {
       attachListingImages,
       toggleSave,
       toggleListingStatus,
+      resolveCompletedListingAvailability,
       deleteListing,
       submitBookingRequest,
       updateBookingRequestStatus: updateBookingRequestStatusById,
