@@ -42,7 +42,12 @@ import Dialog from "../components/ui/Dialog";
 import ReviewForm from "../components/ReviewForm";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import { BOOKING_STATUSES } from "../utils/bookingUtils";
-import { APP_MODES, LISTING_STATUSES, PRICING_PERIODS } from "../constants/appEnums";
+import {
+  APP_MODES,
+  AVAILABILITY_STATUSES,
+  LISTING_STATUSES,
+  PRICING_PERIODS,
+} from "../constants/appEnums";
 import {
   canCheckoutBookingRequest,
   getBookingRequestCheckoutPath,
@@ -393,7 +398,10 @@ function ListingDetailsPage({
     );
   }
 
-  const listingIsActive = listing.status === LISTING_STATUSES.ACTIVE;
+  const listingIsActive =
+    listing.status === LISTING_STATUSES.ACTIVE &&
+    listing.availabilityStatus !== AVAILABILITY_STATUSES.UNAVAILABLE &&
+    !listing.postBookingActionRequired;
   const listingIsDraft = listing.status === LISTING_STATUSES.DRAFT;
   const primaryActionLabel =
     listingIsDraft

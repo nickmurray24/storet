@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
   Alert,
@@ -7,6 +7,7 @@ import {
   Box,
   Button,
   Card,
+  CardActionArea,
   CardContent,
   Chip,
   CircularProgress,
@@ -89,6 +90,7 @@ function getNotificationColor(type) {
 function NotificationsPage() {
   const storetApp = useOptionalStoretApp();
   const [filterType, setFilterType] = useState("all");
+  const recentNotificationsRef = useRef(null);
 
   const activeUser = storetApp?.currentUser;
   const notifications = useMemo(
@@ -138,6 +140,14 @@ function NotificationsPage() {
     if (nextValue) {
       setFilterType(nextValue);
     }
+  }
+
+  function handleSummaryCardClick(nextFilterType) {
+    setFilterType(nextFilterType);
+    recentNotificationsRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
   }
 
   async function handleRefresh() {
@@ -232,24 +242,28 @@ function NotificationsPage() {
               label="Total updates"
               value={stats.total}
               color="primary"
+              onClick={() => handleSummaryCardClick("all")}
             />
             <StatCard
               icon={<Badge color="error" badgeContent={stats.unread}><NotificationsRoundedIcon /></Badge>}
               label="Unread"
               value={stats.unread}
               color="error"
+              onClick={() => handleSummaryCardClick("unread")}
             />
             <StatCard
               icon={<EventAvailableRoundedIcon />}
               label="Booking updates"
               value={stats.bookings}
               color="success"
+              onClick={() => handleSummaryCardClick("booking")}
             />
             <StatCard
               icon={<MailRoundedIcon />}
               label="Messages"
               value={stats.messages}
               color="info"
+              onClick={() => handleSummaryCardClick("message")}
             />
           </Box>
         </Container>
@@ -257,7 +271,10 @@ function NotificationsPage() {
 
       <Container maxWidth="lg" sx={{ py: { xs: 3, md: 4 } }}>
         <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
-          <Box sx={{ flex: 1 }}>
+          <Box
+            ref={recentNotificationsRef}
+            sx={{ flex: 1, scrollMarginTop: { xs: "88px", md: "96px" } }}
+          >
             <Card>
               <CardContent sx={{ p: { xs: 3, md: 4 } }}>
                 <Stack spacing={3}>
@@ -505,26 +522,32 @@ function NotificationTimelineItem({ notification, isLast, onMarkRead }) {
   );
 }
 
-function StatCard({ icon, label, value, color }) {
+function StatCard({ icon, label, value, color, onClick }) {
   return (
-    <Card>
-      <CardContent sx={{ p: 2.5 }}>
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          <Avatar
-            sx={{
-              bgcolor: `${color}.light`,
-              color: `${color}.dark`,
-            }}
-          >
-            {icon}
-          </Avatar>
+    <Card sx={{ height: "100%" }}>
+      <CardActionArea
+        onClick={onClick}
+        aria-label={`Show ${label.toLowerCase()} notifications`}
+        sx={{ height: "100%" }}
+      >
+        <CardContent sx={{ p: 2.5 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center">
+            <Avatar
+              sx={{
+                bgcolor: `${color}.light`,
+                color: `${color}.dark`,
+              }}
+            >
+              {icon}
+            </Avatar>
 
-          <Box>
-            <Typography variant="h5">{value}</Typography>
-            <Typography color="text.secondary">{label}</Typography>
-          </Box>
-        </Stack>
-      </CardContent>
+            <Box>
+              <Typography variant="h5">{value}</Typography>
+              <Typography color="text.secondary">{label}</Typography>
+            </Box>
+          </Stack>
+        </CardContent>
+      </CardActionArea>
     </Card>
   );
 }

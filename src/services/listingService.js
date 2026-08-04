@@ -20,6 +20,7 @@ export const listingService = {
       .from("listings")
       .select(LISTING_SELECT)
       .eq("status", "active")
+      .neq("availability_status", "unavailable")
       .order("created_at", { ascending: false });
 
     if (queryError) {
