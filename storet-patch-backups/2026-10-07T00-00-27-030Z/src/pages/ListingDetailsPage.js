@@ -1170,10 +1170,7 @@ function ListingDetailsPage({
               src={selectedGalleryImage}
               alt={`${listing.title} enlarged photo`}
               sx={{
-                width: "auto",
-                height: "auto",
-                maxWidth: "100%",
-                mx: "auto",
+                width: "100%",
                 maxHeight: { xs: "72vh", md: "78vh" },
                 objectFit: "contain",
                 display: "block",

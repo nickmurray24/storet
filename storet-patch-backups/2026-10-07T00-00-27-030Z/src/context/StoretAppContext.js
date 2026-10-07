@@ -24,10 +24,7 @@ import { getHostMessagesForListings } from "../utils/messageSelectors";
 import { authService } from "../services/authService";
 import { bookingService } from "../services/bookingService";
 import { listingService } from "../services/listingService";
-import { listingEditingService } from "../services/listingEditingService";
-import { getListingEditLock, LISTING_EDIT_LOCK_MESSAGE } from "../utils/listingEditingUtils";
 import { listingImageService } from "../services/listingImageService";
-import { getOrderedListingPhotos } from "../utils/listingPhotoUtils";
 import { messageService } from "../services/messageService";
 import { paymentService } from "../services/paymentService";
 import { notificationService } from "../services/notificationService";
@@ -1216,61 +1213,6 @@ export function StoretAppProvider({ children }) {
     };
   }
 
-  async function reorderListingImages(listingId, orderedImages) {
-    const normalizedId = String(listingId || "");
-    const targetListing = allUserListings.find((listing) => String(listing.id) === normalizedId);
-    const ownerId = targetListing?.hostId || targetListing?.ownerId || targetListing?.createdBy;
-    if (!currentUser?.isAuthenticated || !targetListing || String(ownerId) !== String(currentUser.id)) {
-      return { ok: false, error: "Only the listing host can change its photo order." };
-    }
-    const editLock = getListingEditLock(targetListing, allBookingRequests);
-    if (editLock.isLocked) return { ok: false, error: editLock.message };
-    const existingImages = getOrderedListingPhotos(targetListing);
-    if (!Array.isArray(orderedImages) || orderedImages.length !== existingImages.length ||
-        new Set(orderedImages).size !== existingImages.length ||
-        orderedImages.some((url) => !existingImages.includes(url))) {
-      return { ok: false, error: "The listing photos have changed. Close this dialog and try again." };
-    }
-    let updatedListing;
-    if (isBackendId(normalizedId)) {
-      // Update only the ordered array. Existing listing policies enforce ownership.
-      const response = await listingService.updateListing(normalizedId, { images: orderedImages });
-      if (response.error || !response.data) {
-        return { ok: false, error: response.error?.message?.includes("LISTING_EDIT_LOCKED")
-          ? LISTING_EDIT_LOCK_MESSAGE : getErrorMessage(response.error, "Could not save photo order.") };
-      }
-      updatedListing = response.data;
-    } else {
-      updatedListing = normalizeListingList([{ ...targetListing, images: orderedImages,
-        imageUrl: orderedImages[0] || "", coverImageUrl: orderedImages[0] || "" }])[0];
-    }
-    setUserListings((listings) => ensureArray(listings).map((listing) =>
-      String(listing.id) === normalizedId ? updatedListing : listing));
-    // Preserve current visibility decisions; do not re-add occupied/hidden listings.
-    setListings((listings) => ensureArray(listings).map((listing) =>
-      String(listing.id) === normalizedId ? updatedListing : listing));
-    return { ok: true, listing: updatedListing };
-  }
-
-  async function editListing(listingId, edit) {
-    const normalizedId = String(listingId || "");
-    if (!currentUser?.isAuthenticated) return { ok: false, error: "Please sign in to edit your listing." };
-    const lock = getListingEditLock({ id: normalizedId }, allBookingRequests);
-    if (lock.isLocked) return { ok: false, error: lock.message, editLocked: true };
-    const response = await listingEditingService.saveListingEdit(normalizedId, edit);
-    if (response.error || !response.data) {
-      return { ok: false, error: getErrorMessage(response.error, "Could not save your listing."),
-        editLocked: Boolean(response.error?.editLocked), staleEdit: Boolean(response.error?.staleEdit) };
-    }
-    const updatedListing = response.data;
-    setUserListings((listings) => ensureArray(listings).map((listing) =>
-      String(listing.id) === normalizedId ? updatedListing : listing));
-    // Update displayed listings without changing publication/occupancy decisions.
-    setListings((listings) => ensureArray(listings).map((listing) =>
-      String(listing.id) === normalizedId ? updatedListing : listing));
-    return { ok: true, listing: updatedListing };
-  }
-
   async function toggleSave(listingId) {
     const normalizedId = String(listingId);
     const safeCurrentIds = normalizeSavedIds(savedListingIds);
@@ -2411,8 +2353,6 @@ export function StoretAppProvider({ children }) {
       becomeRenter,
       addListing,
       attachListingImages,
-      reorderListingImages,
-      editListing,
       toggleSave,
       toggleListingStatus,
       resolveCompletedListingAvailability,

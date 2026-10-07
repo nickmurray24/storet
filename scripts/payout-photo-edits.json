@@ -1,0 +1,152 @@
+[
+  {
+    "file": "src/components/HostDashboardPanel.js",
+    "edits": [
+      {
+        "name": "Payout and photo imports",
+        "before": "import AlertDialog from \"./ui/AlertDialog\";",
+        "after": "import AlertDialog from \"./ui/AlertDialog\";\nimport { useRef as usePayoutRef } from \"react\";\nimport ListingPhotoOrderDialog from \"./ListingPhotoOrderDialog\";\nimport { payoutService } from \"../services/payoutService\";"
+      },
+      {
+        "name": "Photo dialog state",
+        "before": "  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);",
+        "after": "  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);\n  const [photoOrderDialogOpen, setPhotoOrderDialogOpen] = useState(false);"
+      },
+      {
+        "name": "Listing photo dialog",
+        "before": "      <Card\n      elevation={0}",
+        "after": "      {photoOrderDialogOpen && (\n        <ListingPhotoOrderDialog listing={listing} onClose={() => setPhotoOrderDialogOpen(false)} />\n      )}\n\n      <Card\n      elevation={0}"
+      },
+      {
+        "name": "Photo order button",
+        "before": "          <Button\n            component={RouterLink}\n            to={APP_ROUTES.createListing}\n            variant=\"text\"\n            size=\"small\"\n          >\n            Create similar\n          </Button>",
+        "after": "          <Button\n            component={RouterLink}\n            to={APP_ROUTES.createListing}\n            variant=\"text\"\n            size=\"small\"\n          >\n            Create similar\n          </Button>\n\n          <Button variant=\"outlined\" size=\"small\" onClick={() => setPhotoOrderDialogOpen(true)}\n            disabled={!Array.isArray(listing.images) || listing.images.length < 2}>\n            Order photos\n          </Button>"
+      },
+      {
+        "name": "Transient payout state",
+        "before": "  const [payoutStatusIsRefreshing, setPayoutStatusIsRefreshing] = useState(false);",
+        "after": "  const [payoutStatusIsRefreshing, setPayoutStatusIsRefreshing] = useState(false);\n  const [showPayoutSuccess, setShowPayoutSuccess] = useState(false);\n  const [payoutManagementIsOpening, setPayoutManagementIsOpening] = useState(false);\n  const refreshPayoutStatusRef = usePayoutRef(storetApp?.actions?.refreshHostPayoutStatus);\n  refreshPayoutStatusRef.current = storetApp?.actions?.refreshHostPayoutStatus;"
+      },
+      {
+        "name": "Readiness transition notice",
+        "before": "  const payoutStatus = storetApp?.hostPayoutStatus || getHostPayoutStatus(storetApp?.currentUser);",
+        "after": "  const payoutStatus = storetApp?.hostPayoutStatus || getHostPayoutStatus(storetApp?.currentUser);\n  const payoutUserId = storetApp?.currentUser?.id;\n  const previousPayoutState = usePayoutRef({ userId: payoutUserId, isReady: payoutStatus.isReady });\n\n  useEffect(() => {\n    const previous = previousPayoutState.current;\n    if (payoutUserId && previous.userId === payoutUserId && !previous.isReady && payoutStatus.isReady) {\n      setShowPayoutSuccess(true);\n    } else if (previous.userId !== payoutUserId || !payoutStatus.isReady) {\n      setShowPayoutSuccess(false);\n    }\n    previousPayoutState.current = { userId: payoutUserId, isReady: payoutStatus.isReady };\n  }, [payoutUserId, payoutStatus.isReady]);"
+      },
+      {
+        "name": "Stripe settings handler",
+        "before": "  async function handleRefreshPayoutStatus() {",
+        "after": "  async function handleManagePayouts() {\n    if (payoutManagementIsOpening) return;\n    setPayoutActionError(\"\");\n    setPayoutManagementIsOpening(true);\n    try {\n      const response = await payoutService.createConnectLoginLink();\n      if (response.error) throw response.error;\n      const url = new URL(response.data?.url || \"\");\n      if (url.protocol !== \"https:\" || url.hostname !== \"connect.stripe.com\") {\n        throw new Error(\"Stripe did not return a valid payout settings link.\");\n      }\n      window.location.assign(url.href);\n    } catch (error) {\n      setPayoutActionError(error.message || \"Could not open payout settings. Please try again.\");\n      setPayoutManagementIsOpening(false);\n    }\n  }\n\n  async function handleRefreshPayoutStatus() {"
+      },
+      {
+        "name": "Stable Stripe-return refresh",
+        "before": "    let isMounted = true;\n    const refreshHostPayoutStatus = storetApp?.actions?.refreshHostPayoutStatus;",
+        "after": "    let isMounted = true;\n    const refreshHostPayoutStatus = refreshPayoutStatusRef.current;"
+      },
+      {
+        "name": "Success on first onboarding return",
+        "before": "      if (isMounted) {\n        setPayoutStatusIsRefreshing(false);\n        navigate(APP_ROUTES.hostDashboard, { replace: true });\n      }",
+        "after": "      if (isMounted) {\n        if (payoutReturnState === \"return\" && result?.ok && result?.payoutStatus?.isReady) {\n          setShowPayoutSuccess(true);\n        }\n        setPayoutStatusIsRefreshing(false);\n        // Consume the return marker so a refresh cannot repeat the success notice.\n        const nextSearch = new URLSearchParams(location.search);\n        nextSearch.delete(\"payout\");\n        navigate({ pathname: APP_ROUTES.hostDashboard, search: nextSearch.toString(), hash: location.hash }, { replace: true });\n      }"
+      },
+      {
+        "name": "Return effect dependencies",
+        "before": "  }, [location.search, navigate, storetApp?.actions]);",
+        "after": "  }, [location.search, location.hash, navigate]);"
+      },
+      {
+        "name": "Manage payouts button",
+        "before": "                Create listing\n              </Button>\n            </Stack>",
+        "after": "                Create listing\n              </Button>\n              {payoutStatus.isReady && (\n                <Button variant=\"outlined\" size=\"large\" startIcon={<PaidRoundedIcon />}\n                  onClick={handleManagePayouts} disabled={payoutManagementIsOpening || payoutStatusIsRefreshing}>\n                  {payoutManagementIsOpening ? \"Opening Stripe...\" : \"Manage payouts\"}\n                </Button>\n              )}\n            </Stack>"
+      },
+      {
+        "name": "Hide persistent payout success banner",
+        "before": "        <PayoutStatusBanner\n          payoutStatus={payoutStatus}",
+        "after": "        {(!payoutStatus.isReady || showPayoutSuccess) && <PayoutStatusBanner\n          payoutStatus={payoutStatus}"
+      },
+      {
+        "name": "Close conditional payout banner",
+        "before": "          actionError={payoutActionError}\n        />",
+        "after": "          actionError={payoutActionError}\n        />}\n        {payoutStatus.isReady && !showPayoutSuccess && payoutActionError && (\n          <Alert severity=\"error\" sx={{ mb: 3 }} onClose={() => setPayoutActionError(\"\")}>\n            {payoutActionError}\n          </Alert>\n        )}"
+      }
+    ]
+  },
+  {
+    "file": "src/pages/CreateListingPage.js",
+    "edits": [
+      {
+        "name": "Photo ordering imports",
+        "before": "import { getListingImageValidationMessage } from \"../services/listingImageService\";",
+        "after": "import { getListingImageValidationMessage } from \"../services/listingImageService\";\nimport ListingPhotoOrderEditor from \"../components/ListingPhotoOrderEditor\";\nimport { moveListingPhoto } from \"../utils/listingPhotoUtils\";"
+      },
+      {
+        "name": "Remove unused photo icon import",
+        "before": "import DeleteRoundedIcon from \"@mui/icons-material/DeleteRounded\";\n",
+        "after": ""
+      },
+      {
+        "name": "Remove unused photo control import",
+        "before": "  IconButton,\n",
+        "after": ""
+      },
+      {
+        "name": "Reorder original upload files",
+        "before": "  function handleRemoveImage(indexToRemove) {",
+        "after": "  function handleMoveImage(fromIndex, toIndex) {\n    setSelectedImageFiles((files) => moveListingPhoto(files, fromIndex, toIndex));\n  }\n\n  function handleRemoveImage(indexToRemove) {"
+      },
+      {
+        "name": "Ordered upload previews",
+        "before": "                    {imagePreviewUrls.length > 0 && (\n                      <Box\n                        sx={{\n                          display: \"grid\",\n                          gridTemplateColumns: {\n                            xs: \"repeat(2, minmax(0, 1fr))\",\n                            sm: \"repeat(3, minmax(0, 1fr))\",\n                          },\n                          gap: 1.5,\n                        }}\n                      >\n                        {imagePreviewUrls.map((url, index) => (\n                          <Box\n                            key={url}\n                            sx={{\n                              position: \"relative\",\n                              borderRadius: 3,\n                              overflow: \"hidden\",\n                              border: \"1px solid\",\n                              borderColor: \"divider\",\n                              minHeight: 128,\n                              bgcolor: \"background.default\",\n                            }}\n                          >\n                            <Box\n                              component=\"img\"\n                              src={url}\n                              alt={`Listing preview ${index + 1}`}\n                              sx={{\n                                width: \"100%\",\n                                height: 128,\n                                objectFit: \"cover\",\n                                display: \"block\",\n                              }}\n                            />\n\n                            <IconButton\n                              size=\"small\"\n                              aria-label=\"Remove photo\"\n                              onClick={() => handleRemoveImage(index)}\n                              sx={{\n                                position: \"absolute\",\n                                top: 8,\n                                right: 8,\n                                bgcolor: \"rgba(255,255,255,0.9)\",\n                                \"&:hover\": { bgcolor: \"rgba(255,255,255,1)\" },\n                              }}\n                            >\n                              <DeleteRoundedIcon fontSize=\"small\" />\n                            </IconButton>\n                          </Box>\n                        ))}\n                      </Box>\n                    )}",
+        "after": "                    <ListingPhotoOrderEditor\n                      imageUrls={imagePreviewUrls}\n                      labels={selectedImageFiles.map((file) => file.name)}\n                      onMove={handleMoveImage}\n                      onRemove={handleRemoveImage}\n                      disabled={isSubmitting}\n                    />"
+      }
+    ]
+  },
+  {
+    "file": "src/pages/ListingDetailsPage.js",
+    "edits": [
+      {
+        "name": "Gallery original-size display",
+        "before": "              alt={`${listing.title} enlarged photo`}\n              sx={{\n                width: \"100%\",",
+        "after": "              alt={`${listing.title} enlarged photo`}\n              sx={{\n                width: \"auto\",\n                height: \"auto\",\n                maxWidth: \"100%\",\n                mx: \"auto\","
+      }
+    ]
+  },
+  {
+    "file": "src/utils/listingUtils.js",
+    "edits": [
+      {
+        "name": "First photo controls cover",
+        "before": "  const imageUrl = listing.imageUrl || listing.coverImageUrl || images[0] || \"\";",
+        "after": "  const imageUrl = images[0] || listing.imageUrl || listing.coverImageUrl || \"\";"
+      }
+    ]
+  },
+  {
+    "file": "src/services/payoutService.js",
+    "edits": [
+      {
+        "name": "Stripe Express login-link service",
+        "before": "  async refreshConnectAccountStatus() {",
+        "after": "  async createConnectLoginLink() {\n    const { supabase, error } = requireSupabase();\n    if (error) return formatServiceResponse(null, error);\n    const { data, error: functionError } = await supabase.functions.invoke(\n      \"create-connect-login-link\", { body: {} }\n    );\n    if (functionError) return formatFunctionError(functionError, \"Could not open payout settings.\");\n    if (data?.error) return formatServiceResponse(null, createServiceError(data.error));\n    return formatServiceResponse(data);\n  },\n\n  async refreshConnectAccountStatus() {"
+      }
+    ]
+  },
+  {
+    "file": "src/context/StoretAppContext.js",
+    "edits": [
+      {
+        "name": "Photo order utilities",
+        "before": "import { listingImageService } from \"../services/listingImageService\";",
+        "after": "import { listingImageService } from \"../services/listingImageService\";\nimport { getOrderedListingPhotos } from \"../utils/listingPhotoUtils\";"
+      },
+      {
+        "name": "Persist existing listing photo order",
+        "before": "  async function toggleSave(listingId) {",
+        "after": "  async function reorderListingImages(listingId, orderedImages) {\n    const normalizedId = String(listingId || \"\");\n    const targetListing = allUserListings.find((listing) => String(listing.id) === normalizedId);\n    const ownerId = targetListing?.hostId || targetListing?.ownerId || targetListing?.createdBy;\n    if (!currentUser?.isAuthenticated || !targetListing || String(ownerId) !== String(currentUser.id)) {\n      return { ok: false, error: \"Only the listing host can change its photo order.\" };\n    }\n    const existingImages = getOrderedListingPhotos(targetListing);\n    if (!Array.isArray(orderedImages) || orderedImages.length !== existingImages.length ||\n        new Set(orderedImages).size !== existingImages.length ||\n        orderedImages.some((url) => !existingImages.includes(url))) {\n      return { ok: false, error: \"The listing photos have changed. Close this dialog and try again.\" };\n    }\n    let updatedListing;\n    if (isBackendId(normalizedId)) {\n      // Update only the ordered array. Existing listing policies enforce ownership.\n      const response = await listingService.updateListing(normalizedId, { images: orderedImages });\n      if (response.error || !response.data) {\n        return { ok: false, error: getErrorMessage(response.error, \"Could not save photo order.\") };\n      }\n      updatedListing = response.data;\n    } else {\n      updatedListing = normalizeListingList([{ ...targetListing, images: orderedImages,\n        imageUrl: orderedImages[0] || \"\", coverImageUrl: orderedImages[0] || \"\" }])[0];\n    }\n    setUserListings((listings) => ensureArray(listings).map((listing) =>\n      String(listing.id) === normalizedId ? updatedListing : listing));\n    // Preserve current visibility decisions; do not re-add occupied/hidden listings.\n    setListings((listings) => ensureArray(listings).map((listing) =>\n      String(listing.id) === normalizedId ? updatedListing : listing));\n    return { ok: true, listing: updatedListing };\n  }\n\n  async function toggleSave(listingId) {"
+      },
+      {
+        "name": "Expose photo-order action",
+        "before": "      attachListingImages,",
+        "after": "      attachListingImages,\n      reorderListingImages,"
+      }
+    ]
+  }
+]

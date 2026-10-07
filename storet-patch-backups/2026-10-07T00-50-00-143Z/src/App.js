@@ -11,7 +11,6 @@ import AuthPage from "./pages/AuthPage";
 import ExplorePage from "./pages/ExplorePage";
 import ListingDetailsPage from "./pages/ListingDetailsPage";
 import CreateListingPage from "./pages/CreateListingPage";
-import EditListingPage from "./pages/EditListingPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationsPage from "./pages/NotificationsPage";
 import CheckoutPage from "./pages/CheckoutPage";
@@ -80,15 +79,6 @@ function AppRoutes() {
           element={
             <ProtectedRoute requiredMode={APP_MODES.HOST} allowHostSetup>
               <CreateListingPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path={APP_ROUTES.editListing}
-          element={
-            <ProtectedRoute requiredMode={APP_MODES.HOST}>
-              <EditListingPage />
             </ProtectedRoute>
           }
         />
