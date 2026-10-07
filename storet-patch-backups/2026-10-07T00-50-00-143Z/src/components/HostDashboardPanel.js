@@ -51,7 +51,6 @@ import { useOptionalStoretApp } from "../context/StoretAppContext";
 import AlertDialog from "./ui/AlertDialog";
 import { useRef as usePayoutRef } from "react";
 import ListingPhotoOrderDialog from "./ListingPhotoOrderDialog";
-import ListingEditActions from "./ListingEditActions";
 import { payoutService } from "../services/payoutService";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import {
@@ -1332,7 +1331,10 @@ function HostListingCard({
             Create similar
           </Button>
 
-          <ListingEditActions listing={listing} onOrderPhotos={() => setPhotoOrderDialogOpen(true)} />
+          <Button variant="outlined" size="small" onClick={() => setPhotoOrderDialogOpen(true)}
+            disabled={!Array.isArray(listing.images) || listing.images.length < 2}>
+            Order photos
+          </Button>
 
           {isAwaitingAvailabilityDecision ? (
             <Button

@@ -82,17 +82,6 @@ export const payoutService = {
     return formatServiceResponse(normalizeProfileResponse(data));
   },
 
-  async createConnectLoginLink() {
-    const { supabase, error } = requireSupabase();
-    if (error) return formatServiceResponse(null, error);
-    const { data, error: functionError } = await supabase.functions.invoke(
-      "create-connect-login-link", { body: {} }
-    );
-    if (functionError) return formatFunctionError(functionError, "Could not open payout settings.");
-    if (data?.error) return formatServiceResponse(null, createServiceError(data.error));
-    return formatServiceResponse(data);
-  },
-
   async refreshConnectAccountStatus() {
     const { supabase, error } = requireSupabase();
 

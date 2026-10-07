@@ -3,7 +3,6 @@ export const APP_ROUTES = {
   auth: "/auth",
   explore: "/explore",
   createListing: "/create-listing",
-  editListing: "/host/listings/:id/edit",
   profile: "/profile",
   notifications: "/notifications",
   hostDashboard: "/host-dashboard",

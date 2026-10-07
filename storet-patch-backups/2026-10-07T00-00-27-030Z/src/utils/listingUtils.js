@@ -174,7 +174,7 @@ export function normalizeListing(listing = {}, index = 0) {
   );
 
   const images = Array.isArray(listing.images) ? listing.images : [];
-  const imageUrl = images[0] || listing.imageUrl || listing.coverImageUrl || "";
+  const imageUrl = listing.imageUrl || listing.coverImageUrl || images[0] || "";
   const displayLocation =
     listing.displayLocation || listing.display_location || listing.location || listing.address || DEFAULT_LISTING_MODEL.displayLocation;
 

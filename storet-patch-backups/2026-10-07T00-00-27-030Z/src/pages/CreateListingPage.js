@@ -14,6 +14,7 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  IconButton,
   InputAdornment,
   InputLabel,
   MenuItem,
@@ -26,6 +27,7 @@ import {
 } from "@mui/material";
 
 import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
+import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
@@ -45,8 +47,6 @@ import { createListingRecord, parseNumber } from "../utils/listingUtils";
 import VerifiedAddressField from "../components/VerifiedAddressField";
 import AlertDialog from "../components/ui/AlertDialog";
 import { getListingImageValidationMessage } from "../services/listingImageService";
-import ListingPhotoOrderEditor from "../components/ListingPhotoOrderEditor";
-import { moveListingPhoto } from "../utils/listingPhotoUtils";
 import { formatPricingSummary, normalizePricing, hasAnyPricing } from "../utils/pricingUtils";
 import { userCanUseRenterMode } from "../utils/roleUtils";
 import { EMPTY_VERIFIED_ADDRESS, hasVerifiedCoordinates } from "../utils/addressUtils";
@@ -418,10 +418,6 @@ function CreateListingPage({ currentUser, onAddListing }) {
 
     setSelectedImageFiles(files);
     event.target.value = "";
-  }
-
-  function handleMoveImage(fromIndex, toIndex) {
-    setSelectedImageFiles((files) => moveListingPhoto(files, fromIndex, toIndex));
   }
 
   function handleRemoveImage(indexToRemove) {
@@ -1038,13 +1034,60 @@ function CreateListingPage({ currentUser, onAddListing }) {
                       </Typography>
                     </Box>
 
-                    <ListingPhotoOrderEditor
-                      imageUrls={imagePreviewUrls}
-                      labels={selectedImageFiles.map((file) => file.name)}
-                      onMove={handleMoveImage}
-                      onRemove={handleRemoveImage}
-                      disabled={isSubmitting}
-                    />
+                    {imagePreviewUrls.length > 0 && (
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: {
+                            xs: "repeat(2, minmax(0, 1fr))",
+                            sm: "repeat(3, minmax(0, 1fr))",
+                          },
+                          gap: 1.5,
+                        }}
+                      >
+                        {imagePreviewUrls.map((url, index) => (
+                          <Box
+                            key={url}
+                            sx={{
+                              position: "relative",
+                              borderRadius: 3,
+                              overflow: "hidden",
+                              border: "1px solid",
+                              borderColor: "divider",
+                              minHeight: 128,
+                              bgcolor: "background.default",
+                            }}
+                          >
+                            <Box
+                              component="img"
+                              src={url}
+                              alt={`Listing preview ${index + 1}`}
+                              sx={{
+                                width: "100%",
+                                height: 128,
+                                objectFit: "cover",
+                                display: "block",
+                              }}
+                            />
+
+                            <IconButton
+                              size="small"
+                              aria-label="Remove photo"
+                              onClick={() => handleRemoveImage(index)}
+                              sx={{
+                                position: "absolute",
+                                top: 8,
+                                right: 8,
+                                bgcolor: "rgba(255,255,255,0.9)",
+                                "&:hover": { bgcolor: "rgba(255,255,255,1)" },
+                              }}
+                            >
+                              <DeleteRoundedIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        ))}
+                      </Box>
+                    )}
 
                     <Divider />
 

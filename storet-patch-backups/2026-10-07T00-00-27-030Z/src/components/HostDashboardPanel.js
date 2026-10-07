@@ -49,10 +49,6 @@ import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import AlertDialog from "./ui/AlertDialog";
-import { useRef as usePayoutRef } from "react";
-import ListingPhotoOrderDialog from "./ListingPhotoOrderDialog";
-import ListingEditActions from "./ListingEditActions";
-import { payoutService } from "../services/payoutService";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import {
   AVAILABILITY_STATUSES,
@@ -1210,7 +1206,6 @@ function HostListingCard({
     hasBlockingBooking;
   const canActivateListing = Boolean(payoutStatus?.isReady);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [photoOrderDialogOpen, setPhotoOrderDialogOpen] = useState(false);
   const statusLabel = isDraft
     ? "Draft"
     : isPaused
@@ -1259,10 +1254,6 @@ function HostListingCard({
         actionColor="error"
         onAction={handleConfirmDelete}
       />
-
-      {photoOrderDialogOpen && (
-        <ListingPhotoOrderDialog listing={listing} onClose={() => setPhotoOrderDialogOpen(false)} />
-      )}
 
       <Card
       elevation={0}
@@ -1331,8 +1322,6 @@ function HostListingCard({
           >
             Create similar
           </Button>
-
-          <ListingEditActions listing={listing} onOrderPhotos={() => setPhotoOrderDialogOpen(true)} />
 
           {isAwaitingAvailabilityDecision ? (
             <Button
@@ -1444,10 +1433,6 @@ function HostDashboardPanel({
   const [payoutInfoDialogOpen, setPayoutInfoDialogOpen] = useState(false);
   const [payoutSetupIsStarting, setPayoutSetupIsStarting] = useState(false);
   const [payoutStatusIsRefreshing, setPayoutStatusIsRefreshing] = useState(false);
-  const [showPayoutSuccess, setShowPayoutSuccess] = useState(false);
-  const [payoutManagementIsOpening, setPayoutManagementIsOpening] = useState(false);
-  const refreshPayoutStatusRef = usePayoutRef(storetApp?.actions?.refreshHostPayoutStatus);
-  refreshPayoutStatusRef.current = storetApp?.actions?.refreshHostPayoutStatus;
   const [availabilityDecisionListingId, setAvailabilityDecisionListingId] = useState("");
   const [deferredAvailabilityDecisionIds, setDeferredAvailabilityDecisionIds] = useState([]);
   const [availabilityDecisionError, setAvailabilityDecisionError] = useState("");
@@ -1463,18 +1448,6 @@ function HostDashboardPanel({
     ? hostMessages
     : storetApp?.hostDashboardMessages ?? [];
   const payoutStatus = storetApp?.hostPayoutStatus || getHostPayoutStatus(storetApp?.currentUser);
-  const payoutUserId = storetApp?.currentUser?.id;
-  const previousPayoutState = usePayoutRef({ userId: payoutUserId, isReady: payoutStatus.isReady });
-
-  useEffect(() => {
-    const previous = previousPayoutState.current;
-    if (payoutUserId && previous.userId === payoutUserId && !previous.isReady && payoutStatus.isReady) {
-      setShowPayoutSuccess(true);
-    } else if (previous.userId !== payoutUserId || !payoutStatus.isReady) {
-      setShowPayoutSuccess(false);
-    }
-    previousPayoutState.current = { userId: payoutUserId, isReady: payoutStatus.isReady };
-  }, [payoutUserId, payoutStatus.isReady]);
 
   const backendAnalytics = storetApp?.hostAnalytics || null;
   const backendSummary = backendAnalytics?.summary || {};
@@ -1660,24 +1633,6 @@ function HostDashboardPanel({
     }
   }
 
-  async function handleManagePayouts() {
-    if (payoutManagementIsOpening) return;
-    setPayoutActionError("");
-    setPayoutManagementIsOpening(true);
-    try {
-      const response = await payoutService.createConnectLoginLink();
-      if (response.error) throw response.error;
-      const url = new URL(response.data?.url || "");
-      if (url.protocol !== "https:" || url.hostname !== "connect.stripe.com") {
-        throw new Error("Stripe did not return a valid payout settings link.");
-      }
-      window.location.assign(url.href);
-    } catch (error) {
-      setPayoutActionError(error.message || "Could not open payout settings. Please try again.");
-      setPayoutManagementIsOpening(false);
-    }
-  }
-
   async function handleRefreshPayoutStatus() {
     const refreshHostPayoutStatus = storetApp?.actions?.refreshHostPayoutStatus;
 
@@ -1706,7 +1661,7 @@ function HostDashboardPanel({
     }
 
     let isMounted = true;
-    const refreshHostPayoutStatus = refreshPayoutStatusRef.current;
+    const refreshHostPayoutStatus = storetApp?.actions?.refreshHostPayoutStatus;
 
     async function refreshAfterStripeReturn() {
       if (!refreshHostPayoutStatus) {
@@ -1723,14 +1678,8 @@ function HostDashboardPanel({
       }
 
       if (isMounted) {
-        if (payoutReturnState === "return" && result?.ok && result?.payoutStatus?.isReady) {
-          setShowPayoutSuccess(true);
-        }
         setPayoutStatusIsRefreshing(false);
-        // Consume the return marker so a refresh cannot repeat the success notice.
-        const nextSearch = new URLSearchParams(location.search);
-        nextSearch.delete("payout");
-        navigate({ pathname: APP_ROUTES.hostDashboard, search: nextSearch.toString(), hash: location.hash }, { replace: true });
+        navigate(APP_ROUTES.hostDashboard, { replace: true });
       }
     }
 
@@ -1739,7 +1688,7 @@ function HostDashboardPanel({
     return () => {
       isMounted = false;
     };
-  }, [location.search, location.hash, navigate]);
+  }, [location.search, navigate, storetApp?.actions]);
 
   useEffect(() => {
     if (
@@ -2227,12 +2176,6 @@ function HostDashboardPanel({
               >
                 Create listing
               </Button>
-              {payoutStatus.isReady && (
-                <Button variant="outlined" size="large" startIcon={<PaidRoundedIcon />}
-                  onClick={handleManagePayouts} disabled={payoutManagementIsOpening || payoutStatusIsRefreshing}>
-                  {payoutManagementIsOpening ? "Opening Stripe..." : "Manage payouts"}
-                </Button>
-              )}
             </Stack>
           </Stack>
         </Container>
@@ -2252,7 +2195,7 @@ function HostDashboardPanel({
           </Stack>
         )}
 
-        {(!payoutStatus.isReady || showPayoutSuccess) && <PayoutStatusBanner
+        <PayoutStatusBanner
           payoutStatus={payoutStatus}
           draftCount={draftCount}
           onSetupPayouts={handleStartPayoutOnboarding}
@@ -2260,12 +2203,7 @@ function HostDashboardPanel({
           isStarting={payoutSetupIsStarting}
           isRefreshing={payoutStatusIsRefreshing}
           actionError={payoutActionError}
-        />}
-        {payoutStatus.isReady && !showPayoutSuccess && payoutActionError && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setPayoutActionError("")}>
-            {payoutActionError}
-          </Alert>
-        )}
+        />
 
         <Box
           sx={{

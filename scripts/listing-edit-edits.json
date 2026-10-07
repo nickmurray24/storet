@@ -1,0 +1,107 @@
+[
+  {
+    "file": "src/App.js",
+    "edits": [
+      {
+        "name": "Import listing editor",
+        "before": "import CreateListingPage from \"./pages/CreateListingPage\";",
+        "after": "import CreateListingPage from \"./pages/CreateListingPage\";\nimport EditListingPage from \"./pages/EditListingPage\";"
+      },
+      {
+        "name": "Host listing edit route",
+        "before": "        <Route\n          path={APP_ROUTES.profile}",
+        "after": "        <Route\n          path={APP_ROUTES.editListing}\n          element={\n            <ProtectedRoute requiredMode={APP_MODES.HOST}>\n              <EditListingPage />\n            </ProtectedRoute>\n          }\n        />\n\n        <Route\n          path={APP_ROUTES.profile}"
+      }
+    ]
+  },
+  {
+    "file": "src/routes/appRoutes.js",
+    "edits": [
+      {
+        "name": "Edit route path",
+        "before": "  createListing: \"/create-listing\",",
+        "after": "  createListing: \"/create-listing\",\n  editListing: \"/host/listings/:id/edit\","
+      }
+    ]
+  },
+  {
+    "file": "src/components/HostDashboardPanel.js",
+    "edits": [
+      {
+        "name": "Import guarded edit actions",
+        "before": "import ListingPhotoOrderDialog from \"./ListingPhotoOrderDialog\";",
+        "after": "import ListingPhotoOrderDialog from \"./ListingPhotoOrderDialog\";\nimport ListingEditActions from \"./ListingEditActions\";"
+      },
+      {
+        "name": "Guard edit and photo controls",
+        "before": "          <Button variant=\"outlined\" size=\"small\" onClick={() => setPhotoOrderDialogOpen(true)}\n            disabled={!Array.isArray(listing.images) || listing.images.length < 2}>\n            Order photos\n          </Button>",
+        "after": "          <ListingEditActions listing={listing} onOrderPhotos={() => setPhotoOrderDialogOpen(true)} />"
+      }
+    ]
+  },
+  {
+    "file": "src/context/StoretAppContext.js",
+    "edits": [
+      {
+        "name": "Import listing edit services",
+        "before": "import { listingService } from \"../services/listingService\";",
+        "after": "import { listingService } from \"../services/listingService\";\nimport { listingEditingService } from \"../services/listingEditingService\";\nimport { getListingEditLock, LISTING_EDIT_LOCK_MESSAGE } from \"../utils/listingEditingUtils\";"
+      },
+      {
+        "name": "Listing content save action",
+        "before": "  async function toggleSave(listingId) {",
+        "after": "  async function editListing(listingId, edit) {\n    const normalizedId = String(listingId || \"\");\n    if (!currentUser?.isAuthenticated) return { ok: false, error: \"Please sign in to edit your listing.\" };\n    const lock = getListingEditLock({ id: normalizedId }, allBookingRequests);\n    if (lock.isLocked) return { ok: false, error: lock.message, editLocked: true };\n    const response = await listingEditingService.saveListingEdit(normalizedId, edit);\n    if (response.error || !response.data) {\n      return { ok: false, error: getErrorMessage(response.error, \"Could not save your listing.\"),\n        editLocked: Boolean(response.error?.editLocked), staleEdit: Boolean(response.error?.staleEdit) };\n    }\n    const updatedListing = response.data;\n    setUserListings((listings) => ensureArray(listings).map((listing) =>\n      String(listing.id) === normalizedId ? updatedListing : listing));\n    // Update displayed listings without changing publication/occupancy decisions.\n    setListings((listings) => ensureArray(listings).map((listing) =>\n      String(listing.id) === normalizedId ? updatedListing : listing));\n    return { ok: true, listing: updatedListing };\n  }\n\n  async function toggleSave(listingId) {"
+      },
+      {
+        "name": "Guard standalone photo reordering",
+        "before": "    const existingImages = getOrderedListingPhotos(targetListing);",
+        "after": "    const editLock = getListingEditLock(targetListing, allBookingRequests);\n    if (editLock.isLocked) return { ok: false, error: editLock.message };\n    const existingImages = getOrderedListingPhotos(targetListing);"
+      },
+      {
+        "name": "Readable reservation error for photo saves",
+        "before": "        return { ok: false, error: getErrorMessage(response.error, \"Could not save photo order.\") };",
+        "after": "        return { ok: false, error: response.error?.message?.includes(\"LISTING_EDIT_LOCKED\")\n          ? LISTING_EDIT_LOCK_MESSAGE : getErrorMessage(response.error, \"Could not save photo order.\") };"
+      },
+      {
+        "name": "Expose edit action",
+        "before": "      reorderListingImages,",
+        "after": "      reorderListingImages,\n      editListing,"
+      }
+    ]
+  },
+  {
+    "file": "src/components/ListingPhotoOrderDialog.js",
+    "edits": [
+      {
+        "name": "Photo dialog booking guard imports",
+        "before": "import { getOrderedListingPhotos, moveListingPhoto } from \"../utils/listingPhotoUtils\";",
+        "after": "import { getOrderedListingPhotos, moveListingPhoto } from \"../utils/listingPhotoUtils\";\nimport { getListingEditLock } from \"../utils/listingEditingUtils\";"
+      },
+      {
+        "name": "Live photo edit lock",
+        "before": "  const originalPhotos = getOrderedListingPhotos(listing);",
+        "after": "  const editLock = getListingEditLock(listing, storetApp?.hostBookingRequests);\n  const isEditLocked = Boolean(storetApp?.activityIsLoading) || editLock.isLocked;\n  const originalPhotos = getOrderedListingPhotos(listing);"
+      },
+      {
+        "name": "Prevent occupied photo saves",
+        "before": "    if (isSaving) return;",
+        "after": "    if (isSaving || isEditLocked) return;"
+      },
+      {
+        "name": "Explain occupied photo lock",
+        "before": "          {error && <Alert severity=\"error\">{error}</Alert>}",
+        "after": "          {editLock.isLocked && <Alert severity=\"warning\">{editLock.message}</Alert>}\n          {error && <Alert severity=\"error\">{error}</Alert>}"
+      },
+      {
+        "name": "Disable occupied photo order controls",
+        "before": "          <ListingPhotoOrderEditor imageUrls={photos} disabled={isSaving}",
+        "after": "          <ListingPhotoOrderEditor imageUrls={photos} disabled={isSaving || isEditLocked}"
+      },
+      {
+        "name": "Disable occupied photo save button",
+        "before": "disabled={isSaving || !hasChanges}",
+        "after": "disabled={isSaving || isEditLocked || !hasChanges}"
+      }
+    ]
+  }
+]
