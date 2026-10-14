@@ -100,7 +100,6 @@ function ExplorePage({
   const location = useLocation();
   const isAuthenticated = Boolean(storetApp?.currentUser?.isAuthenticated);
 
-  const activeMode = storetApp?.activeMode || "Renter";
   const userListings = useMemo(() => {
     if (Array.isArray(storetApp?.userListings)) {
       return storetApp.userListings;
@@ -479,13 +478,7 @@ function ExplorePage({
             justifyContent="space-between"
           >
             <Stack spacing={1.5}>
-              <Chip
-                icon={<WarehouseRoundedIcon />}
-                label={`${activeMode} mode`}
-                color="primary"
-                variant="outlined"
-                sx={{ width: "fit-content", fontWeight: 700 }}
-              />
+
 
               <Box>
                 <Typography
@@ -513,13 +506,19 @@ function ExplorePage({
               exclusive
               onChange={handleViewModeChange}
               color="primary"
+              size="small"
               sx={{
+                alignSelf: { xs: "flex-start", md: "center" },
+                flexShrink: 0,
+                ml: { md: "auto" },
                 bgcolor: "background.paper",
                 borderRadius: 999,
                 boxShadow: "0 12px 32px rgba(15, 23, 42, 0.08)",
                 "& .MuiToggleButton-root": {
-                  px: 2.25,
-                  py: 1,
+                  height: 34,
+                  px: 1.25,
+                  py: 0.5,
+                  fontSize: "0.8125rem",
                   borderRadius: 999,
                   textTransform: "none",
                   fontWeight: 800,
@@ -527,11 +526,11 @@ function ExplorePage({
               }}
             >
               <ToggleButton value="list">
-                <ViewListRoundedIcon fontSize="small" sx={{ mr: 1 }} />
+                <ViewListRoundedIcon fontSize="small" sx={{ mr: 0.5, fontSize: 18 }} />
                 List view
               </ToggleButton>
               <ToggleButton value="map">
-                <MapRoundedIcon fontSize="small" sx={{ mr: 1 }} />
+                <MapRoundedIcon fontSize="small" sx={{ mr: 0.5, fontSize: 18 }} />
                 Map view
               </ToggleButton>
             </ToggleButtonGroup>
@@ -612,8 +611,10 @@ function ExplorePage({
                   borderRadius: 999,
                   boxShadow: "0 14px 36px rgba(15, 23, 42, 0.16)",
                   "& .MuiToggleButton-root": {
-                    px: 1.75,
-                    py: 0.75,
+                    height: 34,
+                    fontSize: "0.8125rem",
+                    px: 1.25,
+                    py: 0.5,
                     borderRadius: 999,
                     textTransform: "none",
                     fontWeight: 900,
@@ -634,12 +635,17 @@ function ExplorePage({
           />
         ) : (
         <Stack direction={{ xs: "column", lg: "row" }} spacing={3}>
-          <Card
+          <Card tabIndex={0} role="region" aria-label="Search filters"
             sx={{
               width: { xs: "100%", lg: 320 },
               alignSelf: "flex-start",
               position: { lg: "sticky" },
               top: { lg: 96 },
+              flexShrink: 0,
+              maxHeight: { xs: "70dvh", lg: "calc(100dvh - 112px)" },
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              scrollbarGutter: "stable",
             }}
           >
             <CardContent sx={{ p: 3 }}>
@@ -826,7 +832,7 @@ function ExplorePage({
                               </Typography>
                             </Stack>
 
-                            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
                               <Chip
                                 icon={<WarehouseRoundedIcon />}
                                 label={listing.storageType}
@@ -837,6 +843,7 @@ function ExplorePage({
                                 label={`${listing.sqft} sq ft`}
                                 size="small"
                               />
+                              {listing.access && <Chip label={listing.access} size="small" variant="outlined" />}
                               {listing.waitlist && (
                                 <Chip
                                   label="Waitlist"
@@ -853,12 +860,14 @@ function ExplorePage({
                               direction="row"
                               alignItems="center"
                               justifyContent="space-between"
+                              gap={2}
+                              sx={{ minWidth: 0, alignItems: "center", justifyContent: "space-between" }}
                             >
-                              <Box>
+                              <Box sx={{ minWidth: 0, flex: 1 }}>
                                 <Typography variant="h5">
                                   {listing.startingPriceDisplay}
                                 </Typography>
-                                <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 0.75 }}>
+                                <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 0.75, flexWrap: "wrap" }}>
                                   {listing.pricingOptions.map((option) => (
                                     <Chip
                                       key={option.period}
@@ -868,16 +877,14 @@ function ExplorePage({
                                     />
                                   ))}
                                 </Stack>
-                                <Typography color="text.secondary" sx={{ mt: 0.75 }}>
-                                  {listing.access}
-                                </Typography>
                               </Box>
 
-                              <Stack alignItems="flex-end" spacing={0.25}>
-                                <Stack direction="row" alignItems="center" spacing={0.5}>
+                              <Stack spacing={0.25}
+                                sx={{ ml: "auto", flexShrink: 0, alignItems: "flex-end", textAlign: "right" }}>
+                                <Stack direction="row" spacing={0.5} sx={{ alignItems: "center" }}>
                                   <StarRoundedIcon
                                     fontSize="small"
-                                    sx={{ color: "warning.main" }}
+                                    sx={{ color: "rating.main" }}
                                   />
                                   <Typography fontWeight={800}>
                                     {listing.rating.toFixed(1)}
@@ -894,6 +901,8 @@ function ExplorePage({
 
                       <CardActions sx={{ px: 2.5, pb: 2.5, pt: 0 }}>
                         <Button
+                          size="small"
+                          sx={{ px: 1.5, py: 0.5, minHeight: 30 }}
                           variant={isSaved ? "contained" : "outlined"}
                           startIcon={
                             isSaved ? (
@@ -910,8 +919,9 @@ function ExplorePage({
                         <Button
                           component={RouterLink}
                           to={listingPath}
+                          size="small"
                           endIcon={<ArrowForwardRoundedIcon />}
-                          sx={{ ml: "auto" }}
+                          sx={{ ml: "auto", px: 1.5, py: 0.5, minHeight: 30 }}
                         >
                           View details
                         </Button>

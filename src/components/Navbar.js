@@ -151,6 +151,9 @@ function Navbar({ currentUser, onLogout }) {
           disableGutters
           sx={{
             minHeight: 76,
+            py: 1.5,
+            flexWrap: "wrap",
+            alignItems: "center",
             display: "flex",
             justifyContent: "space-between",
             gap: 2,
@@ -196,7 +199,15 @@ function Navbar({ currentUser, onLogout }) {
             spacing={1}
             sx={{
               flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              ml: "auto",
+              minWidth: 0,
+              flex: { xs: "1 1 100%", md: "0 1 auto" },
+              gap: 1,
+              "& > .MuiButton-root, & > .MuiChip-root": { height: 36, minHeight: 36, flexShrink: 0 },
             }}
+            useFlexGap
           >
             {visibleNavItems.map((item) => {
               const active = isActiveRoute(item.to);
@@ -206,26 +217,26 @@ function Navbar({ currentUser, onLogout }) {
                   key={item.to}
                   component={NavLink}
                   to={item.to}
-                  variant={active ? "contained" : "text"}
+                  variant="outlined"
                   color={active ? "primary" : "inherit"}
+                  size="small"
+                  aria-label={item.to === APP_ROUTES.notifications && unreadNotificationsCount > 0
+                    ? `${item.label}, ${unreadNotificationsCount} unread` : undefined}
                   sx={{
                     borderRadius: 999,
-                    px: 2,
+                    px: 1.5,
+                    borderColor: active ? "primary.main" : "divider",
+                    bgcolor: active ? "action.selected" : "transparent",
+                    fontWeight: active ? 800 : 700,
+                    gap: 0.75,
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  {item.to === APP_ROUTES.notifications && unreadNotificationsCount > 0 ? (
-                    <Badge
-                      color="error"
-                      badgeContent={unreadNotificationsCount}
-                      max={99}
-                      sx={{ "& .MuiBadge-badge": { right: -14 } }}
-                    >
-                      <Box component="span" sx={{ pr: 0.75 }}>
-                        {item.label}
-                      </Box>
-                    </Badge>
-                  ) : (
-                    item.label
+                  {item.label}
+                  {item.to === APP_ROUTES.notifications && unreadNotificationsCount > 0 && (
+                    <Badge color="error" badgeContent={unreadNotificationsCount} max={99} aria-hidden="true"
+                      sx={{ "& .MuiBadge-badge": { position: "static", transform: "none", minWidth: 20,
+                        height: 20, borderRadius: 10, px: 0.5, fontWeight: 800 } }} />
                   )}
                 </Button>
               );
@@ -236,6 +247,7 @@ function Navbar({ currentUser, onLogout }) {
                 <Chip
                   icon={activeMode === APP_MODES.HOST ? <HomeWorkRoundedIcon /> : <PersonRoundedIcon />}
                   label={`${userName} • ${activeMode}`}
+                  title={`${userName} • ${activeMode}`}
                   variant="outlined"
                   clickable={canSwitchModes}
                   onClick={handleModeMenuOpen}
@@ -244,6 +256,9 @@ function Navbar({ currentUser, onLogout }) {
                   sx={{
                     fontWeight: 700,
                     bgcolor: "background.paper",
+                    maxWidth: { xs: "min(100%, 260px)", md: 280 },
+                    alignItems: "center",
+                    "& .MuiChip-label": { overflow: "hidden", textOverflow: "ellipsis" },
                     "& .MuiChip-deleteIcon": {
                       color: "text.secondary",
                     },
@@ -290,13 +305,13 @@ function Navbar({ currentUser, onLogout }) {
                 </Menu>
 
                 {logoutAction && (
-                  <Button variant="outlined" color="primary" onClick={handleLogout}>
+                  <Button size="small" variant="outlined" color="primary" onClick={handleLogout}>
                     Log Out
                   </Button>
                 )}
               </>
             ) : (
-              <Button component={NavLink} to={APP_ROUTES.auth} variant="contained">
+              <Button size="small" component={NavLink} to={APP_ROUTES.auth} variant="outlined">
                 Log In
               </Button>
             )}
