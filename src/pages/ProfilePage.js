@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   Card,
-  CardActionArea,
   CardContent,
   Chip,
   Container,
@@ -227,9 +226,10 @@ function ProfilePage({
             alignItems={{ xs: "flex-start", md: "center" }}
             justifyContent="space-between"
           >
-            <Stack direction="row" spacing={2.5} alignItems="center">
+            <Stack direction="row" spacing={2.5} sx={{ alignItems: "flex-start", minWidth: 0, flex: 1 }}>
               <Avatar
                 sx={{
+                  flexShrink: 0,
                   width: { xs: 72, md: 88 },
                   height: { xs: 72, md: 88 },
                   bgcolor: "primary.main",
@@ -240,8 +240,8 @@ function ProfilePage({
                 {getInitials(activeUser?.fullName)}
               </Avatar>
 
-              <Box>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+              <Box sx={{ minWidth: 0 }}>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 1, flexWrap: "wrap", alignItems: "center" }}>
                   <Chip
                     icon={isHostMode ? <HomeWorkRoundedIcon /> : <PersonRoundedIcon />}
                     label={`${activeMode} mode`}
@@ -255,6 +255,29 @@ function ProfilePage({
                     variant="outlined"
                     sx={{ fontWeight: 700 }}
                   />
+                  {isRenterMode && canUseHostMode && (
+                    <Button
+                      size="small"
+                      sx={{ height: 32, minHeight: 32, px: 1.25, whiteSpace: "nowrap" }}
+                      variant="outlined"
+                      startIcon={<SwapHorizRoundedIcon />}
+                      onClick={handleSwitchToHost}
+                      disabled={!hasHostedListings && hostUpgradeIsSubmitting}
+                    >
+                      {!hasHostedListings && hostUpgradeIsSubmitting ? "Opening setup..." : hasHostedListings ? "Switch to Host" : "Create first listing"}
+                    </Button>
+                  )}
+                  {isHostMode && canUseRenterMode && (
+                    <Button
+                      size="small"
+                      sx={{ height: 32, minHeight: 32, px: 1.25, whiteSpace: "nowrap" }}
+                      variant="outlined"
+                      startIcon={<PersonRoundedIcon />}
+                      onClick={handleSwitchToRenter}
+                    >
+                      Switch to Renter
+                    </Button>
+                  )}
                 </Stack>
 
                 <Typography
@@ -273,9 +296,10 @@ function ProfilePage({
               </Box>
             </Stack>
 
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={1.25}>
+            <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ alignItems: "center", alignSelf: { xs: "flex-start", md: "center" }, ml: { md: "auto" }, flexWrap: "wrap", "& .MuiButton-root": { px: 1.5, py: 0.5, minHeight: 30 } }}>
               {isHostMode && (
                 <Button
+                  size="small"
                   component={RouterLink}
                   to={APP_ROUTES.createListing}
                   variant="contained"
@@ -285,19 +309,11 @@ function ProfilePage({
                 </Button>
               )}
 
-              {isRenterMode && canUseHostMode && (
-                <Button
-                  variant="outlined"
-                  startIcon={<SwapHorizRoundedIcon />}
-                  onClick={handleSwitchToHost}
-                  disabled={!hasHostedListings && hostUpgradeIsSubmitting}
-                >
-                  {!hasHostedListings && hostUpgradeIsSubmitting ? "Opening setup..." : hasHostedListings ? "Switch to Host" : "Create first listing"}
-                </Button>
-              )}
+
 
               {isRenterMode && !canUseHostMode && (
                 <Button
+                  size="small"
                   variant="contained"
                   startIcon={<HomeWorkRoundedIcon />}
                   onClick={handleBecomeHost}
@@ -307,18 +323,11 @@ function ProfilePage({
                 </Button>
               )}
 
-              {isHostMode && canUseRenterMode && (
-                <Button
-                  variant="outlined"
-                  startIcon={<PersonRoundedIcon />}
-                  onClick={handleSwitchToRenter}
-                >
-                  Switch to Renter
-                </Button>
-              )}
+
 
               {isHostMode && !canUseRenterMode && (
                 <Button
+                  size="small"
                   variant="outlined"
                   startIcon={<PersonRoundedIcon />}
                   onClick={handleBecomeRenter}
@@ -638,14 +647,7 @@ function ProfilePage({
                             </Typography>
                           </Box>
 
-                          <Button
-                            component={RouterLink}
-                            to={APP_ROUTES.createListing}
-                            variant="contained"
-                            startIcon={<AddHomeWorkRoundedIcon />}
-                          >
-                            {hasHostedListings ? "New listing" : "Create first listing"}
-                          </Button>
+
                         </Stack>
 
                         <Divider />
@@ -823,78 +825,37 @@ function StatCard({ icon, label, value, color }) {
 function ListingRow({ listing, action }) {
   return (
     <Card variant="outlined" sx={{ boxShadow: "none" }}>
-      <CardActionArea component={RouterLink} to={buildListingPath(listing.id)}>
-        <CardContent sx={{ p: 2.25 }}>
-          <Stack
-            direction={{ xs: "column", sm: "row" }}
-            spacing={2}
-            alignItems={{ xs: "flex-start", sm: "center" }}
-            justifyContent="space-between"
-          >
-            <Stack direction="row" spacing={1.5} alignItems="center">
-              <Avatar
-                sx={{
-                  bgcolor:
-                    listing.listingType === "Commercial"
-                      ? "primary.main"
-                      : "secondary.main",
-                }}
-              >
+      <CardContent sx={{ p: 2.25 }}>
+        <Box sx={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 1.5, alignItems: "center" }}>
+          <Box sx={{ minWidth: 0 }}>
+            <Box component={RouterLink} to={buildListingPath(listing.id)}
+              sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0, color: "inherit", textDecoration: "none", borderRadius: 1,
+                "&:focus-visible": { outline: "2px solid", outlineColor: "primary.main", outlineOffset: 3 } }}>
+              <Avatar sx={{ flexShrink: 0, bgcolor: listing.listingType === "Commercial" ? "primary.main" : "secondary.main" }}>
                 <WarehouseRoundedIcon />
               </Avatar>
-
-              <Box>
-                <Typography fontWeight={900}>{listing.title}</Typography>
-
-                <Stack
-                  direction="row"
-                  spacing={1}
-                  alignItems="center"
-                  flexWrap="wrap"
-                  useFlexGap
-                  sx={{ mt: 0.5 }}
-                >
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-                  >
-                    <PlaceRoundedIcon fontSize="inherit" />
-                    {listing.location}
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontWeight: 900, overflowWrap: "anywhere" }}>{listing.title}</Typography>
+                <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 0.5, flexWrap: "wrap", alignItems: "center" }}>
+                  <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}>
+                    <PlaceRoundedIcon fontSize="inherit" sx={{ flexShrink: 0 }} />{listing.location}
                   </Typography>
-
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{ display: "flex", alignItems: "center", gap: 0.5 }}
-                  >
-                    <StraightenRoundedIcon fontSize="inherit" />
-                    {listing.sqft} sq ft
+                  <Typography variant="body2" color="text.secondary" sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
+                    <StraightenRoundedIcon fontSize="inherit" />{listing.sqft} sq ft
                   </Typography>
                 </Stack>
               </Box>
-            </Stack>
-
-            <Stack
-              direction="row"
-              spacing={1}
-              alignItems="center"
-              onClick={(event) => event.preventDefault()}
-            >
+            </Box>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.25, flexWrap: "wrap", alignItems: "center" }}>
               <Chip label={listing.startingPriceDisplay || listing.priceDisplay} size="small" />
-
-              <Chip
-                icon={<StarRoundedIcon />}
-                label={Number(listing.rating || listing.averageRating || 0).toFixed(1)}
-                size="small"
-                variant="outlined"
-              />
-
-              {action}
+              <Chip icon={<StarRoundedIcon sx={{ color: "rating.main" }} />}
+                label={Number(listing.rating || listing.averageRating || 0).toFixed(1)} size="small" variant="outlined"
+                sx={{ "& .MuiChip-icon": { color: "rating.main" } }} />
             </Stack>
-          </Stack>
-        </CardContent>
-      </CardActionArea>
+          </Box>
+          <Box sx={{ justifySelf: "end", alignSelf: "center", flexShrink: 0 }}>{action}</Box>
+        </Box>
+      </CardContent>
     </Card>
   );
 }
@@ -916,10 +877,13 @@ function BookingRequestRow({ request, onCancel }) {
           direction={{ xs: "column", sm: "row" }}
           spacing={2}
           alignItems={{ xs: "flex-start", sm: "center" }}
-          justifyContent="space-between"
+          sx={{ alignItems: { xs: "stretch", sm: "center" }, justifyContent: "space-between", minWidth: 0 }}
         >
-          <Box>
-            <Typography fontWeight={900}>{request.listingTitle}</Typography>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: "center", flexWrap: "wrap" }}>
+              <Typography sx={{ fontWeight: 900, overflowWrap: "anywhere" }}>{request.listingTitle}</Typography>
+              <Chip label={request.status} size="small" variant="outlined" />
+            </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {request.rateDisplay} · {request.duration} · {request.moveInDate} to {request.moveOutDate}
             </Typography>
@@ -931,8 +895,8 @@ function BookingRequestRow({ request, onCancel }) {
             alignItems="center"
             flexWrap="wrap"
             useFlexGap
+            sx={{ ml: { sm: "auto" }, alignSelf: { xs: "flex-end", sm: "center" }, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end", flexShrink: 0 }}
           >
-            <Chip label={request.status} size="small" variant="outlined" />
 
             <Button
               size="small"

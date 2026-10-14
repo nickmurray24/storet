@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Accordion,
@@ -42,7 +42,6 @@ import BarChartRoundedIcon from "@mui/icons-material/BarChartRounded";
 import PaidRoundedIcon from "@mui/icons-material/PaidRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
-import StorefrontRoundedIcon from "@mui/icons-material/StorefrontRounded";
 import TaskAltRoundedIcon from "@mui/icons-material/TaskAltRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
@@ -50,7 +49,6 @@ import WarningAmberRoundedIcon from "@mui/icons-material/WarningAmberRounded";
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import AlertDialog from "./ui/AlertDialog";
 import { useRef as usePayoutRef } from "react";
-import ListingPhotoOrderDialog from "./ListingPhotoOrderDialog";
 import ListingEditActions from "./ListingEditActions";
 import { payoutService } from "../services/payoutService";
 import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
@@ -458,6 +456,7 @@ function DashboardSection({
   description,
   expanded,
   onToggle,
+  onEntered,
   summary,
   children,
 }) {
@@ -468,6 +467,7 @@ function DashboardSection({
       elevation={0}
       expanded={expanded}
       onChange={onToggle}
+      slotProps={{ transition: { onEntered } }}
       sx={{
         scrollMarginTop: { xs: 96, md: 112 },
         border: "1px solid",
@@ -491,11 +491,11 @@ function DashboardSection({
         }}
       >
         <Stack
-          direction={{ xs: "column", sm: "row" }}
-          spacing={1.5}
-          alignItems={{ xs: "flex-start", sm: "center" }}
+          direction="row"
+          spacing={2}
+          alignItems="center"
           justifyContent="space-between"
-          sx={{ width: "100%", pr: 2 }}
+          sx={{ width: "100%", pr: 2, minWidth: 0, alignItems: "center", justifyContent: "space-between", "& > :first-of-type": { minWidth: 0, flex: 1 } }}
         >
           <Box>
             {eyebrow && (
@@ -517,7 +517,12 @@ function DashboardSection({
             )}
           </Box>
 
-          {summary}
+          <Box sx={{ ml: "auto", flexShrink: 0, maxWidth: { xs: 130, sm: 240 }, display: "flex", alignSelf: "center", alignItems: "center", justifyContent: "flex-end", textAlign: "right",
+            "& > .MuiStack-root": { alignItems: "flex-end", justifyContent: "flex-end", flexWrap: "wrap" },
+            "& .MuiChip-root": { maxWidth: "100%", height: "auto", minHeight: 24 },
+            "& .MuiChip-label": { whiteSpace: "normal", py: 0.5, overflowWrap: "anywhere" } }}>
+            {summary}
+          </Box>
         </Stack>
       </AccordionSummary>
 
@@ -572,8 +577,8 @@ function DashboardSectionNav({ activeSection, onOpenSection, counts }) {
         bgcolor: "background.paper",
       }}
     >
-      <CardContent sx={{ p: 2 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 900 }}>
+      <CardContent sx={{ p: 2.5 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", px: 1.5, fontWeight: 900 }}>
           Dashboard sections
         </Typography>
 
@@ -582,7 +587,7 @@ function DashboardSectionNav({ activeSection, onOpenSection, counts }) {
           spacing={1}
           useFlexGap
           flexWrap="wrap"
-          sx={{ mt: 1.25 }}
+          sx={{ mt: 1.25, flexWrap: "wrap" }}
         >
           {navItems.map((item) => (
             <SectionNavChip
@@ -972,7 +977,7 @@ function ListingPerformanceCard({ listing }) {
       }}
     >
       <CardContent sx={{ p: 2.5 }}>
-        <Stack direction="row" spacing={1.5} justifyContent="space-between" alignItems="flex-start">
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: "flex-start", justifyContent: "space-between", "& > :first-child": { minWidth: 0 }, "& > .MuiChip-root": { flexShrink: 0 } }}>
           <Box>
             <Typography variant="h6">{listing.title}</Typography>
             <Typography variant="body2" color="text.secondary">
@@ -981,7 +986,7 @@ function ListingPerformanceCard({ listing }) {
           </Box>
 
           <Chip
-            icon={<StarRoundedIcon />}
+            icon={<StarRoundedIcon sx={{ color: "rating.main" }} />}
             label={
               getListingReviewCount(listing) > 0
                 ? `${getListingRating(listing).toFixed(1)} (${getListingReviewCount(listing)})`
@@ -989,12 +994,12 @@ function ListingPerformanceCard({ listing }) {
             }
             variant="outlined"
             size="small"
-            sx={{ fontWeight: 800 }}
+            sx={{ fontWeight: 800, "& .MuiChip-icon": { color: "rating.main" } }}
           />
         </Stack>
 
         <Box sx={{ my: 2.5 }}>
-          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75 }}>
+          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 2, "& > :last-child": { textAlign: "right", fontVariantNumeric: "tabular-nums" } }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
               Request activity
             </Typography>
@@ -1008,7 +1013,7 @@ function ListingPerformanceCard({ listing }) {
             sx={{ height: 8, borderRadius: 999, mb: 1.5 }}
           />
 
-          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75 }}>
+          <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.75, display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 2, "& > :last-child": { textAlign: "right", fontVariantNumeric: "tabular-nums" } }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
               Confirmed bookings
             </Typography>
@@ -1162,7 +1167,9 @@ function AnalyticsBarList({ title, description, icon, items, valueFormatter = (v
 
               return (
                 <Box key={item.key || item.label}>
-                  <Stack direction="row" justifyContent="space-between" spacing={1} sx={{ mb: 0.75 }}>
+                  <Stack direction="row" justifyContent="space-between" spacing={2} sx={{ mb: 0.75, minWidth: 0,
+                    "& > :first-of-type": { minWidth: 0 },
+                    "& > :last-child": { ml: "auto", textAlign: "right", fontVariantNumeric: "tabular-nums" } }}>
                     <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 800 }}>
                       {item.label}
                     </Typography>
@@ -1210,7 +1217,6 @@ function HostListingCard({
     hasBlockingBooking;
   const canActivateListing = Boolean(payoutStatus?.isReady);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [photoOrderDialogOpen, setPhotoOrderDialogOpen] = useState(false);
   const statusLabel = isDraft
     ? "Draft"
     : isPaused
@@ -1260,10 +1266,6 @@ function HostListingCard({
         onAction={handleConfirmDelete}
       />
 
-      {photoOrderDialogOpen && (
-        <ListingPhotoOrderDialog listing={listing} onClose={() => setPhotoOrderDialogOpen(false)} />
-      )}
-
       <Card
       elevation={0}
       sx={{
@@ -1274,7 +1276,7 @@ function HostListingCard({
       }}
     >
       <CardContent sx={{ p: 2.5 }}>
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 1.5 }}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ mb: 1.5, flexWrap: "wrap" }}>
           <Chip
             label={listing.listingType || listing.type || "Private host"}
             color="primary"
@@ -1295,24 +1297,25 @@ function HostListingCard({
           {listing.location}
         </Typography>
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: "repeat(2, 1fr)",
-            gap: 1,
-            my: 2,
-          }}
-        >
-          <MetricPill label="Rates" value={listing.pricingSummary || listing.priceDisplay || "$0/month"} />
-          <MetricPill
-            label="Booking"
-            value={listing.instantBook ? "Instant" : listing.waitlist ? "Waitlist" : "Approval"}
-          />
-          <MetricPill label="Waitlist" value={listing.waitlist ? "Enabled" : "Disabled"} />
-          <MetricPill label="Status" value={statusMetric} />
+        <Box component="dl" sx={{ display: "grid", m: 0, my: 2, py: 1.5,
+          gridTemplateColumns: { xs: "repeat(2, minmax(0, 1fr))", sm: "minmax(0, 1.6fr) repeat(3, minmax(0, 1fr))" },
+          columnGap: 2.5, rowGap: 1.5, borderTop: "1px solid", borderBottom: "1px solid", borderColor: "divider" }}>
+          {[
+            ["Rates", listing.pricingSummary || listing.priceDisplay || "$0/month"],
+            ["Booking", listing.instantBook ? "Instant" : listing.waitlist ? "Waitlist" : "Approval"],
+            ["Waitlist", listing.waitlist ? "Enabled" : "Disabled"],
+            ["Status", statusMetric],
+          ].map(([label, value]) => (
+            <Box key={label} sx={{ minWidth: 0 }}>
+              <Typography component="dt" variant="caption" color="text.secondary" sx={{ mb: 0.5 }}>{label}</Typography>
+              <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 700, lineHeight: 1.6, overflowWrap: "anywhere" }}>{value}</Typography>
+            </Box>
+          ))}
         </Box>
 
-        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+        <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap"
+          sx={{ flexWrap: "wrap", alignItems: "center", "& .MuiButton-root": { px: 1.25, py: 0.375, minHeight: 28, fontSize: "0.75rem" },
+            "& .MuiButton-startIcon": { mr: 0.5, "& > *:nth-of-type(1)": { fontSize: 16 } } }}>
           <Button
             component={RouterLink}
             to={buildListingPath(listing.id)}
@@ -1323,16 +1326,9 @@ function HostListingCard({
             View
           </Button>
 
-          <Button
-            component={RouterLink}
-            to={APP_ROUTES.createListing}
-            variant="text"
-            size="small"
-          >
-            Create similar
-          </Button>
 
-          <ListingEditActions listing={listing} onOrderPhotos={() => setPhotoOrderDialogOpen(true)} />
+
+          <ListingEditActions listing={listing} />
 
           {isAwaitingAvailabilityDecision ? (
             <Button
@@ -1342,7 +1338,7 @@ function HostListingCard({
               startIcon={<TaskAltRoundedIcon />}
               onClick={() => onResolveAvailability(listing.id)}
             >
-              Choose availability
+              Set availability
             </Button>
           ) : (
             <Button
@@ -1369,15 +1365,15 @@ function HostListingCard({
               }
             >
               {hasBlockingBooking
-                ? "Rental in progress"
+                ? "In use"
                 : isDraft
                 ? canActivateListing
                   ? "Activate"
-                  : "Payout setup required"
+                  : "Set up payouts"
                 : isPaused
                 ? canActivateListing
                   ? "Resume"
-                  : "Payout setup required"
+                  : "Set up payouts"
                 : "Pause"}
             </Button>
           )}
@@ -1435,6 +1431,12 @@ function HostDashboardPanel({
     [DASHBOARD_SECTIONS.analytics]: false,
   });
   const [activeSection, setActiveSection] = useState(DASHBOARD_SECTIONS.attention);
+  const sectionJumpFrame = useRef(null);
+  const pendingSectionJump = useRef(null);
+
+  useEffect(() => () => {
+    if (sectionJumpFrame.current !== null) window.cancelAnimationFrame(sectionJumpFrame.current);
+  }, []);
   const [bookingTab, setBookingTab] = useState(BOOKING_TABS[0].key);
   const [showAllBookings, setShowAllBookings] = useState(false);
   const [showAllListings, setShowAllListings] = useState(false);
@@ -1958,6 +1960,8 @@ function HostDashboardPanel({
     : displayedListingAnalytics.slice(0, DEFAULT_VISIBLE_ITEMS);
 
   function toggleSection(sectionId) {
+    pendingSectionJump.current = null;
+    if (sectionJumpFrame.current !== null) window.cancelAnimationFrame(sectionJumpFrame.current);
     setActiveSection(sectionId);
     setExpandedSections((current) => ({
       ...current,
@@ -1965,28 +1969,31 @@ function HostDashboardPanel({
     }));
   }
 
+  function scrollToSection(sectionId) {
+    if (sectionJumpFrame.current !== null) window.cancelAnimationFrame(sectionJumpFrame.current);
+    sectionJumpFrame.current = window.requestAnimationFrame(() => {
+      sectionJumpFrame.current = null;
+      if (pendingSectionJump.current !== sectionId) return;
+      pendingSectionJump.current = null;
+      const section = document.getElementById(sectionId);
+      if (!section) return;
+      const navbarHeight = document.querySelector(".MuiAppBar-root")?.getBoundingClientRect().height || 0;
+      const top = section.getBoundingClientRect().top + window.scrollY - navbarHeight - 16;
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      window.scrollTo({ top: Math.max(0, top), behavior: reduceMotion ? "instant" : "smooth" });
+    });
+  }
+
   function openSection(sectionId) {
     setActiveSection(sectionId);
-    setExpandedSections((current) => ({
-      ...current,
-      [sectionId]: true,
-    }));
+    pendingSectionJump.current = sectionId;
+    setExpandedSections((current) => ({ ...current, [sectionId]: true }));
+    // A closed section must finish expanding before the page can scroll to its final position.
+    if (expandedSections[sectionId]) scrollToSection(sectionId);
+  }
 
-    window.setTimeout(() => {
-      const section = document.getElementById(sectionId);
-
-      if (!section) {
-        return;
-      }
-
-      const navbarOffset = window.innerWidth >= 900 ? 108 : 92;
-      const sectionTop = section.getBoundingClientRect().top + window.scrollY - navbarOffset;
-
-      window.scrollTo({
-        top: Math.max(sectionTop, 0),
-        behavior: "smooth",
-      });
-    }, 120);
+  function handleSectionEntered(sectionId) {
+    if (pendingSectionJump.current === sectionId) scrollToSection(sectionId);
   }
 
   function handleBookingTabChange(event, nextTab) {
@@ -1994,82 +2001,6 @@ function HostDashboardPanel({
     setShowAllBookings(false);
   }
 
-  useEffect(() => {
-    const sectionIds = Object.values(DASHBOARD_SECTIONS);
-    let animationFrameId = null;
-
-    function getScrollAnchor() {
-      return window.innerWidth >= 900 ? 126 : 104;
-    }
-
-    function updateActiveSectionFromScroll() {
-      animationFrameId = null;
-
-      const anchor = getScrollAnchor();
-      const sections = sectionIds
-        .map((sectionId) => {
-          const element = document.getElementById(sectionId);
-
-          if (!element) {
-            return null;
-          }
-
-          const rect = element.getBoundingClientRect();
-
-          return {
-            id: sectionId,
-            top: rect.top,
-            bottom: rect.bottom,
-          };
-        })
-        .filter(Boolean);
-
-      if (sections.length === 0) {
-        return;
-      }
-
-      const sectionAtAnchor = sections.find(
-        (section) => section.top <= anchor && section.bottom >= anchor
-      );
-
-      if (sectionAtAnchor) {
-        setActiveSection(sectionAtAnchor.id);
-        return;
-      }
-
-      const previousSection = [...sections]
-        .reverse()
-        .find((section) => section.top <= anchor);
-
-      if (previousSection) {
-        setActiveSection(previousSection.id);
-        return;
-      }
-
-      setActiveSection(sections[0].id);
-    }
-
-    function requestActiveSectionUpdate() {
-      if (animationFrameId !== null) {
-        return;
-      }
-
-      animationFrameId = window.requestAnimationFrame(updateActiveSectionFromScroll);
-    }
-
-    requestActiveSectionUpdate();
-    window.addEventListener("scroll", requestActiveSectionUpdate, { passive: true });
-    window.addEventListener("resize", requestActiveSectionUpdate);
-
-    return () => {
-      window.removeEventListener("scroll", requestActiveSectionUpdate);
-      window.removeEventListener("resize", requestActiveSectionUpdate);
-
-      if (animationFrameId !== null) {
-        window.cancelAnimationFrame(animationFrameId);
-      }
-    };
-  }, []);
 
   return (
     <>
@@ -2198,13 +2129,6 @@ function HostDashboardPanel({
             justifyContent="space-between"
           >
             <Box>
-              <Chip
-                icon={<StorefrontRoundedIcon />}
-                label="Host Dashboard"
-                color="primary"
-                sx={{ mb: 1.5, fontWeight: 900 }}
-              />
-
               <Typography
                 variant="h2"
                 sx={{ fontSize: { xs: "2.25rem", md: "3.25rem" }, lineHeight: 1 }}
@@ -2215,30 +2139,31 @@ function HostDashboardPanel({
               <Typography color="text.secondary" sx={{ mt: 1.5, maxWidth: 720, fontSize: "1.05rem" }}>
                 Review renter requests, monitor listing performance, and quickly see what needs your attention next.
               </Typography>
+              <Stack direction="row" spacing={1.25} useFlexGap flexWrap="wrap" sx={{ mt: 2.5, flexWrap: "wrap", alignItems: "center" }}>
+                <Button
+                  component={RouterLink}
+                  to={APP_ROUTES.createListing}
+                  variant="contained"
+                  size="small"
+                  startIcon={<AddHomeWorkRoundedIcon />}
+                >
+                  Create listing
+                </Button>
+                {payoutStatus.isReady && (
+                  <Button variant="outlined" size="small" startIcon={<PaidRoundedIcon />}
+                    onClick={handleManagePayouts} disabled={payoutManagementIsOpening || payoutStatusIsRefreshing}>
+                    {payoutManagementIsOpening ? "Opening Stripe..." : "Manage payouts"}
+                  </Button>
+                )}
+              </Stack>
             </Box>
 
-            <Stack direction={{ xs: "column", sm: "row", md: "column" }} spacing={1.25} sx={{ width: { xs: "100%", sm: "auto" } }}>
-              <Button
-                component={RouterLink}
-                to={APP_ROUTES.createListing}
-                variant="contained"
-                size="large"
-                startIcon={<AddHomeWorkRoundedIcon />}
-              >
-                Create listing
-              </Button>
-              {payoutStatus.isReady && (
-                <Button variant="outlined" size="large" startIcon={<PaidRoundedIcon />}
-                  onClick={handleManagePayouts} disabled={payoutManagementIsOpening || payoutStatusIsRefreshing}>
-                  {payoutManagementIsOpening ? "Opening Stripe..." : "Manage payouts"}
-                </Button>
-              )}
-            </Stack>
+
           </Stack>
         </Container>
       </Box>
 
-      <Container maxWidth="xl" sx={{ mt: { xs: 3, md: 4 } }}>
+      <Container maxWidth="lg" sx={{ mt: { xs: 3, md: 4 } }}>
         {storetApp?.hostAnalyticsError && (
           <Alert severity="warning" sx={{ mb: 2, borderRadius: 3 }}>
             {storetApp.hostAnalyticsError}
@@ -2315,7 +2240,7 @@ function HostDashboardPanel({
         <Box
           sx={{
             display: { xs: "block", md: "grid" },
-            gridTemplateColumns: { md: "240px minmax(0, 1fr)" },
+            gridTemplateColumns: { md: "220px minmax(0, 1fr)" },
             gap: 3,
             alignItems: "start",
           }}
@@ -2349,6 +2274,7 @@ function HostDashboardPanel({
           description="Open renter requests, unread messages, and completed-rental availability decisions."
           expanded={expandedSections[DASHBOARD_SECTIONS.attention]}
           onToggle={() => toggleSection(DASHBOARD_SECTIONS.attention)}
+          onEntered={() => handleSectionEntered(DASHBOARD_SECTIONS.attention)}
           summary={
             <Chip
               label={actionNeededCount > 0 ? `${actionNeededCount} items` : "Caught up"}
@@ -2392,6 +2318,7 @@ function HostDashboardPanel({
           description="Use the tabs to focus on one booking status at a time."
           expanded={expandedSections[DASHBOARD_SECTIONS.requests]}
           onToggle={() => toggleSection(DASHBOARD_SECTIONS.requests)}
+          onEntered={() => handleSectionEntered(DASHBOARD_SECTIONS.requests)}
           summary={
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
               <Chip label={`${pendingRequestCount} pending`} color="warning" size="small" sx={{ fontWeight: 900 }} />
@@ -2464,6 +2391,7 @@ function HostDashboardPanel({
           description="A focused view of paid or currently active rentals."
           expanded={expandedSections[DASHBOARD_SECTIONS.active]}
           onToggle={() => toggleSection(DASHBOARD_SECTIONS.active)}
+          onEntered={() => handleSectionEntered(DASHBOARD_SECTIONS.active)}
           summary={
             <Chip
               label={`${confirmedCount + activeBookingCount} current`}
@@ -2512,6 +2440,7 @@ function HostDashboardPanel({
           description="Manage your spaces. Pause and delete are locked while a rental is in progress."
           expanded={expandedSections[DASHBOARD_SECTIONS.listings]}
           onToggle={() => toggleSection(DASHBOARD_SECTIONS.listings)}
+          onEntered={() => handleSectionEntered(DASHBOARD_SECTIONS.listings)}
           summary={
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
               <Chip label={`${activeCount} active`} color="success" size="small" sx={{ fontWeight: 900 }} />
@@ -2521,22 +2450,12 @@ function HostDashboardPanel({
         >
           {safeMyListings.length > 0 ? (
             <Stack spacing={2}>
-              <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
-                <Button
-                  component={RouterLink}
-                  to={APP_ROUTES.createListing}
-                  variant="contained"
-                  size="small"
-                  startIcon={<AddHomeWorkRoundedIcon />}
-                >
-                  Add listing
-                </Button>
-              </Box>
+
 
               <Box
                 sx={{
                   display: "grid",
-                  gridTemplateColumns: { xs: "1fr", md: "repeat(2, 1fr)" },
+                  gridTemplateColumns: "minmax(0, 1fr)",
                   gap: 2,
                 }}
               >
@@ -2589,6 +2508,7 @@ function HostDashboardPanel({
           description="Renter questions sent from listing detail pages."
           expanded={expandedSections[DASHBOARD_SECTIONS.messages]}
           onToggle={() => toggleSection(DASHBOARD_SECTIONS.messages)}
+          onEntered={() => handleSectionEntered(DASHBOARD_SECTIONS.messages)}
           summary={
             <Chip
               label={unreadMessageCount > 0 ? `${unreadMessageCount} unread` : `${safeHostMessages.length} total`}
@@ -2631,17 +2551,18 @@ function HostDashboardPanel({
           description="Backend-powered revenue, pipeline, rating, and listing performance insights."
           expanded={expandedSections[DASHBOARD_SECTIONS.analytics]}
           onToggle={() => toggleSection(DASHBOARD_SECTIONS.analytics)}
+          onEntered={() => handleSectionEntered(DASHBOARD_SECTIONS.analytics)}
           summary={
-            backendAnalytics?.refreshedAt ? (
-              <Chip
-                label={`Updated ${formatDateTime(backendAnalytics.refreshedAt)}`}
-                variant="outlined"
-                size="small"
-                sx={{ fontWeight: 900 }}
-              />
-            ) : (
-              <Chip label="Snapshot" variant="outlined" size="small" sx={{ fontWeight: 900 }} />
-            )
+            <Stack spacing={0.25} alignItems="flex-end">
+              <Typography fontWeight={900} sx={{ fontVariantNumeric: "tabular-nums" }}>
+                {formatMoneyExact(getHostAnalyticsSummaryValue(backendSummary, "grossRevenue", 0))}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {getHostAnalyticsSummaryValue(backendSummary, "paidPaymentCount", 0)} payments
+              </Typography>
+              <Chip label={backendAnalytics?.refreshedAt ? `Updated ${formatDateTime(backendAnalytics.refreshedAt)}` : "Snapshot"}
+                variant="outlined" size="small" sx={{ fontWeight: 800 }} />
+            </Stack>
           }
         >
           <Stack spacing={2.5}>

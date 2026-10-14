@@ -28,7 +28,6 @@ import {
 import AddHomeWorkRoundedIcon from "@mui/icons-material/AddHomeWorkRounded";
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import EventAvailableRoundedIcon from "@mui/icons-material/EventAvailableRounded";
-import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import ImageRoundedIcon from "@mui/icons-material/ImageRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
@@ -780,21 +779,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
                 </Box>
               </Stack>
 
-              <Card sx={{ minWidth: { xs: "100%", md: 260 } }}>
-                <CardContent sx={{ py: 2.5 }}>
-                  <Stack direction="row" spacing={1.5} alignItems="center">
-                    <Avatar sx={{ bgcolor: "secondary.light", color: "secondary.dark" }}>
-                      <HomeWorkRoundedIcon />
-                    </Avatar>
-                    <Box>
-                      <Typography fontWeight={800}>
-                        {activeUser?.fullName || "Demo Host"}
-                      </Typography>
-                      <Typography color="text.secondary">Listing as host</Typography>
-                    </Box>
-                  </Stack>
-                </CardContent>
-              </Card>
+
             </Stack>
           </Stack>
         </Container>

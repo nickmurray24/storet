@@ -27,6 +27,9 @@ const storetTheme = createTheme({
     warning: {
       main: "#f59e0b",
     },
+    rating: {
+      main: "#facc15",
+    },
     error: {
       main: "#dc2626",
     },
@@ -64,6 +67,12 @@ const storetTheme = createTheme({
     borderRadius: 16,
   },
   components: {
+    MuiRating: {
+      styleOverrides: {
+        root: { color: "#facc15" },
+        iconEmpty: { color: "#cbd5e1" },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: {

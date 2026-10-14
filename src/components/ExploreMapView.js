@@ -395,7 +395,7 @@ function ListingPopup({
             )}
             {rating > 0 && (
               <Stack direction="row" spacing={0.35} alignItems="center">
-                <StarRoundedIcon fontSize="small" sx={{ color: "warning.main" }} />
+                <StarRoundedIcon fontSize="small" sx={{ color: "rating.main" }} />
                 <Typography variant="body2" fontWeight={900}>
                   {rating.toFixed(1)}
                 </Typography>

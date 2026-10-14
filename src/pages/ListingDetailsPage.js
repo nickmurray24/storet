@@ -564,7 +564,7 @@ function ListingDetailsPage({
                   </Stack>
 
                   <Stack direction="row" spacing={0.75} alignItems="center">
-                    <StarRoundedIcon fontSize="small" sx={{ color: "warning.main" }} />
+                    <StarRoundedIcon fontSize="small" sx={{ color: "rating.main" }} />
                     <Typography>
                       {displayedRating.toFixed(1)} · {displayedReviewCount} reviews
                     </Typography>

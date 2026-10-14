@@ -65,14 +65,15 @@ function getPaidWithLabel(payment = {}) {
 
 function SummaryRow({ label, value, strong = false }) {
   return (
-    <Stack direction="row" justifyContent="space-between" gap={2} alignItems="flex-start">
+    <Stack direction="row" justifyContent="space-between" gap={3} alignItems="flex-start"
+      sx={{ py: 0.75, minWidth: 0, gap: 3, alignItems: "flex-start", justifyContent: "space-between", "& > :first-of-type": { flex: 1, minWidth: 0 },
+        "& > :last-child": { maxWidth: "60%", overflowWrap: "anywhere", lineHeight: 1.6, textAlign: "right" } }}>
       <Typography variant="body2" color="text.secondary">
         {label}
       </Typography>
       <Typography
         variant="body2"
-        fontWeight={strong ? 800 : 700}
-        textAlign="right"
+        sx={{ fontWeight: strong ? 800 : 600, textAlign: "right" }}
         color="text.primary"
       >
         {value || "—"}
@@ -191,64 +192,53 @@ function BookingSummaryCard({ request, pricing }) {
 }
 
 function ReceiptSummaryCard({ request, payment }) {
+  const details = [
+    ["Listing", payment.listingTitle || request.listingTitle],
+    ["Host", payment.hostName || request.hostName],
+    ["Billing rate", payment.rateDisplay || request.rateDisplay],
+    ["Paid with", getPaidWithLabel(payment)],
+    ["Paid at", formatDateTime(payment.paidAt)],
+    ["Rental active", formatDateTime(request.activatedAt)],
+    ["Completed at", formatDateTime(request.completedAt)],
+    ...(payment.stripeCheckoutSessionId ? [["Stripe session", payment.stripeCheckoutSessionId.slice(-12)]] : []),
+  ];
+
   return (
-    <Card elevation={0} sx={{ border: "1px solid", borderColor: "divider", borderRadius: 4 }}>
-      <CardContent sx={{ p: { xs: 3, md: 4 } }}>
-        <Stack spacing={2.5}>
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} justifyContent="space-between">
-            <Stack direction="row" spacing={1.25} alignItems="center">
-              <ReceiptLongRoundedIcon color="primary" />
-              <Box>
-                <Typography variant="h5" fontWeight={900}>
-                  Payment receipt
+    <Card component="section" aria-label="Payment receipt">
+      <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
+        <Stack spacing={3}>
+          <Stack direction="row" spacing={1.5} alignItems="flex-start">
+            <ReceiptLongRoundedIcon color="primary" sx={{ mt: 0.5, flexShrink: 0 }} />
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h5" fontWeight={900}>Payment receipt</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, overflowWrap: "anywhere" }}>
+                Receipt #{payment.receiptNumber || "Processing"}
+              </Typography>
+            </Box>
+          </Stack>
+          <Divider />
+          <Box component="dl" sx={{ m: 0, display: "grid",
+            gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" },
+            columnGap: { sm: 4, md: 6 }, rowGap: 3 }}>
+            {details.map(([label, value]) => (
+              <Box key={label} sx={{ minWidth: 0 }}>
+                <Typography component="dt" variant="caption" color="text.secondary" sx={{ fontWeight: 700, mb: 0.75 }}>
+                  {label}
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Receipt #{payment.receiptNumber || "Processing"}
+                <Typography component="dd" variant="body2" sx={{ m: 0, fontWeight: 600, lineHeight: 1.7, overflowWrap: "anywhere" }}>
+                  {value || "—"}
                 </Typography>
               </Box>
-            </Stack>
-
-            <Chip
-              color="success"
-              icon={<CheckCircleRoundedIcon />}
-              label={payment.status || "Paid"}
-              sx={{ fontWeight: 800, alignSelf: { xs: "flex-start", sm: "center" } }}
-            />
-          </Stack>
-
-          <Divider />
-
-          <Box
-            sx={{
-              display: "grid",
-              gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-              gap: 2,
-            }}
-          >
-            <Stack spacing={1.5}>
-              <SummaryRow label="Listing" value={payment.listingTitle || request.listingTitle} />
-              <SummaryRow label="Host" value={payment.hostName || request.hostName} />
-              <SummaryRow label="Billing rate" value={payment.rateDisplay || request.rateDisplay} />
-              <SummaryRow label="Paid with" value={getPaidWithLabel(payment)} />
-            </Stack>
-
-            <Stack spacing={1.5}>
-              <SummaryRow label="Paid at" value={formatDateTime(payment.paidAt)} />
-              <SummaryRow label="Rental active" value={formatDateTime(request.activatedAt)} />
-              <SummaryRow label="Completed at" value={formatDateTime(request.completedAt)} />
-              {payment.stripeCheckoutSessionId && (
-                <SummaryRow label="Stripe session" value={payment.stripeCheckoutSessionId.slice(-12)} />
-              )}
+            ))}
+          </Box>
+          <Box sx={{ bgcolor: "background.default", border: "1px solid", borderColor: "divider", borderRadius: 3, p: { xs: 2, md: 2.5 } }}>
+            <Stack spacing={1}>
+              <SummaryRow label="Storage charge" value={formatCurrency(payment.storageCharge)} />
+              <SummaryRow label="Platform service fee" value={formatCurrency(payment.serviceFee)} />
+              <Divider sx={{ my: 0.5 }} />
+              <SummaryRow label="Total paid" value={formatCurrency(payment.amount)} strong />
             </Stack>
           </Box>
-
-          <Divider />
-
-          <Stack spacing={1.5}>
-            <SummaryRow label="Storage charge" value={formatCurrency(payment.storageCharge)} />
-            <SummaryRow label="Platform service fee" value={formatCurrency(payment.serviceFee)} />
-            <SummaryRow label="Total paid" value={formatCurrency(payment.amount)} strong />
-          </Stack>
         </Stack>
       </CardContent>
     </Card>
