@@ -10,9 +10,18 @@ import {
   CircularProgress,
   Container,
   Divider,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
   Stack,
   Typography,
 } from "@mui/material";
+
+import ChatBubbleOutlineRoundedIcon from "@mui/icons-material/ChatBubbleOutlineRounded";
+import ContactHostForm from "../components/ContactHostForm";
+import { isDateKey } from "../utils/rentalDates";
+import { isListingOwnedByUser } from "../utils/listingOwnershipUtils";
 
 import ArrowBackRoundedIcon from "@mui/icons-material/ArrowBackRounded";
 import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
@@ -49,6 +58,40 @@ function formatDateTime(value) {
   }
 
   return new Date(value).toLocaleString();
+}
+
+function formatRentalDate(value) {
+  if (!isDateKey(value)) return "Not recorded";
+  return new Date(`${value}T00:00:00Z`).toLocaleDateString("en-US", {
+    month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+  });
+}
+
+function RentalDatesCard({ request, onMessageHost }) {
+  return (
+    <Card component="section" aria-label="Rental dates" sx={{ mb: 3 }}>
+      <CardContent sx={{ p: { xs: 2.5, md: 4 } }}>
+        <Stack spacing={2.5}>
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
+            <Box>
+              <Typography variant="h6" fontWeight={900}>Rental dates</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>Hosted by {request.hostName}</Typography>
+            </Box>
+            {onMessageHost && <Button variant="outlined" startIcon={<ChatBubbleOutlineRoundedIcon />} onClick={onMessageHost}>Message host</Button>}
+          </Box>
+          <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))" }, gap: 2 }}>
+            {[["Move-in", request.moveInDate], ["Move-out", request.moveOutDate]].map(([label, date]) => (
+              <Box key={label} sx={{ p: 2, borderRadius: 3, bgcolor: "action.hover", minWidth: 0 }}>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>{label}</Typography>
+                <Typography variant="h6" fontWeight={800}>{formatRentalDate(date)}</Typography>
+              </Box>
+            ))}
+          </Box>
+          {isDateKey(request.moveOutDate) && <Typography variant="caption" color="text.secondary">Move-out is the first day the space becomes available again.</Typography>}
+        </Stack>
+      </CardContent>
+    </Card>
+  );
 }
 
 function getPaidWithLabel(payment = {}) {
@@ -162,7 +205,7 @@ function BookingSummaryCard({ request, pricing }) {
           <Divider />
 
           <SummaryRow
-            label={`${request.rateLabel || "Storage"} charge`}
+            label={request.rentalDays ? `Storage · ${request.rentalDays} days` : `${request.rateLabel || "Storage"} charge`}
             value={formatCurrency(pricing.storageCharge)}
           />
           <SummaryRow label="Platform service fee" value={formatCurrency(pricing.serviceFee)} />
@@ -176,14 +219,14 @@ function BookingSummaryCard({ request, pricing }) {
               color: "primary.contrastText",
             }}
           >
-            <Stack direction="row" justifyContent="space-between" alignItems="center" gap={2}>
-              <Typography variant="body1" fontWeight={800}>
+            <Box sx={{ display: "flex", width: "100%", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
+              <Typography variant="body1" fontWeight={800} sx={{ minWidth: 0 }}>
                 Total due today
               </Typography>
-              <Typography variant="h5" fontWeight={900}>
+              <Typography variant="h5" fontWeight={900} sx={{ ml: "auto", flexShrink: 0, textAlign: "right", whiteSpace: "nowrap" }}>
                 {formatCurrency(pricing.totalAmount)}
               </Typography>
-            </Stack>
+            </Box>
           </Box>
         </Stack>
       </CardContent>
@@ -249,6 +292,8 @@ function CheckoutPage({
   bookingRequests,
   paymentRecords,
   onStartStripeCheckout,
+  onSubmitHostMessage,
+  currentUser,
 }) {
   const storetApp = useOptionalStoretApp();
   const { requestId } = useParams();
@@ -264,7 +309,7 @@ function CheckoutPage({
   const existingPayment = getPaymentRecordForRequest(activePaymentRecords, requestId);
 
   const pricing = useMemo(() => {
-    const storageCharge = Number(request?.listingPrice || 0);
+    const storageCharge = Number(request?.storageTotal ?? request?.listingPrice ?? 0);
     const serviceFee = SERVICE_FEE;
     const totalAmount = storageCharge + serviceFee;
 
@@ -274,6 +319,32 @@ function CheckoutPage({
       totalAmount,
     };
   }, [request]);
+
+  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
+  const activeUser = currentUser || storetApp?.currentUser;
+  const bookingListing = request ? {
+    id: request.listingId, title: request.listingTitle, location: request.listingLocation,
+    host: request.hostName, hostId: request.hostId, hostEmail: request.hostEmail,
+  } : null;
+  const renterIdentity = String(request?.renterId || request?.requesterId || "");
+  const userIdentity = String(activeUser?.id || activeUser?.userId || "");
+  const renterEmail = String(request?.renterEmail || request?.requesterEmail || renterIdentity).toLowerCase();
+  const bookingMatchesAccount = Boolean(renterIdentity && userIdentity && renterIdentity === userIdentity);
+  const bookingMatchesLegacyEmail = Boolean((!renterIdentity || renterIdentity.includes("@")) &&
+    activeUser?.email && renterEmail === activeUser.email.toLowerCase());
+  const canMessageHost = Boolean(activeUser?.isAuthenticated && request?.hostId &&
+    !isListingOwnedByUser(bookingListing, activeUser) && (bookingMatchesAccount || bookingMatchesLegacyEmail));
+
+  async function handleBookingHostMessage(messageData) {
+    if (!canMessageHost) return { ok: false, error: "Only the renter can message this booking’s host." };
+    const submit = onSubmitHostMessage || storetApp?.actions?.submitHostMessage;
+    if (!submit) return { ok: false, error: "Messaging is unavailable right now. Please try again later." };
+    const dates = `Move-in: ${formatRentalDate(request.moveInDate)}\nMove-out: ${formatRentalDate(request.moveOutDate)}`;
+    return submit(bookingListing, {
+      ...messageData, subject: `Booking: ${request.listingTitle}`,
+      message: `${messageData.message}\n\n${request.listingTitle}\n${dates}`,
+    });
+  }
 
   const [submitError, setSubmitError] = useState("");
   const [isStripeSubmitting, setIsStripeSubmitting] = useState(false);
@@ -383,7 +454,20 @@ function CheckoutPage({
           chip={<Chip color="success" label="Paid" sx={{ fontWeight: 800 }} />}
         />
 
+        <RentalDatesCard request={request} onMessageHost={canMessageHost ? () => setMessageDialogOpen(true) : undefined} />
         <ReceiptSummaryCard request={request} payment={existingPayment} />
+
+        {canMessageHost && <Dialog key={request.id} open={messageDialogOpen} onClose={() => setMessageDialogOpen(false)} fullWidth maxWidth="sm" aria-labelledby="booking-message-title">
+          <DialogTitle id="booking-message-title">Message {request.hostName || "your host"}</DialogTitle>
+          <DialogContent dividers>
+            <ContactHostForm hostName={request.hostName} listingTitle={request.listingTitle} currentUser={activeUser}
+              heading="About your booking"
+              description="Coordinate move-in, move-out, or ask a question about your rental. Your rental dates are included with your message."
+              messagePlaceholder="Hi, I’d like to arrange access for my move-in. What works best?"
+              onSubmitMessage={handleBookingHostMessage} />
+          </DialogContent>
+          <DialogActions><Button onClick={() => setMessageDialogOpen(false)}>Close</Button></DialogActions>
+        </Dialog>}
 
         <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 3 }}>
           <Button component={RouterLink} to={APP_ROUTES.profile} variant="contained" size="large">

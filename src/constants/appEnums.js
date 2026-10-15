@@ -47,6 +47,7 @@ export const BOOKING_STATUSES = {
 
 export const PRICING_PERIODS = {
   DAILY: "daily",
+  WEEKLY: "weekly",
   MONTHLY: "monthly",
   YEARLY: "yearly",
 };

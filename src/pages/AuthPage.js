@@ -55,8 +55,10 @@ function AuthPage({ onLogin }) {
   const redirectAfterAuth = "";
 
   const [authMode, setAuthMode] = useState(() =>
-    getRecoveryModeFromLocation(window.location)
+    getRecoveryModeFromLocation(window.location) || getRecoveryModeFromLocation(location)
       ? AUTH_MODES.RESET_PASSWORD
+      : new URLSearchParams(location.search).get("mode") === AUTH_MODES.SIGNUP
+      ? AUTH_MODES.SIGNUP
       : AUTH_MODES.LOGIN
   );
   const [role, setRole] = useState(USER_ROLES.RENTER);
@@ -139,6 +141,9 @@ function AuthPage({ onLogin }) {
       setAuthMode(AUTH_MODES.RESET_PASSWORD);
       setError("");
       setSuccessMessage("Create a new password to finish resetting your Storet account.");
+    } else {
+      setAuthMode(new URLSearchParams(location.search).get("mode") === AUTH_MODES.SIGNUP
+        ? AUTH_MODES.SIGNUP : AUTH_MODES.LOGIN);
     }
   }, [location]);
 
@@ -678,6 +683,7 @@ function AuthPage({ onLogin }) {
                         </Stack>
                       )}
 
+                      <Box sx={{ display: "grid", gridTemplateColumns: isLogin ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)", gap: 1.25 }}>
                       <Button
                         type="submit"
                         size="large"
@@ -687,6 +693,12 @@ function AuthPage({ onLogin }) {
                       >
                         {isSubmitting ? "Please wait..." : pageCopy.buttonLabel}
                       </Button>
+                        {isLogin && (
+                          <Button type="button" size="large" variant="outlined" onClick={handleModeSwitch} disabled={isSubmitting}>
+                            Create account
+                          </Button>
+                        )}
+                      </Box>
                     </Stack>
                   </Box>
 

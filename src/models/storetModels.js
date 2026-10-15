@@ -55,6 +55,7 @@ export const DEFAULT_LISTING_MODEL = {
   priceDisplay: "$75/mo",
   pricing: {
     [PRICING_PERIODS.DAILY]: null,
+    [PRICING_PERIODS.WEEKLY]: null,
     [PRICING_PERIODS.MONTHLY]: 75,
     [PRICING_PERIODS.YEARLY]: null,
   },
@@ -92,11 +93,14 @@ export const DEFAULT_BOOKING_REQUEST_MODEL = {
   listingTitle: "Storage space",
   listingLocation: "",
   listingPrice: 0,
+  storageTotal: null,
+  rentalDays: null,
   ratePeriod: PRICING_PERIODS.MONTHLY,
   rateLabel: "Monthly",
   rateDisplay: "$0/mo",
   pricingSnapshot: {
     [PRICING_PERIODS.DAILY]: null,
+    [PRICING_PERIODS.WEEKLY]: null,
     [PRICING_PERIODS.MONTHLY]: null,
     [PRICING_PERIODS.YEARLY]: null,
   },

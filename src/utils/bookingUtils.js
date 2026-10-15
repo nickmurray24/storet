@@ -1,3 +1,4 @@
+import { quoteRental } from "./rentalDates";
 import { BOOKING_STATUSES, PAYMENT_STATUSES, PRICING_PERIODS } from "../constants/appEnums";
 import { buildCheckoutPath, buildListingPath } from "../routes/appRoutes";
 import {
@@ -122,7 +123,10 @@ export function createBookingRequest({ listing, currentUser, requestData = {} })
     requestData.ratePeriod || requestData.billingPeriod || normalizedListing.pricePeriod
   );
 
+  const quote = quoteRental({ start: requestData.moveInDate, end: requestData.moveOutDate, amount: selectedPricingOption?.amount, period: selectedPricingOption?.period });
+  if (quote.error) throw new Error(quote.error);
   return normalizeBookingRequest({
+    storageTotal: quote.total, rentalDays: quote.days,
     id: createModelId(MODEL_PREFIXES.BOOKING),
     listingId: normalizedListing.id,
     listingTitle: normalizedListing.title,
@@ -142,10 +146,7 @@ export function createBookingRequest({ listing, currentUser, requestData = {} })
     requesterEmail: renterEmail,
     moveInDate: requestData.moveInDate || DEFAULT_BOOKING_REQUEST_MODEL.moveInDate,
     moveOutDate: requestData.moveOutDate || DEFAULT_BOOKING_REQUEST_MODEL.moveOutDate,
-    duration:
-      requestData.duration ||
-      selectedPricingOption?.durationLabel ||
-      DEFAULT_BOOKING_REQUEST_MODEL.duration,
+    duration: `${quote.days} day${quote.days === 1 ? "" : "s"}`,
     notes: requestData.notes || "Created from the listing details page.",
     status,
     submittedAt: now,
@@ -187,7 +188,7 @@ export function updateBookingLifecycle(request, status) {
 
 export function createPaymentRecord(request, paymentData = {}) {
   const now = new Date().toISOString();
-  const storageCharge = Number(paymentData.storageCharge || request.listingPrice || 0);
+  const storageCharge = Number(paymentData.storageCharge || request.storageTotal || request.listingPrice || 0);
   const serviceFee = Number(paymentData.serviceFee || 0);
   const totalAmount = Number(paymentData.totalAmount || storageCharge + serviceFee);
 

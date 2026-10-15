@@ -71,6 +71,8 @@ const storetTheme = createTheme({
       styleOverrides: {
         root: { color: "#facc15" },
         iconEmpty: { color: "#cbd5e1" },
+        // Global responsive SVG sizing must not shrink a partially clipped star.
+        icon: { "& svg": { maxWidth: "none", flexShrink: 0 } },
       },
     },
     MuiButton: {

@@ -26,7 +26,7 @@ export function createListingEditForm(listing) {
     title: listing.title || "", location: listing.location || "",
     storageType: listing.storageType || "Other", listingType: listing.listingType || "Private host",
     access: listing.access || "By appointment", bookingMode: listing.bookingMode || "request",
-    dailyRate: listing.pricing?.daily ?? "", monthlyRate: listing.pricing?.monthly ?? "",
+    dailyRate: listing.pricing?.daily ?? "", weeklyRate: listing.pricing?.weekly ?? "", monthlyRate: listing.pricing?.monthly ?? "",
     yearlyRate: listing.pricing?.yearly ?? "", sqft: listing.sqft ?? "", description: listing.description || "",
     customTags: (listing.tags || []).join(", "), amenities: [...(listing.amenities || [])],
   };
@@ -38,10 +38,10 @@ export function validateListingEditForm(form, originalListing) {
   if (!form?.title?.trim()) return "Please enter a listing title.";
   if (!form?.description?.trim()) return "Please add a description for the space.";
   if (!Number.isInteger(Number(form.sqft)) || Number(form.sqft) <= 0) return "Square footage must be a positive whole number.";
-  const rates = [form.dailyRate, form.monthlyRate, form.yearlyRate];
+  const rates = [form.dailyRate, form.weeklyRate, form.monthlyRate, form.yearlyRate];
   if (rates.some((rate) => rate !== "" && rate !== null && rate !== undefined &&
       (!Number.isFinite(Number(rate)) || Number(rate) <= 0))) return "Rates must be positive numbers, or left blank.";
-  if (!rates.some((rate) => Number(rate) > 0)) return "Please enter at least one daily, monthly, or yearly rate.";
+  if (!rates.some((rate) => Number(rate) > 0)) return "Please enter at least one daily, weekly, monthly, or yearly rate.";
   const originalForm = createListingEditForm(originalListing);
   const addressChanged = LISTING_EDIT_ADDRESS_FIELDS.some((key) => form[key] !== originalForm[key]);
   if (addressChanged && !hasVerifiedCoordinates(form)) return "Choose a verified address from the address suggestions.";
@@ -57,6 +57,7 @@ export function listingEditFormToChanges(form) {
     storageType: form.storageType, listingType: form.listingType, access: form.access,
     bookingMode: form.bookingMode, sqft: Number(form.sqft), description: form.description.trim(),
     pricing: { daily: form.dailyRate === "" ? null : Number(form.dailyRate),
+      weekly: form.weeklyRate === "" ? null : Number(form.weeklyRate),
       monthly: form.monthlyRate === "" ? null : Number(form.monthlyRate),
       yearly: form.yearlyRate === "" ? null : Number(form.yearlyRate) },
     tags: Array.from(new Set(form.customTags.split(",").map((tag) => tag.trim()).filter(Boolean))),

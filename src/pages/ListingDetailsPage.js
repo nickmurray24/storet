@@ -1,3 +1,7 @@
+import AvailabilityCalendar from "../components/AvailabilityCalendar";
+import useListingAvailability from "../hooks/useListingAvailability";
+import { quoteRental, isDateKey, todayKey, addDateDays, validateRentalAvailability, formatRentalMoney } from "../utils/rentalDates";
+import { isListingOwnedByUser } from "../utils/listingOwnershipUtils";
 import React, { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import {
@@ -13,6 +17,7 @@ import {
   Divider,
   IconButton,
   LinearProgress,
+  TextField,
   Rating,
   Stack,
   Typography,
@@ -117,6 +122,8 @@ function ListingDetailsPage({
     return allListings.find((item) => String(item.id) === routeListingId);
   }, [allListings, routeListingId]);
 
+  const isOwnListing = isListingOwnedByUser(listing, activeUser);
+
   const hasExternalSavedIds =
     savedListingIds !== undefined || storetApp?.savedListingIds !== undefined;
   const savedIdsFromProps = normalizeSavedIds(
@@ -135,6 +142,9 @@ function ListingDetailsPage({
     ? activeSavedIds.includes(String(listing.id))
     : false;
 
+  const [moveInDate, setMoveInDate] = useState("");
+  const [moveOutDate, setMoveOutDate] = useState("");
+  const [bookingError, setBookingError] = useState("");
   const [bookingStatus, setBookingStatus] = useState("");
   const [submittedBookingRequest, setSubmittedBookingRequest] = useState(null);
   const [selectedRatePeriod, setSelectedRatePeriod] = useState("");
@@ -146,17 +156,22 @@ function ListingDetailsPage({
     [bookingRequests, storetApp?.bookingRequests]
   );
 
+  const availability = useListingAvailability(listing?.id, activeBookingRequests);
+  function changeDates(start, end) {
+    setMoveInDate(start); setMoveOutDate(end); setSubmittedBookingRequest(null); setBookingStatus(""); setBookingError("");
+  }
+  useEffect(() => { changeDates("", ""); }, [routeListingId]);
   const latestListingRequest = useMemo(() => {
     if (!listing) {
       return null;
     }
 
     return getLatestBookingRequestForListing(
-      activeBookingRequests,
+      moveInDate || moveOutDate ? activeBookingRequests.filter(r => r.moveInDate === moveInDate && r.moveOutDate === moveOutDate) : activeBookingRequests,
       listing.id,
       activeUser
     );
-  }, [activeBookingRequests, activeUser, listing]);
+  }, [activeBookingRequests, activeUser, listing, moveInDate, moveOutDate]);
 
   const pricingOptions = useMemo(() => {
     return listing ? getAvailablePricingOptions(listing.pricing) : [];
@@ -171,6 +186,15 @@ function ListingDetailsPage({
     listing?.pricing,
     selectedRatePeriod || defaultRatePeriod
   );
+
+  const selectedRequest = submittedBookingRequest || latestListingRequest;
+  const rentalQuote = quoteRental({ start: moveInDate, end: moveOutDate, amount: selectedPricingOption?.amount, period: selectedPricingOption?.period });
+  const otherHolds = availability.ranges.filter(range => !(
+    canCheckoutBookingRequest(selectedRequest) && range.kind === "booked" &&
+    range.startDate === selectedRequest.moveInDate && range.endDate === selectedRequest.moveOutDate
+  ));
+  const dateConflict = !rentalQuote.error ? validateRentalAvailability(moveInDate, moveOutDate, otherHolds) : "";
+  const datesUnavailable = Boolean(rentalQuote.error || dateConflict || availability.loading || availability.error);
 
   const listingReviews = useMemo(() => {
     return storetApp?.reviewsByListingId?.[routeListingId] || [];
@@ -196,7 +220,7 @@ function ListingDetailsPage({
   }, [routeListingId]);
 
   function handleSaveClick() {
-    if (!listing) return;
+    if (!listing || isOwnListing) return;
 
     if (!isAuthenticated) {
       navigate(APP_ROUTES.auth, {
@@ -228,6 +252,7 @@ function ListingDetailsPage({
   }
 
   function handleSubmitHostMessage(messageData) {
+    if (isOwnListing) return { ok: false, error: "You cannot message yourself about your own listing." };
     if (!listing) {
       return {
         ok: false,
@@ -253,7 +278,7 @@ function ListingDetailsPage({
   }
 
   async function handleSubmitReview(_, reviewData) {
-    if (!listing || !eligibleReviewRequest) {
+    if (isOwnListing || !listing || !eligibleReviewRequest) {
       return {
         ok: false,
         error: "A completed booking is required before leaving a review.",
@@ -273,7 +298,7 @@ function ListingDetailsPage({
   }
 
   async function handleBookingAction() {
-    if (!listing || bookingIsSubmitting) return;
+    if (!listing || isOwnListing || bookingIsSubmitting) return;
 
     const activeBookingRequest = submittedBookingRequest || latestListingRequest;
 
@@ -292,7 +317,8 @@ function ListingDetailsPage({
       return;
     }
 
-    if (!selectedPricingOption) {
+    if (datesUnavailable || !selectedPricingOption) {
+      setBookingError(rentalQuote.error || dateConflict || availability.error || "Please wait for availability to load.");
       setBookingStatus("error");
       return;
     }
@@ -303,25 +329,35 @@ function ListingDetailsPage({
     if (submitBookingRequestAction) {
       setBookingIsSubmitting(true);
 
-      const result = await submitBookingRequestAction(listing, {
-        fullName: activeUser.fullName || "Demo User",
-        email: activeUser.email || "",
-        ratePeriod: selectedPricingOption?.period,
-        rateLabel: selectedPricingOption?.label,
-        rateDisplay: selectedPricingOption?.display,
-        duration: selectedPricingOption?.durationLabel || "Month-to-month",
-        notes: "Quick reservation request from the listing details page.",
-      });
+      try {
+        const result = await submitBookingRequestAction(listing, {
+          fullName: activeUser.fullName || "Demo User",
+          email: activeUser.email || "",
+          moveInDate, moveOutDate,
+          ratePeriod: selectedPricingOption?.period,
+          rateLabel: selectedPricingOption?.label,
+          rateDisplay: selectedPricingOption?.display,
+          duration: selectedPricingOption?.durationLabel || "Month-to-month",
+          notes: "Quick reservation request from the listing details page.",
+        });
 
-      setBookingIsSubmitting(false);
+        if (result?.ok === false) {
+          setBookingError(result.error || "We could not submit your request.");
+          availability.refresh();
+          setBookingStatus("error");
+          return;
+        }
 
-      if (result?.ok === false) {
+        availability.refresh();
+        setSubmittedBookingRequest(result?.request || null);
+        setBookingStatus(result?.request?.status || BOOKING_STATUSES.PENDING);
+      } catch (error) {
+        setBookingError(error?.message || "We could not submit your request. Please try again.");
         setBookingStatus("error");
-        return;
+        availability.refresh();
+      } finally {
+        setBookingIsSubmitting(false);
       }
-
-      setSubmittedBookingRequest(result?.request || null);
-      setBookingStatus(result?.request?.status || BOOKING_STATUSES.PENDING);
       return;
     }
 
@@ -418,8 +454,10 @@ function ListingDetailsPage({
   const canContinueToCheckout = canCheckoutBookingRequest(activeBookingRequest);
   const hasExistingOpenRequest = hasOpenBookingRequest(activeBookingRequest);
   const shouldDisableReservation =
+    isOwnListing ||
     (!listingIsActive && !canContinueToCheckout) ||
-    (hasExistingOpenRequest && !canContinueToCheckout);
+    (hasExistingOpenRequest && !canContinueToCheckout) ||
+    (isAuthenticated && !canContinueToCheckout && datesUnavailable);
   const inactiveActionLabel = listingIsDraft ? "Draft listing" : "Unavailable";
   const existingRequestActionLabel = activeBookingRequest?.status
     ? `${activeBookingRequest.status} request`
@@ -431,7 +469,7 @@ function ListingDetailsPage({
     : hasExistingOpenRequest && !canContinueToCheckout
     ? existingRequestActionLabel
     : shouldDisableReservation
-    ? inactiveActionLabel
+    ? !listingIsActive ? inactiveActionLabel : "Choose available dates"
     : primaryActionLabel;
   const listingImages = Array.isArray(listing.images) ? listing.images.filter(Boolean) : [];
   const galleryImages = Array.from(new Set([listing.imageUrl, ...listingImages].filter(Boolean)));
@@ -507,10 +545,10 @@ function ListingDetailsPage({
               direction={{ xs: "column", md: "row" }}
               spacing={3}
               alignItems={{ xs: "flex-start", md: "flex-end" }}
-              justifyContent="space-between"
+              sx={{ alignItems: "flex-start", justifyContent: "space-between" }}
             >
-              <Stack spacing={1.5}>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+              <Stack spacing={1.5} sx={{ width: "100%", minWidth: 0 }}>
+                <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: "wrap", alignItems: "center" }}>
                   <Chip
                     icon={<WarehouseRoundedIcon />}
                     label={listing.storageType}
@@ -541,6 +579,19 @@ function ListingDetailsPage({
                       sx={{ fontWeight: 700 }}
                     />
                   )}
+                  {isOwnListing ? <Chip label="Your listing" size="small" variant="outlined" color="primary" /> : (
+              <Button
+                size="small"
+                variant={isSaved ? "contained" : "outlined"}
+                startIcon={
+                  isSaved ? <FavoriteRoundedIcon /> : <FavoriteBorderRoundedIcon />
+                }
+                onClick={handleSaveClick}
+                sx={{ bgcolor: isSaved ? undefined : "background.paper", minHeight: 30, px: 1.25, py: 0.5, flexShrink: 0, alignSelf: "center" }}
+              >
+                {!isAuthenticated ? "Sign in to save" : isSaved ? "Saved" : "Save listing"}
+              </Button>
+                  )}
                 </Stack>
 
                 <Typography
@@ -548,6 +599,7 @@ function ListingDetailsPage({
                   sx={{
                     fontSize: { xs: "2.25rem", md: "3.5rem" },
                     lineHeight: 1,
+                    overflowWrap: "anywhere",
                   }}
                 >
                   {listing.title}
@@ -572,16 +624,7 @@ function ListingDetailsPage({
                 </Stack>
               </Stack>
 
-              <Button
-                variant={isSaved ? "contained" : "outlined"}
-                startIcon={
-                  isSaved ? <FavoriteRoundedIcon /> : <FavoriteBorderRoundedIcon />
-                }
-                onClick={handleSaveClick}
-                sx={{ bgcolor: isSaved ? undefined : "background.paper" }}
-              >
-                {!isAuthenticated ? "Sign in to save" : isSaved ? "Saved" : "Save listing"}
-              </Button>
+
             </Stack>
           </Stack>
         </Container>
@@ -617,7 +660,7 @@ function ListingDetailsPage({
                       justifyContent: "space-between",
                     }}
                   >
-                  <Stack direction="row" justifyContent="space-between">
+                  <Stack direction="row" useFlexGap sx={{ gap: 0.75, flexWrap: "wrap", justifyContent: "flex-start", alignItems: "center" }}>
                     <Chip
                       label={listing.listingType}
                       sx={{
@@ -752,7 +795,7 @@ function ListingDetailsPage({
                       </Box>
 
                       {pricingOptions.length > 0 && (
-                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
+                        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2, flexWrap: "wrap", gap: 0.75 }}>
                           {pricingOptions.map((option) => (
                             <Chip
                               key={option.period}
@@ -772,7 +815,7 @@ function ListingDetailsPage({
                         Good for
                       </Typography>
 
-                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                      <Stack direction="row" useFlexGap sx={{ flexWrap: "wrap", gap: 0.75 }}>
                         {listing.tags.length > 0 ? (
                           listing.tags.map((tag) => <Chip key={tag} label={tag} />)
                         ) : (
@@ -815,7 +858,7 @@ function ListingDetailsPage({
                   <Stack spacing={2}>
                     <Typography variant="h5">Host information</Typography>
 
-                    <Stack direction="row" spacing={2} alignItems="center">
+                    <Stack direction="row" spacing={2} sx={{ alignItems: "center" }}>
                       <Avatar
                         sx={{
                           width: 64,
@@ -839,8 +882,7 @@ function ListingDetailsPage({
                     <Stack spacing={1}>
                       <Stack
                         direction="row"
-                        justifyContent="space-between"
-                        alignItems="center"
+                        sx={{ justifyContent: "space-between", alignItems: "center", gap: 2 }}
                       >
                         <Typography color="text.secondary">Host rating</Typography>
                         <Typography fontWeight={800}>
@@ -858,6 +900,7 @@ function ListingDetailsPage({
                 </CardContent>
               </Card>
 
+              {!isOwnListing && (
               <Card>
                 <CardContent sx={{ p: { xs: 3, md: 4 } }}>
                   <ContactHostForm
@@ -876,6 +919,7 @@ function ListingDetailsPage({
                   />
                 </CardContent>
               </Card>
+              )}
 
               <Card>
                 <CardContent sx={{ p: { xs: 3, md: 4 } }}>
@@ -884,7 +928,7 @@ function ListingDetailsPage({
                       direction={{ xs: "column", sm: "row" }}
                       spacing={2}
                       justifyContent="space-between"
-                      alignItems={{ xs: "flex-start", sm: "center" }}
+                      sx={{ justifyContent: "space-between", alignItems: { xs: "flex-start", sm: "center" }, flexWrap: "wrap", gap: 2 }}
                     >
                       <Box>
                         <Typography variant="h5">Reviews</Typography>
@@ -893,7 +937,7 @@ function ListingDetailsPage({
                         </Typography>
                       </Box>
 
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexShrink: 0 }}>
                         <Rating value={displayedRating} precision={0.1} readOnly />
                         <Typography fontWeight={800}>
                           {displayedRating.toFixed(1)} · {displayedReviewCount}
@@ -905,7 +949,7 @@ function ListingDetailsPage({
                       <Alert severity="error">{storetApp.reviewsError}</Alert>
                     )}
 
-                    {eligibleReviewRequest ? (
+                    {!isOwnListing && (eligibleReviewRequest ? (
                       <ReviewForm
                         eligibleRequest={eligibleReviewRequest}
                         onSubmitReview={handleSubmitReview}
@@ -922,7 +966,7 @@ function ListingDetailsPage({
                       <Alert severity="info" variant="outlined">
                         Sign in and complete a booking to leave a verified review.
                       </Alert>
-                    )}
+                    ))}
 
                     <Divider />
 
@@ -977,12 +1021,7 @@ function ListingDetailsPage({
           </Box>
 
           <Box sx={{ width: { xs: "100%", lg: 360 } }}>
-            <Card
-              sx={{
-                position: { lg: "sticky" },
-                top: { lg: 96 },
-              }}
-            >
+            <Card>
               <CardContent sx={{ p: 3 }}>
                 <Stack spacing={2.5}>
                   <Box>
@@ -994,6 +1033,22 @@ function ListingDetailsPage({
                     </Typography>
                   </Box>
 
+                  {isOwnListing ? (
+                    <>
+                      <Chip label="Your listing" color="primary" variant="outlined" sx={{ alignSelf: "flex-start" }} />
+                      <Typography color="text.secondary">Manage this space from your Host Dashboard.</Typography>
+                      <Stack spacing={1}>
+                        <Typography sx={{ fontWeight: 800 }}>Available rates</Typography>
+                        {pricingOptions.map(option => (
+                          <Box key={option.period} sx={{ display: "flex", justifyContent: "space-between", gap: 2 }}>
+                            <Typography>{option.label}</Typography><Typography sx={{ fontWeight: 700 }}>{option.display}</Typography>
+                          </Box>
+                        ))}
+                      </Stack>
+                      <Button component={RouterLink} to={APP_ROUTES.hostDashboard} variant="contained">Manage listing</Button>
+                    </>
+                  ) : (
+                    <>
                   {pricingOptions.length > 0 && (
                     <Stack spacing={1}>
                       <Typography fontWeight={800}>Choose a rate</Typography>
@@ -1018,6 +1073,25 @@ function ListingDetailsPage({
                     </Stack>
                   )}
 
+                  <Stack spacing={1.5}>
+                    <Typography sx={{ fontWeight: 800 }}>Your rental dates</Typography>
+                    <TextField label="Move-in date" type="date" value={moveInDate} size="small"
+                      onChange={e => changeDates(e.target.value, moveOutDate)}
+                      slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: todayKey() } }} />
+                    <TextField label="Move-out date" type="date" value={moveOutDate} size="small"
+                      onChange={e => changeDates(moveInDate, e.target.value)}
+                      slotProps={{ inputLabel: { shrink: true }, htmlInput: { min: isDateKey(moveInDate) ? addDateDays(moveInDate, 1) : todayKey() } }} />
+                    {availability.loading && <LinearProgress />}
+                    {availability.error && <Alert severity="error" action={<Button size="small" onClick={availability.refresh}>Retry</Button>}>{availability.error}</Alert>}
+                    <AvailabilityCalendar ranges={availability.ranges} startDate={moveInDate} endDate={moveOutDate}
+                      disabled={availability.loading || Boolean(availability.error)}
+                      onSelectDate={day => !moveInDate || moveOutDate || day <= moveInDate ? changeDates(day, "") : changeDates(moveInDate, day)} />
+                    {moveInDate && moveOutDate && (rentalQuote.error || dateConflict) && <Alert severity="warning">{rentalQuote.error || dateConflict}</Alert>}
+                    {!rentalQuote.error && <Box sx={{ bgcolor: "action.hover", borderRadius: 2, p: 1.5 }}>
+                      <Typography sx={{ fontWeight: 800 }}>{rentalQuote.days} day{rentalQuote.days === 1 ? "" : "s"} · {formatRentalMoney(rentalQuote.total)} storage</Typography>
+                      <Typography variant="caption" color="text.secondary">{selectedPricingOption?.display}, prorated by day{rentalQuote.basis > 1 ? ` (${rentalQuote.basis} days per ${selectedPricingOption?.shortLabel})` : ""}. Move-out is not charged. $19 service fee at checkout.</Typography>
+                    </Box>}
+                  </Stack>
                   <Divider />
 
                   {!listingIsActive && (
@@ -1038,7 +1112,7 @@ function ListingDetailsPage({
                   {bookingStatus === BOOKING_STATUSES.PENDING && (
                     <Alert severity="info">
                       Reservation request sent. The host can approve, waitlist,
-                      or decline it in a later dashboard phase.
+                      or decline it from their dashboard. Dates are held once approved.
                     </Alert>
                   )}
 
@@ -1050,14 +1124,15 @@ function ListingDetailsPage({
 
                   {bookingStatus === "error" && (
                     <Alert severity="error">
-                      {storetApp?.activityError ||
+                      {bookingError || storetApp?.activityError ||
                         "We could not create that booking request. Please try again."}
                     </Alert>
                   )}
 
                   {activeBookingRequest && !bookingStatus && (
                     <Alert severity="info">
-                      Latest local request for this listing: {activeBookingRequest.status}.
+                      Your request: {activeBookingRequest.status}.
+                      {activeBookingRequest.moveInDate !== "Not selected" && ` ${activeBookingRequest.moveInDate} to ${activeBookingRequest.moveOutDate}.`}
                     </Alert>
                   )}
 
@@ -1104,15 +1179,9 @@ function ListingDetailsPage({
                     {!isAuthenticated ? "Sign in to save" : isSaved ? "Saved" : "Save for later"}
                   </Button>
 
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    textAlign="center"
-                  >
-                    {isAuthenticated
-                      ? `You are browsing as ${activeUser.fullName || "Storet user"}.`
-                      : "Sign in to save, message hosts, or reserve this space."}
-                  </Typography>
+
+                    </>
+                  )}
                 </Stack>
               </CardContent>
             </Card>

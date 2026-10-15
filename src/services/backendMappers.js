@@ -127,6 +127,7 @@ export function mapDatabaseListingToAppListing(row = {}) {
   const hostProfile = getNestedProfile(row);
   const pricing = {
     [PRICING_PERIODS.DAILY]: numberOrNull(row.daily_rate),
+    [PRICING_PERIODS.WEEKLY]: numberOrNull(row.weekly_rate),
     [PRICING_PERIODS.MONTHLY]: numberOrNull(row.monthly_rate),
     [PRICING_PERIODS.YEARLY]: numberOrNull(row.yearly_rate),
   };
@@ -185,10 +186,11 @@ export function mapAppListingToDatabaseListing(listing = {}, options = {}) {
     hasAnyField(listing, ["pricing"]) ||
     hasAnyField(pricing, [
       PRICING_PERIODS.DAILY,
+      PRICING_PERIODS.WEEKLY,
       PRICING_PERIODS.MONTHLY,
       PRICING_PERIODS.YEARLY,
     ]) ||
-    hasAnyField(listing, ["dailyRate", "monthlyRate", "yearlyRate", "price"]);
+    hasAnyField(listing, ["dailyRate", "weeklyRate", "monthlyRate", "yearlyRate", "price"]);
 
   return omitUndefinedFields({
     host_id: options.hostId || listing.hostId || listing.ownerId || listing.createdBy,
@@ -211,9 +213,10 @@ export function mapAppListingToDatabaseListing(listing = {}, options = {}) {
     daily_rate: hasPricingFields
       ? numberOrNull(pricing[PRICING_PERIODS.DAILY] ?? listing.dailyRate)
       : undefined,
+    weekly_rate: hasPricingFields ? numberOrNull(pricing.weekly ?? listing.weeklyRate) : undefined,
     monthly_rate: hasPricingFields
       ? numberOrNull(
-          pricing[PRICING_PERIODS.MONTHLY] ?? listing.monthlyRate ?? listing.price
+          pricing[PRICING_PERIODS.MONTHLY] ?? listing.monthlyRate ?? (listing.pricing ? null : listing.price)
         )
       : undefined,
     yearly_rate: hasPricingFields
@@ -264,6 +267,8 @@ export function mapDatabaseBookingToAppBooking(row = {}) {
     listingTitle: row.listing_title,
     listingLocation: row.listing_location,
     listingPrice: numberOrNull(row.listing_price),
+    storageTotal: numberOrNull(row.storage_total),
+    rentalDays: integerOrNull(row.rental_days),
     ratePeriod: row.rate_period,
     rateLabel: row.rate_label,
     rateDisplay: row.rate_display,
@@ -303,6 +308,8 @@ export function mapAppBookingToDatabaseBooking(booking = {}, options = {}) {
     listing_title: booking.listingTitle,
     listing_location: booking.listingLocation,
     listing_price: numberOrNull(booking.listingPrice),
+    storage_total: booking.storageTotal == null ? undefined : numberOrNull(booking.storageTotal),
+    rental_days: booking.rentalDays == null ? undefined : integerOrNull(booking.rentalDays),
     rate_period: booking.ratePeriod,
     rate_label: booking.rateLabel,
     rate_display: booking.rateDisplay,
