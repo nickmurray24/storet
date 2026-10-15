@@ -9,7 +9,7 @@ import { getOrderedListingPhotos } from "../utils/listingPhotoUtils";
 const EDITABLE_DATABASE_FIELDS = new Set([
   "title", "location", "address_line1", "address_line2", "city", "state", "postal_code", "country",
   "formatted_address", "display_location", "address_verified", "address_place_id", "address_accuracy",
-  "latitude", "longitude", "daily_rate", "monthly_rate", "yearly_rate", "sqft", "storage_type",
+  "latitude", "longitude", "daily_rate", "weekly_rate", "monthly_rate", "yearly_rate", "sqft", "storage_type",
   "listing_type", "access", "booking_mode", "description", "tags", "amenities", "images", "updated_at",
 ]);
 

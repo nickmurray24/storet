@@ -123,6 +123,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
     storageType: "Garage",
     listingType: "Private host",
     dailyRate: "",
+    weeklyRate: "",
     monthlyRate: "",
     yearlyRate: "",
     sqft: "",
@@ -149,6 +150,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
   const previewListing = useMemo(() => {
     const pricing = normalizePricing({
       daily: formData.dailyRate,
+      weekly: formData.weeklyRate,
       monthly: formData.monthlyRate,
       yearly: formData.yearlyRate,
     });
@@ -160,7 +162,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
       storageType: formData.storageType,
       listingType: formData.listingType,
       pricing,
-      price: pricing.monthly || pricing.daily || pricing.yearly || 85,
+      price: pricing.monthly || pricing.weekly || pricing.daily || pricing.yearly || 85,
       priceDisplay: formatPricingSummary(pricing),
       sqft,
       access: formData.access,
@@ -184,6 +186,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
       formData.formattedAddress,
       formData.displayLocation,
       formData.dailyRate,
+      formData.weeklyRate,
       formData.monthlyRate,
       formData.yearlyRate,
       formData.sqft,
@@ -527,6 +530,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
     const description = formData.description.trim();
     const pricing = normalizePricing({
       daily: formData.dailyRate,
+      weekly: formData.weeklyRate,
       monthly: formData.monthlyRate,
       yearly: formData.yearlyRate,
     });
@@ -542,8 +546,13 @@ function CreateListingPage({ currentUser, onAddListing }) {
       return;
     }
 
+    const enteredRates = [formData.dailyRate, formData.weeklyRate, formData.monthlyRate, formData.yearlyRate];
+    if (enteredRates.some(rate => String(rate).trim() && (!Number.isFinite(Number(rate)) || Number(rate) <= 0 || Number(rate) > 99999999.99))) {
+      setError("Rates must be positive dollar amounts, or left blank.");
+      return;
+    }
     if (!hasAnyPricing(pricing)) {
-      setError("Please enter at least one valid daily, monthly, or yearly rate.");
+      setError("Please enter at least one valid daily, weekly, monthly, or yearly rate.");
       return;
     }
 
@@ -577,7 +586,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
         addressAccuracy: formData.addressAccuracy,
         distance: "New listing",
         pricing,
-        price: pricing.monthly || pricing.daily || pricing.yearly,
+        price: pricing.monthly || pricing.weekly || pricing.daily || pricing.yearly,
         sqft,
         storageType: formData.storageType,
         listingType: formData.listingType,
@@ -892,6 +901,13 @@ function CreateListingPage({ currentUser, onAddListing }) {
                             <InputAdornment position="end">/day</InputAdornment>
                           ),
                         }}
+                      />
+
+                      <TextField
+                        label="Weekly rate" name="weeklyRate" value={formData.weeklyRate}
+                        onChange={handleInputChange} placeholder="50" fullWidth
+                        InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment>,
+                          endAdornment: <InputAdornment position="end">/wk</InputAdornment> }}
                       />
 
                       <TextField

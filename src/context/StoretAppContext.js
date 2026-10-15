@@ -1,3 +1,6 @@
+import { hasBookingDates, validateRentalAvailability } from "../utils/rentalDates";
+import { listingAvailabilityService } from "../services/listingAvailabilityService";
+import { isListingOwnedByUser } from "../utils/listingOwnershipUtils";
 import React, {
   createContext,
   useCallback,
@@ -134,7 +137,7 @@ function syncListingWithBookingState(listing, requests = [], options = {}) {
     (request) => String(request.listingId) === String(listing.id)
   );
   const hasBlockingBooking = listingRequests.some((request) =>
-    bookingStatusBlocksListing(request.status)
+    bookingStatusBlocksListing(request.status) && !hasBookingDates(request)
   );
   const postBookingActionRequired = Boolean(
     listing.postBookingActionRequired || options.markPostBookingActionRequired
@@ -1275,6 +1278,10 @@ export function StoretAppProvider({ children }) {
     const normalizedId = String(listingId);
     const safeCurrentIds = normalizeSavedIds(savedListingIds);
     const isCurrentlySaved = safeCurrentIds.includes(normalizedId);
+    const targetListing = allListings.find(item => String(item.id) === normalizedId);
+    if (!isCurrentlySaved && isListingOwnedByUser(targetListing, currentUser)) {
+      return { ok: false, error: "You cannot save your own listing." };
+    }
     const updatedIds = isCurrentlySaved
       ? safeCurrentIds.filter((id) => id !== normalizedId)
       : [...safeCurrentIds, normalizedId];
@@ -1679,6 +1686,10 @@ export function StoretAppProvider({ children }) {
   }
 
   async function submitBookingRequest(listing, requestData = {}) {
+    if (isListingOwnedByUser(listing, currentUser)) {
+      return { ok: false, error: "You cannot reserve your own listing." };
+    }
+
     if (!listing) {
       return {
         ok: false,
@@ -1686,11 +1697,14 @@ export function StoretAppProvider({ children }) {
       };
     }
 
-    const request = createBookingRequest({
-      listing,
-      currentUser,
-      requestData,
-    });
+    let request;
+    try { request = createBookingRequest({ listing, currentUser, requestData }); }
+    catch (error) { return { ok: false, error: error.message }; }
+    if (!isBackendId(listing.id)) {
+      const availability = await listingAvailabilityService.getRanges(listing.id, allBookingRequests);
+      const conflict = validateRentalAvailability(request.moveInDate, request.moveOutDate, availability.data);
+      if (conflict) return { ok: false, error: conflict };
+    }
     const previousHostListings = allUserListings;
     const previousActiveListings = activeBackendListings;
 
@@ -1764,6 +1778,12 @@ export function StoretAppProvider({ children }) {
     const previousRequests = allBookingRequests;
     const previousHostListings = allUserListings;
     const previousActiveListings = activeBackendListings;
+    if (!isBackendId(requestId) && bookingStatusBlocksListing(status)) {
+      if (!hasBookingDates(targetRequest)) return { ok: false, error: "Cancel this undated request and ask the renter to choose dates." };
+      const availability = await listingAvailabilityService.getRanges(targetRequest.listingId, allBookingRequests);
+      const conflict = validateRentalAvailability(targetRequest.moveInDate, targetRequest.moveOutDate, availability.data, targetRequest.id);
+      if (conflict) return { ok: false, error: conflict };
+    }
     const updatedRequest = updateBookingRequestStatus(targetRequest, status);
     const nextRequests = replaceRecordById(previousRequests, requestId, updatedRequest);
 
@@ -1832,7 +1852,7 @@ export function StoretAppProvider({ children }) {
     const updatedRequest = updateBookingLifecycle(targetRequest, status);
     const nextRequests = replaceRecordById(previousRequests, requestId, updatedRequest);
     const bookingSyncOptions = {
-      markPostBookingActionRequired: status === BOOKING_STATUSES.COMPLETED,
+      markPostBookingActionRequired: status === BOOKING_STATUSES.COMPLETED && !hasBookingDates(targetRequest),
     };
 
     setBookingRequests((currentRequests) =>
@@ -1891,6 +1911,10 @@ export function StoretAppProvider({ children }) {
   }
 
   async function submitHostMessage(listing, messageData = {}) {
+    if (isListingOwnedByUser(listing, currentUser)) {
+      return { ok: false, error: "You cannot message the host of your own listing." };
+    }
+
     if (!listing) {
       return {
         ok: false,
@@ -2047,6 +2071,10 @@ export function StoretAppProvider({ children }) {
   }
 
   async function submitReview(listing, bookingRequest, reviewData = {}) {
+    if (isListingOwnedByUser(listing, currentUser)) {
+      return { ok: false, error: "You cannot review your own listing." };
+    }
+
     if (!listing || !bookingRequest) {
       return {
         ok: false,

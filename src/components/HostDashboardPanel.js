@@ -1,3 +1,4 @@
+import ListingCalendarManager from "./ListingCalendarManager";
 import React, { useEffect, useRef, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -834,6 +835,7 @@ function BookingRequestCard({ request, onUpdateBookingRequestStatus, onUpdateBoo
           <DetailRow label="Move-in" value={request.moveInDate} />
           <DetailRow label="Move-out" value={request.moveOutDate} />
           <DetailRow label="Duration" value={request.duration} />
+          {request.storageTotal != null && <DetailRow label="Storage total" value={formatMoney(request.storageTotal)} />}
         </Box>
 
         {(request.waitlistReason || request.notes) && (
@@ -1329,6 +1331,7 @@ function HostListingCard({
 
 
           <ListingEditActions listing={listing} />
+          <ListingCalendarManager listing={listing} />
 
           {isAwaitingAvailabilityDecision ? (
             <Button
@@ -1810,7 +1813,7 @@ function HostDashboardPanel({
       return total;
     }
 
-    return total + getPriceValue(request.listingPrice);
+    return total + getPriceValue(request.storageTotal ?? request.listingPrice);
   }, 0);
 
   const localAverageRating =
@@ -1863,7 +1866,7 @@ function HostDashboardPanel({
           return sum;
         }
 
-        return sum + getPriceValue(request.listingPrice);
+        return sum + getPriceValue(request.storageTotal ?? request.listingPrice);
       }, 0);
 
       return {

@@ -21,6 +21,9 @@ function ContactHostForm({
   currentUser,
   onSubmitMessage = () => ({ ok: true }),
   onRequireAuth,
+  heading = "Contact host",
+  description,
+  messagePlaceholder = "Hi, I’m interested in this storage space. Is it still available?",
 }) {
   const [formData, setFormData] = useState({
     fullName: currentUser?.isAuthenticated ? currentUser.fullName || "" : "",
@@ -79,27 +82,27 @@ function ContactHostForm({
 
     setIsSubmitting(true);
 
-    const result = await onSubmitMessage({
-      fullName: formData.fullName.trim(),
-      email: formData.email.trim(),
-      message: formData.message.trim(),
-    });
-
-    setIsSubmitting(false);
-
-    if (result?.ok === false) {
-      setErrors({
-        form: result.error || "We could not send this message. Please try again.",
+    try {
+      const result = await onSubmitMessage({
+        fullName: formData.fullName.trim(),
+        email: formData.email.trim(),
+        message: formData.message.trim(),
       });
-      return;
+      if (result?.ok === false) {
+        setErrors({ form: result.error || "We could not send this message. Please try again." });
+        return;
+      }
+      setSubmissionResult(result?.message || {
+        senderName: formData.fullName,
+        senderEmail: formData.email,
+        message: formData.message,
+      });
+      setFormData((prev) => ({ ...prev, message: "" }));
+    } catch (error) {
+      setErrors({ form: error?.message || "We could not send this message. Please try again." });
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setSubmissionResult(result?.message || {
-      senderName: formData.fullName,
-      senderEmail: formData.email,
-      message: formData.message,
-    });
-    setFormData((prev) => ({ ...prev, message: "" }));
   }
 
   if (!currentUser?.isAuthenticated) {
@@ -112,7 +115,7 @@ function ContactHostForm({
             </Alert>
 
             <Box>
-              <Typography variant="h6">Contact host</Typography>
+              <Typography variant="h6">{heading}</Typography>
               <Typography color="text.secondary" sx={{ mt: 0.5 }}>
                 Create or log into your Storet account to ask <strong>{hostName}</strong>{" "}
                 a question about <strong>{listingTitle}</strong>.
@@ -152,7 +155,7 @@ function ContactHostForm({
                 From {submissionResult.senderName || formData.fullName} ·{" "}
                 {submissionResult.senderEmail || formData.email}
               </Typography>
-              <Typography>{submissionResult.message}</Typography>
+              <Typography sx={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{submissionResult.message}</Typography>
             </Stack>
 
             <Button variant="outlined" onClick={() => setSubmissionResult(null)}>
@@ -168,10 +171,10 @@ function ContactHostForm({
     <Box component="form" onSubmit={handleSubmit} noValidate>
       <Stack spacing={2}>
         <Box>
-          <Typography variant="h6">Contact host</Typography>
+          <Typography variant="h6">{heading}</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Ask <strong>{hostName}</strong> a question about{" "}
-            <strong>{listingTitle}</strong> before reserving.
+            {description || <>Ask <strong>{hostName}</strong> a question about{" "}
+            <strong>{listingTitle}</strong> before reserving.</>}
           </Typography>
         </Box>
 
@@ -205,7 +208,7 @@ function ContactHostForm({
           onChange={handleChange}
           error={Boolean(errors.message)}
           helperText={errors.message}
-          placeholder="Hi, I’m interested in this storage space. Is it still available?"
+          placeholder={messagePlaceholder}
           multiline
           minRows={4}
           fullWidth

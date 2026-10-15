@@ -236,8 +236,9 @@ export default function EditListingPage() {
             </Stack></CardContent></Card>
             <Card><CardContent sx={{ p: { xs: 2, sm: 3 } }}><Stack spacing={2.5}>
               <Typography variant="h5">Pricing and booking</Typography>
-              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(3, 1fr)" }, gap: 2 }}>
+              <Box sx={{ display: "grid", gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)" }, gap: 2 }}>
                 {textField("dailyRate", "Daily rate ($)", { type: "number", inputProps: { min: 0.01, step: 0.01 } })}
+                {textField("weeklyRate", "Weekly rate ($)", { type: "number", inputProps: { min: 0.01, step: 0.01 } })}
                 {textField("monthlyRate", "Monthly rate ($)", { type: "number", inputProps: { min: 0.01, step: 0.01 } })}
                 {textField("yearlyRate", "Yearly rate ($)", { type: "number", inputProps: { min: 0.01, step: 0.01 } })}
               </Box>

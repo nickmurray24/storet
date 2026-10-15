@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "Booking request was not found." }, 404);
     }
 
-    if (booking.renter_id !== user.id) {
+    if (booking.renter_id !== user.id || booking.renter_id === booking.host_id) {
       return jsonResponse({ error: "Only the renter can pay for this booking." }, 403);
     }
 
@@ -95,10 +95,10 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "This booking is not ready for checkout." }, 409);
     }
 
-    const storageChargeCents = Math.max(0, Math.round(Number(booking.listing_price || 0) * 100));
+    const storageChargeCents = Math.max(0, Math.round(Number(booking.storage_total ?? booking.listing_price ?? 0) * 100));
     const amountCents = storageChargeCents + SERVICE_FEE_CENTS;
 
-    if (amountCents <= 0) {
+    if (storageChargeCents <= 0 || !Number.isSafeInteger(amountCents) || amountCents > 2147483647) {
       return jsonResponse({ error: "Checkout amount must be greater than $0." }, 400);
     }
 
@@ -111,6 +111,7 @@ Deno.serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
+      payment_method_types: ["card"],
       success_url: successUrl,
       cancel_url: cancelUrl,
       client_reference_id: requestId,
@@ -121,7 +122,7 @@ Deno.serve(async (req) => {
             currency: "usd",
             product_data: {
               name: `Storet booking: ${booking.listing_title}`,
-              description: `${booking.rate_display || "Storage rental"} with ${booking.host_display_name || "Storet host"}`,
+              description: `${booking.move_in_date && booking.move_out_date ? `${booking.move_in_date} to ${booking.move_out_date} · ${booking.duration} · ` : ""}${booking.rate_display || "Storage rental"} with ${booking.host_display_name || "Storet host"}`,
             },
             unit_amount: amountCents,
           },

@@ -1,3 +1,5 @@
+import { isListingOwnedByUser } from "../utils/listingOwnershipUtils";
+import { useOptionalStoretApp } from "../context/StoretAppContext";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
@@ -317,6 +319,8 @@ function ListingPopup({
   onPopupMouseEnter,
   onPopupMouseLeave,
 }) {
+  const app = useOptionalStoretApp();
+  const isOwnListing = isListingOwnedByUser(listing, app?.currentUser);
   const listingPath = buildListingPath(listing.id);
   const rating = Number(listing.rating || listing.averageRating || 0);
   const location = getPublicListingLocation(listing);
@@ -340,7 +344,7 @@ function ListingPopup({
 
       <CardContent sx={{ p: 2 }}>
         <Stack spacing={1.35}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: "wrap", alignItems: "center", gap: 0.75 }}>
             <Chip
               label={listing.storageType || "Storage"}
               size="small"
@@ -378,7 +382,7 @@ function ListingPopup({
             </Stack>
           </Box>
 
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+          <Stack direction="row" spacing={1} alignItems="center" useFlexGap sx={{ flexWrap: "wrap", alignItems: "center", gap: 0.75 }}>
             <Chip
               label={listing.startingPriceDisplay || "View rates"}
               size="small"
@@ -436,6 +440,7 @@ function ListingPopup({
             >
               View listing
             </Button>
+            {!isOwnListing && (
             <Button
               variant={isSaved ? "contained" : "outlined"}
               size="small"
@@ -451,6 +456,7 @@ function ListingPopup({
             >
               {isSaved ? <FavoriteRoundedIcon /> : <FavoriteBorderRoundedIcon />}
             </Button>
+            )}
           </Stack>
         </Stack>
       </CardContent>

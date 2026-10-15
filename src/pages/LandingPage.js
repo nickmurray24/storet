@@ -70,8 +70,9 @@ function LandingPage() {
                 <Typography variant="caption" color="text.secondary">Storage, simplified</Typography>
               </Box>
             </Stack>
-            <Stack direction="row" spacing={1} sx={{ ml: "auto", alignItems: "center", "& .MuiButton-root": { height: 36 } }}>
+            <Stack direction="row" useFlexGap sx={{ ml: "auto", gap: 1, flexWrap: "wrap", justifyContent: "flex-end", alignItems: "center", "& .MuiButton-root": { height: 36, px: 1.25, fontSize: "0.8125rem" } }}>
               <Button component={RouterLink} to={APP_ROUTES.auth} color="inherit" size="small" variant="outlined">Log in</Button>
+              <Button component={RouterLink} to={`${APP_ROUTES.auth}?mode=signup`} variant="contained" size="small">Create account</Button>
               <Button component={RouterLink} to={APP_ROUTES.explore} variant="outlined" size="small" endIcon={<ArrowForwardRoundedIcon />}>Explore</Button>
             </Stack>
           </Stack>

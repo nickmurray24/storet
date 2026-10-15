@@ -1,3 +1,4 @@
+import { isListingOwnedByUser } from "../utils/listingOwnershipUtils";
 import React, { useMemo, useState } from "react";
 import { Link as RouterLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -265,6 +266,8 @@ function ExplorePage({
   function handleSaveClick(event, listingId) {
     event.preventDefault();
     event.stopPropagation();
+    const targetListing = allListings.find(item => String(item.id) === String(listingId));
+    if (isListingOwnedByUser(targetListing, storetApp?.currentUser)) return;
 
     if (!isAuthenticated) {
       navigate(APP_ROUTES.auth, {
@@ -706,6 +709,7 @@ function ExplorePage({
               >
                 {filteredListings.map((listing) => {
                   const isSaved = savedIdSet.has(String(listing.id));
+                  const isOwnListing = isListingOwnedByUser(listing, storetApp?.currentUser);
                   const listingPath = buildListingPath(listing.id);
                   const listingImageUrl =
                     listing.coverImageUrl ||
@@ -753,13 +757,15 @@ function ExplorePage({
 
                           <Stack
                             direction="row"
-                            justifyContent="space-between"
-                            alignItems="flex-start"
                             sx={{
                               position: "absolute",
                               top: 16,
                               left: 16,
                               right: 16,
+                              gap: 0.75,
+                              flexWrap: "wrap",
+                              alignItems: "flex-start",
+                              justifyContent: "flex-start",
                             }}
                           >
                             <Chip
@@ -832,7 +838,7 @@ function ExplorePage({
                               </Typography>
                             </Stack>
 
-                            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                            <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", gap: 0.75 }}>
                               <Chip
                                 icon={<WarehouseRoundedIcon />}
                                 label={listing.storageType}
@@ -867,7 +873,7 @@ function ExplorePage({
                                 <Typography variant="h5">
                                   {listing.startingPriceDisplay}
                                 </Typography>
-                                <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 0.75, flexWrap: "wrap" }}>
+                                <Stack direction="row" spacing={0.75} useFlexGap sx={{ mt: 0.75, flexWrap: "wrap", gap: 0.75 }}>
                                   {listing.pricingOptions.map((option) => (
                                     <Chip
                                       key={option.period}
@@ -900,6 +906,7 @@ function ExplorePage({
                       </CardActionArea>
 
                       <CardActions sx={{ px: 2.5, pb: 2.5, pt: 0 }}>
+                        {!isOwnListing && (
                         <Button
                           size="small"
                           sx={{ px: 1.5, py: 0.5, minHeight: 30 }}
@@ -915,6 +922,7 @@ function ExplorePage({
                         >
                           {!isAuthenticated ? "Sign in to save" : isSaved ? "Saved" : "Save"}
                         </Button>
+                        )}
 
                         <Button
                           component={RouterLink}

@@ -2,6 +2,7 @@ import { PRICING_PERIODS } from "../constants/appEnums";
 
 export const PRICING_PERIOD_ORDER = [
   PRICING_PERIODS.DAILY,
+  PRICING_PERIODS.WEEKLY,
   PRICING_PERIODS.MONTHLY,
   PRICING_PERIODS.YEARLY,
 ];
@@ -13,6 +14,9 @@ export const PRICING_PERIOD_CONFIG = {
     pluralLabel: "days",
     suffix: "/day",
     durationLabel: "Daily rate",
+  },
+  [PRICING_PERIODS.WEEKLY]: {
+    label: "Weekly", shortLabel: "week", pluralLabel: "weeks", suffix: "/wk", durationLabel: "Weekly rate",
   },
   [PRICING_PERIODS.MONTHLY]: {
     label: "Monthly",
@@ -54,13 +58,15 @@ export function normalizePricing(pricingInput = {}, legacyMonthlyValue = null) {
     pricing.daily ?? pricing.day ?? pricing.dailyRate ?? pricing.pricePerDay,
     null
   );
+  const weekly = parsePositiveNumber(pricing.weekly ?? pricing.week ?? pricing.weeklyRate ?? pricing.pricePerWeek, null);
+  const hasStructuredPricing = ["daily", "day", "dailyRate", "pricePerDay", "weekly", "week", "weeklyRate", "pricePerWeek", "monthly", "month", "monthlyRate", "monthlyPrice", "pricePerMonth", "yearly", "year", "yearlyRate", "annualRate", "pricePerYear"].some(key => parsePositiveNumber(pricing[key]) !== null);
   const monthly = parsePositiveNumber(
     pricing.monthly ??
       pricing.month ??
       pricing.monthlyRate ??
       pricing.monthlyPrice ??
       pricing.pricePerMonth ??
-      legacyMonthlyValue,
+      (hasStructuredPricing ? null : legacyMonthlyValue),
     null
   );
   const yearly = parsePositiveNumber(
@@ -70,6 +76,7 @@ export function normalizePricing(pricingInput = {}, legacyMonthlyValue = null) {
 
   return {
     [PRICING_PERIODS.DAILY]: daily,
+    [PRICING_PERIODS.WEEKLY]: weekly,
     [PRICING_PERIODS.MONTHLY]: monthly,
     [PRICING_PERIODS.YEARLY]: yearly,
   };
@@ -146,6 +153,8 @@ export function getMonthlyEquivalentAmount(pricingInput = {}) {
     return pricing.daily * 30;
   }
 
+  if (pricing.weekly) return pricing.weekly * 30 / 7;
+
   if (pricing.yearly) {
     return pricing.yearly / 12;
   }
@@ -164,7 +173,7 @@ export function formatRate(amount, period = PRICING_PERIODS.MONTHLY) {
 }
 
 export function formatPricingSummary(pricingInput = {}, options = {}) {
-  const { limit = 3, prefix = "" } = options;
+  const { limit = 4, prefix = "" } = options;
   const rates = getAvailablePricingOptions(pricingInput);
 
   if (rates.length === 0) {

@@ -20,11 +20,6 @@ function requireEnv(name: string) {
   return value;
 }
 
-function toInteger(value: unknown, fallback = 0) {
-  const numberValue = Number(value);
-  return Number.isFinite(numberValue) ? Math.round(numberValue) : fallback;
-}
-
 function getPaymentIntentId(session: Stripe.Checkout.Session) {
   const paymentIntent = session.payment_intent;
 
@@ -60,7 +55,7 @@ Deno.serve(async (req) => {
       webhookSecret
     );
 
-    if (event.type !== "checkout.session.completed") {
+    if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.async_payment_succeeded") {
       return jsonResponse({ received: true, ignored: event.type });
     }
 
@@ -73,80 +68,27 @@ Deno.serve(async (req) => {
 
     const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: booking, error: bookingError } = await supabaseAdmin
-      .from("booking_requests")
-      .select("*")
-      .eq("id", requestId)
-      .single();
-
-    if (bookingError || !booking) {
-      throw bookingError || new Error("Booking request was not found.");
+    if (session.payment_status !== "paid") return jsonResponse({ received: true, awaitingPayment: true });
+    const intentId = getPaymentIntentId(session);
+    const { data: result, error: paymentError } = await supabaseAdmin.rpc("record_dated_booking_payment", {
+      p_booking_id: requestId, p_session_id: session.id, p_intent_id: intentId,
+      p_amount_cents: session.amount_total, p_currency: session.currency,
+    });
+    if (paymentError) throw paymentError; // Retry technical failures; never acknowledge a lost receipt.
+    if (!result?.ok) {
+      if (!intentId) throw new Error("A paid session is missing its payment intent.");
+      // A cancellation or a second paid checkout must never resurrect a reservation.
+      // Stripe idempotency makes webhook retries safe if a refund response is lost.
+      await stripe.refunds.create({ payment_intent: intentId }, { idempotencyKey: `storet-unavailable-${session.id}` });
+      console.warn("Refunded unfulfillable checkout", session.id, result?.error);
+      return jsonResponse({ received: true, refunded: true });
     }
-
-    const storageChargeCents = toInteger(
-      session.metadata?.storage_charge_cents,
-      Math.round(Number(booking.listing_price || 0) * 100)
-    );
-    const serviceFeeCents = toInteger(session.metadata?.service_fee_cents, 1900);
-    const amountCents = toInteger(
-      session.amount_total,
-      storageChargeCents + serviceFeeCents
-    );
-    const paidAt = new Date().toISOString();
-    const receiptNumber = `ST-${session.id.slice(-12).toUpperCase()}`;
-
-    const { data: payment, error: paymentError } = await supabaseAdmin
-      .from("payment_records")
-      .upsert(
-        {
-          booking_request_id: requestId,
-          listing_id: booking.listing_id,
-          host_id: booking.host_id,
-          renter_id: booking.renter_id,
-          stripe_checkout_session_id: session.id,
-          stripe_payment_intent_id: getPaymentIntentId(session),
-          display_card_brand: "Stripe",
-          display_last4: "Checkout",
-          storage_charge_cents: storageChargeCents,
-          service_fee_cents: serviceFeeCents,
-          amount_cents: amountCents,
-          currency: session.currency || "usd",
-          rate_period: booking.rate_period,
-          rate_label: booking.rate_label,
-          rate_display: booking.rate_display,
-          status: "Paid",
-          receipt_number: receiptNumber,
-          paid_at: paidAt,
-          updated_at: paidAt,
-        },
-        { onConflict: "booking_request_id" }
-      )
-      .select("id")
-      .single();
-
-    if (paymentError) {
-      throw paymentError;
-    }
-
-    const { error: updateBookingError } = await supabaseAdmin
-      .from("booking_requests")
-      .update({
-        status: "Confirmed",
-        confirmed_at: paidAt,
-        updated_at: paidAt,
-      })
-      .eq("id", requestId);
-
-    if (updateBookingError) {
-      throw updateBookingError;
-    }
-
-    return jsonResponse({ received: true, paymentId: payment?.id });
+    return jsonResponse({ received: true, paymentId: result.paymentId });
   } catch (error) {
     console.error("stripe-webhook error", error);
     return jsonResponse(
       { error: error instanceof Error ? error.message : "Webhook handling failed." },
-      400
+      500
     );
   }
 });
