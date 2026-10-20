@@ -28,6 +28,7 @@ import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 import PaymentsRoundedIcon from "@mui/icons-material/PaymentsRounded";
 import RateReviewRoundedIcon from "@mui/icons-material/RateReviewRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
+import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 import ScheduleRoundedIcon from "@mui/icons-material/ScheduleRounded";
 
 import { NOTIFICATION_STATUSES } from "../constants/appEnums";
@@ -198,6 +199,7 @@ function NotificationsPage() {
 
             <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap"
               sx={{ alignSelf: { xs: "flex-start", md: "center" }, alignItems: "center", flexWrap: "wrap", ml: { md: "auto" }, "& .MuiButton-root": { px: 1.5, py: 0.5, minHeight: 30 } }}>
+              <Button component={RouterLink} to={APP_ROUTES.settings} size="small" variant="outlined" startIcon={<SettingsRoundedIcon />} sx={{ bgcolor: "background.paper" }}>Settings</Button>
               <Button
                 onClick={handleRefresh}
                 size="small"

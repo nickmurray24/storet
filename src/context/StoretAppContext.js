@@ -254,6 +254,7 @@ function getPostAuthRedirectPath(user, options = {}) {
       return APP_ROUTES.explore;
     }
 
+    if (safeRequestedPath === APP_ROUTES.settings) return safeRequestedPath;
     if (!canRenter && canHost) {
       return hostDestination;
     }

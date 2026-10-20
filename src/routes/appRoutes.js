@@ -6,6 +6,7 @@ export const APP_ROUTES = {
   editListing: "/host/listings/:id/edit",
   profile: "/profile",
   notifications: "/notifications",
+  settings: "/settings",
   hostDashboard: "/host-dashboard",
   listingDetails: "/listing/:id",
   checkout: "/checkout/:requestId",
@@ -17,6 +18,7 @@ export const NAV_ITEMS = [
   { label: "Notifications", to: APP_ROUTES.notifications, requiresAuth: true },
   { label: "Host", to: APP_ROUTES.hostDashboard, requiresAuth: true },
   { label: "Profile", to: APP_ROUTES.profile, requiresAuth: true },
+  { label: "Settings", to: APP_ROUTES.settings, requiresAuth: true },
 ];
 
 export const HIDDEN_GLOBAL_NAV_ROUTES = [APP_ROUTES.home, APP_ROUTES.auth];
