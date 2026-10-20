@@ -20,6 +20,7 @@ import PlaceRoundedIcon from "@mui/icons-material/PlaceRounded";
 
 import {
   buildDisplayLocation,
+  getTypedAddressUnit,
   hasVerifiedCoordinates,
   mapMapboxAddressFeatureToListingAddress,
 } from "../utils/addressUtils";
@@ -68,6 +69,7 @@ function VerifiedAddressField({
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [showOptions, setShowOptions] = useState(false);
+  const [searchIsActive, setSearchIsActive] = useState(false);
 
   useEffect(() => {
     setAddressSearchValue(address?.addressLine1 || "");
@@ -82,15 +84,19 @@ function VerifiedAddressField({
   }, []);
 
   useEffect(() => {
-    if (!hasToken || disabled) {
+    // Only search while the user is editing an unverified street address.
+    // Selecting a result updates the input too, but must not start another lookup.
+    if (!hasToken || disabled || !searchIsActive || isVerified) {
       setAddressOptions([]);
       setIsSearching(false);
+      setShowOptions(false);
       return undefined;
     }
 
     const trimmedQuery = addressSearchValue.trim();
 
     if (trimmedQuery.length < 3) {
+      setShowOptions(false);
       setAddressOptions([]);
       setIsSearching(false);
       setSearchError("");
@@ -137,7 +143,7 @@ function VerifiedAddressField({
       controller.abort();
       window.clearTimeout(debounceTimer);
     };
-  }, [addressSearchValue, disabled, hasToken]);
+  }, [addressSearchValue, disabled, hasToken, searchIsActive, isVerified]);
 
   const selectedAddressLabel = useMemo(() => {
     return address?.formattedAddress || address?.addressLine1 || "";
@@ -145,6 +151,8 @@ function VerifiedAddressField({
 
   function handleAddressInputChange(nextValue) {
     setAddressSearchValue(nextValue);
+    setAddressOptions([]);
+    setSearchIsActive(true);
     setShowOptions(true);
 
     // Typing a new street address means the selected Mapbox result no longer
@@ -160,17 +168,23 @@ function VerifiedAddressField({
     }
 
     const nextAddress = mapMapboxAddressFeatureToListingAddress(selectedFeature);
+    nextAddress.addressLine2 = nextAddress.addressLine2 ||
+      getTypedAddressUnit(addressSearchValue, nextAddress.addressLine1) || address?.addressLine2 || "";
+    if (nextAddress.addressLine2) {
+      nextAddress.formattedAddress = [nextAddress.addressLine1, nextAddress.addressLine2,
+        nextAddress.city, [nextAddress.state, nextAddress.postalCode].filter(Boolean).join(" ")]
+        .filter(Boolean).join(", ");
+    }
     const nextSearchLabel = nextAddress.addressLine1 || getOptionLabel(selectedFeature);
 
+    setSearchIsActive(false);
+    setIsSearching(false);
     setAddressSearchValue(nextSearchLabel);
     setAddressOptions([]);
     setShowOptions(false);
     setSearchError("");
 
-    onAddressSelected?.({
-      ...nextAddress,
-      addressLine2: address?.addressLine2 || nextAddress.addressLine2 || "",
-    });
+    onAddressSelected?.(nextAddress);
   }
 
   function handleEditableAddressFieldChange(fieldName, value) {
@@ -179,12 +193,14 @@ function VerifiedAddressField({
       [fieldName]: fieldName === "state" ? value.toUpperCase() : value,
     };
 
-    nextAddress.displayLocation = buildDisplayLocation({
-      city: nextAddress.city,
-      state: nextAddress.state,
-      country: nextAddress.country,
-      fallback: nextAddress.displayLocation || nextAddress.location,
-    });
+    if (fieldName === "city" || fieldName === "state" || !nextAddress.displayLocation) {
+      nextAddress.displayLocation = buildDisplayLocation({
+        city: nextAddress.city,
+        state: nextAddress.state,
+        country: nextAddress.country,
+        fallback: nextAddress.displayLocation || nextAddress.location,
+      });
+    }
 
     const formattedParts = [
       nextAddress.addressLine1,
@@ -203,13 +219,15 @@ function VerifiedAddressField({
       window.clearTimeout(hideOptionsTimer.current);
     }
 
-    if (addressOptions.length > 0) {
+    setSearchIsActive(!isVerified);
+    if (!isVerified && addressOptions.length > 0) {
       setShowOptions(true);
     }
   }
 
   function handleAddressFieldBlur() {
     hideOptionsTimer.current = window.setTimeout(() => {
+      setSearchIsActive(false);
       setShowOptions(false);
     }, 160);
   }
@@ -230,6 +248,13 @@ function VerifiedAddressField({
           onChange={(event) => handleAddressInputChange(event.target.value)}
           onFocus={handleAddressFieldFocus}
           onBlur={handleAddressFieldBlur}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setSearchIsActive(false);
+              setShowOptions(false);
+              event.stopPropagation();
+            }
+          }}
           placeholder="Start typing the storage address"
           fullWidth
           disabled={disabled || !hasToken}
@@ -257,7 +282,7 @@ function VerifiedAddressField({
           inputProps={{ autoComplete: "off" }}
         />
 
-        {showOptions && addressOptions.length > 0 && !disabled && (
+        {searchIsActive && !isVerified && showOptions && addressOptions.length > 0 && !disabled && (
           <Paper
             elevation={8}
             sx={{
@@ -303,6 +328,7 @@ function VerifiedAddressField({
           handleEditableAddressFieldChange("addressLine2", event.target.value)
         }
         placeholder="Example: Garage behind house, Unit B, west door"
+        helperText="Check any unit copied from your street address. You can edit or clear it here."
         fullWidth
         disabled={disabled}
         inputProps={{ autoComplete: "shipping address-line2" }}
@@ -350,21 +376,35 @@ function VerifiedAddressField({
         />
       </Box>
 
-      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-        <Chip
-          icon={isVerified ? <CheckCircleRoundedIcon /> : <ErrorOutlineRoundedIcon />}
-          label={isVerified ? "Address verified with Mapbox" : "Address not verified yet"}
-          color={isVerified ? "success" : "warning"}
-          variant={isVerified ? "filled" : "outlined"}
-          sx={{ fontWeight: 800 }}
-        />
+      <Chip
+        icon={isVerified ? <CheckCircleRoundedIcon /> : <ErrorOutlineRoundedIcon />}
+        label={isVerified ? "Address verified with Mapbox" : "Address not verified yet"}
+        color={isVerified ? "success" : "warning"}
+        variant={isVerified ? "filled" : "outlined"}
+        sx={{ alignSelf: "flex-start", maxWidth: "100%", fontWeight: 800, height: "auto", py: 0.5,
+          "& .MuiChip-label": { whiteSpace: "normal" } }}
+      />
 
-        {isVerified && (
-          <Typography variant="body2" color="text.secondary">
-            Public location preview: {address?.displayLocation || "Location selected"}
-          </Typography>
-        )}
-      </Stack>
+      <Box component="section" aria-label="Public location preview"
+        sx={{ p: { xs: 2, sm: 2.5 }, border: "1px solid", borderColor: "divider", borderRadius: 3, bgcolor: "action.hover" }}>
+        <Box sx={{ display: "flex", alignItems: "flex-start", gap: 1.5 }}>
+          <Box sx={{ display: "grid", placeItems: "center", width: 38, height: 38, flexShrink: 0,
+            borderRadius: 2, bgcolor: "background.paper", color: "primary.main" }}>
+            <PlaceRoundedIcon fontSize="small" />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography component="h3" variant="subtitle2" sx={{ fontWeight: 800 }}>Public location preview</Typography>
+            <Typography variant={isVerified ? "h6" : "body2"} color={isVerified ? "text.primary" : "text.secondary"}
+              sx={{ mt: 0.5, fontWeight: isVerified ? 800 : 400, overflowWrap: "anywhere" }}>
+              {isVerified ? address?.displayLocation || buildDisplayLocation({ city: address?.city, state: address?.state, country: address?.country }) || "Location selected"
+                : "Select an address to preview the area."}
+            </Typography>
+          </Box>
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1.5, lineHeight: 1.6 }}>
+          Renters see this city or neighborhood when browsing your listing. It’s a general area label, separate from the street address and unit/access notes above.
+        </Typography>
+      </Box>
     </Stack>
   );
 }

@@ -171,6 +171,35 @@ function buildAddressLine1(feature = {}, properties = {}) {
   );
 }
 
+// Copy only explicit unit markers, and only when the selected street matches.
+// A trailing unlabelled number could be a ZIP/house number and is never guessed.
+const STREET_WORDS = {
+  st: "street", rd: "road", ave: "avenue", av: "avenue", ln: "lane", dr: "drive",
+  blvd: "boulevard", ct: "court", pl: "place", cir: "circle", ter: "terrace",
+  pkwy: "parkway", hwy: "highway", n: "north", s: "south", e: "east", w: "west",
+  ne: "northeast", nw: "northwest", se: "southeast", sw: "southwest",
+};
+
+function normalizedStreet(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9/-]+/g, " ").trim()
+    .split(/\s+/).map(word => STREET_WORDS[word] || word).join(" ");
+}
+
+export function getTypedAddressUnit(searchValue, selectedStreet) {
+  const input = String(searchValue || "");
+  const pattern = /(?:^|[\s,])((?:apt\.?|apartment|suite|ste\.?|unit)\s+#?\s*([a-z0-9][a-z0-9/-]*)|#\s*([a-z0-9][a-z0-9/-]*))(?=,|\s|$)/gi;
+  const chosenStreet = normalizedStreet(selectedStreet);
+  if (!chosenStreet) return "";
+  for (const match of input.matchAll(pattern)) {
+    const withoutUnit = `${input.slice(0, match.index)} ${input.slice(match.index + match[0].length)}`;
+    const queryStreet = normalizedStreet(withoutUnit);
+    if (queryStreet === chosenStreet || queryStreet.startsWith(`${chosenStreet} `)) {
+      return match[1].replace(/\s+/g, " ").trim();
+    }
+  }
+  return "";
+}
+
 export function buildDisplayLocation({ city, neighborhood, state, country, fallback } = {}) {
   const primaryArea = firstText(neighborhood, city);
   const primary = [primaryArea, state].filter(Boolean).join(", ");
@@ -221,6 +250,13 @@ export function mapMapboxAddressFeatureToListingAddress(feature = {}) {
   );
 
   const addressLine1 = buildAddressLine1(feature, properties);
+  const secondaryAddress = properties.secondary_address || getContextItem(context, ["secondary_address"]);
+  const addressLine2 = firstText(
+    properties.address_line2,
+    typeof secondaryAddress === "string" ? secondaryAddress : "",
+    secondaryAddress?.name,
+    secondaryAddress?.identifier ? [secondaryAddress.designator || "Unit", secondaryAddress.identifier].join(" ") : ""
+  );
   const formattedAddress = firstText(
     properties.full_address,
     feature.place_name,
@@ -243,7 +279,7 @@ export function mapMapboxAddressFeatureToListingAddress(feature = {}) {
 
   return {
     addressLine1,
-    addressLine2: firstText(properties.address_line2),
+    addressLine2,
     city,
     state,
     postalCode,
