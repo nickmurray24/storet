@@ -1,7 +1,6 @@
 import { NOTIFICATION_STATUSES } from "../constants/appEnums";
 import {
   mapDatabaseNotificationToAppNotification,
-  mapAppNotificationToDatabaseNotification,
 } from "./backendMappers";
 import { formatServiceResponse, requireSupabase } from "./backendServiceUtils";
 import { normalizeNotificationList } from "../utils/notificationUtils";
@@ -36,6 +35,7 @@ export const notificationService = {
       .from("notifications")
       .select(NOTIFICATION_SELECT)
       .eq("recipient_id", userId)
+      .eq("in_app_visible", true)
       .order("created_at", { ascending: false });
 
     if (queryError) {
@@ -59,10 +59,7 @@ export const notificationService = {
     const { data, error: updateError } = await supabase
       .from("notifications")
       .update(
-        mapAppNotificationToDatabaseNotification({
-          status: NOTIFICATION_STATUSES.READ,
-          readAt: now,
-        })
+        { status: NOTIFICATION_STATUSES.READ, read_at: now }
       )
       .eq("id", notificationId)
       .select(NOTIFICATION_SELECT)
@@ -93,10 +90,7 @@ export const notificationService = {
     const { data, error: updateError } = await supabase
       .from("notifications")
       .update(
-        mapAppNotificationToDatabaseNotification({
-          status: NOTIFICATION_STATUSES.READ,
-          readAt: now,
-        })
+        { status: NOTIFICATION_STATUSES.READ, read_at: now }
       )
       .eq("recipient_id", userId)
       .eq("status", NOTIFICATION_STATUSES.UNREAD)
