@@ -41,6 +41,7 @@ import { APP_ROUTES, buildListingPath } from "../routes/appRoutes";
 import { DEFAULT_USER_PROFILE } from "../models/storetModels";
 import { APP_MODES, AVAILABILITY_STATUSES, LISTING_STATUSES } from "../constants/appEnums";
 import { createListingRecord, parseNumber } from "../utils/listingUtils";
+import SquareFootageHelper from "../components/SquareFootageHelper";
 import VerifiedAddressField from "../components/VerifiedAddressField";
 import AlertDialog from "../components/ui/AlertDialog";
 import { getListingImageValidationMessage } from "../services/listingImageService";
@@ -83,11 +84,7 @@ const amenityOptions = [
 ];
 
 const MAX_LISTING_IMAGES = 5;
-const DEFAULT_SELECTED_AMENITIES = [
-  "Indoor space",
-  "Private access",
-  "Good for boxes",
-];
+const DEFAULT_SELECTED_AMENITIES = [];
 
 function CreateListingPage({ currentUser, onAddListing }) {
   const storetApp = useOptionalStoretApp();
@@ -384,7 +381,6 @@ function CreateListingPage({ currentUser, onAddListing }) {
     setFormData((currentData) => ({
       ...currentData,
       ...nextAddress,
-      addressLine2: currentData.addressLine2 || nextAddress.addressLine2 || "",
       location: nextAddress.displayLocation || nextAddress.formattedAddress || "",
     }));
   }
@@ -534,7 +530,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
       monthly: formData.monthlyRate,
       yearly: formData.yearlyRate,
     });
-    const sqft = parseNumber(formData.sqft, null);
+    const sqft = Number(formData.sqft);
 
     if (!title) {
       setError("Please enter a listing title.");
@@ -556,8 +552,8 @@ function CreateListingPage({ currentUser, onAddListing }) {
       return;
     }
 
-    if (!sqft) {
-      setError("Please enter a valid square footage.");
+    if (!Number.isInteger(sqft) || sqft <= 0 || sqft > 2147483647) {
+      setError("Please enter square footage as a positive whole number. An estimate is fine.");
       return;
     }
 
@@ -603,10 +599,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
         description,
         images: [],
         tags: buildTags(),
-        amenities:
-          selectedAmenities.length > 0
-            ? selectedAmenities
-            : ["Flexible rental", "Local storage", "Host managed"],
+        amenities: selectedAmenities,
       },
     });
 
@@ -946,6 +939,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
 
                       <TextField
                         label="Square footage"
+                        helperText="An estimate is fine. Use the helper if you’re unsure."
                         name="sqft"
                         value={formData.sqft}
                         onChange={handleInputChange}
@@ -959,6 +953,11 @@ function CreateListingPage({ currentUser, onAddListing }) {
                           ),
                         }}
                       />
+                      <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", alignSelf: "start",
+                        minHeight: { sm: 56 }, mt: { xs: -1, sm: 0 } }}>
+                        <SquareFootageHelper disabled={isSubmitting} onUseEstimate={(sqft) =>
+                          setFormData((current) => ({ ...current, sqft: String(sqft) }))} />
+                      </Box>
                     </Box>
 
                     <FormControl fullWidth>
@@ -1253,7 +1252,7 @@ function CreateListingPage({ currentUser, onAddListing }) {
                   </Stack>
 
                   <Alert severity="info">
-                    Created listings are saved to Supabase and will appear on Explore,
+                    Created listings are saved and will appear on Explore,
                     Listing Details, and your Host Dashboard.
                   </Alert>
                 </Stack>

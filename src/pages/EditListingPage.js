@@ -228,11 +228,10 @@ export default function EditListingPage() {
             <Card><CardContent sx={{ p: { xs: 2, sm: 3 } }}><Stack spacing={2.5}>
               <Typography variant="h5">Location</Typography>
               <VerifiedAddressField address={form} disabled={disabled}
-                onAddressInputChange={(value) => setForm((current) => ({ ...current, ...EMPTY_VERIFIED_ADDRESS,
+                onAddressInputChange={(fieldName, value) => setForm((current) => ({ ...current, ...EMPTY_VERIFIED_ADDRESS,
                   addressLine1: value, addressLine2: current.addressLine2, location: "" }))}
                 onAddressSelected={(address) => setForm((current) => ({ ...current, ...address,
-                  addressLine2: current.addressLine2 || "", location: address.displayLocation || address.formattedAddress }))} />
-              {textField("addressLine2", "Unit, suite, or apartment (optional)")}
+                  location: address.displayLocation || address.formattedAddress }))} />
             </Stack></CardContent></Card>
             <Card><CardContent sx={{ p: { xs: 2, sm: 3 } }}><Stack spacing={2.5}>
               <Typography variant="h5">Pricing and booking</Typography>
