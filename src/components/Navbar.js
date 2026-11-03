@@ -21,6 +21,7 @@ import ArrowDropDownRoundedIcon from "@mui/icons-material/ArrowDropDownRounded";
 import HomeWorkRoundedIcon from "@mui/icons-material/HomeWorkRounded";
 import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
+import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
 
 import { useOptionalStoretApp } from "../context/StoretAppContext";
 import {
@@ -31,7 +32,10 @@ import { APP_MODES } from "../constants/appEnums";
 
 function getNavItemsForMode({ isLoggedIn, activeMode, hostDashboardIsAvailable }) {
   if (!isLoggedIn) {
-    return [{ label: "Explore", to: APP_ROUTES.explore }];
+    return [
+      { label: "Explore", to: APP_ROUTES.explore },
+      { label: "Support", to: APP_ROUTES.support },
+    ];
   }
 
   if (activeMode === APP_MODES.HOST) {
@@ -41,6 +45,7 @@ function getNavItemsForMode({ isLoggedIn, activeMode, hostDashboardIsAvailable }
         ? { label: "Host Dashboard", to: APP_ROUTES.hostDashboard }
         : { label: "Create Listing", to: APP_ROUTES.createListing },
       { label: "Profile", to: APP_ROUTES.profile },
+      { label: "Support", to: APP_ROUTES.support },
       { label: "Settings", to: APP_ROUTES.settings },
     ];
   }
@@ -49,6 +54,7 @@ function getNavItemsForMode({ isLoggedIn, activeMode, hostDashboardIsAvailable }
     { label: "Explore", to: APP_ROUTES.explore },
     { label: "Notifications", to: APP_ROUTES.notifications },
     { label: "Profile", to: APP_ROUTES.profile },
+    { label: "Support", to: APP_ROUTES.support },
     { label: "Settings", to: APP_ROUTES.settings },
   ];
 }
@@ -215,6 +221,8 @@ function Navbar({ currentUser, onLogout }) {
             {visibleNavItems.map((item) => {
               const active = isActiveRoute(item.to);
               const isSettings = item.to === APP_ROUTES.settings;
+              const isNotifications = item.to === APP_ROUTES.notifications;
+              const isIconLink = isSettings || isNotifications;
 
               return (
                 <Button
@@ -224,14 +232,15 @@ function Navbar({ currentUser, onLogout }) {
                   variant="outlined"
                   color={active ? "primary" : "inherit"}
                   size="small"
-                  title={isSettings ? "Settings" : undefined}
-                  aria-label={isSettings ? "Settings" : item.to === APP_ROUTES.notifications && unreadNotificationsCount > 0
-                    ? `${item.label}, ${unreadNotificationsCount} unread` : undefined}
+                  title={isIconLink ? item.label : undefined}
+                  aria-label={isNotifications
+                    ? unreadNotificationsCount > 0 ? `Notifications, ${unreadNotificationsCount} unread` : "Notifications"
+                    : isSettings ? "Settings" : undefined}
                   sx={{
                     borderRadius: 999,
-                    px: isSettings ? 0 : 1.5,
-                    minWidth: isSettings ? 36 : undefined,
-                    width: isSettings ? 36 : undefined,
+                    px: isIconLink ? 0 : 1.5,
+                    minWidth: isIconLink ? 36 : undefined,
+                    width: isIconLink ? 36 : undefined,
                     borderColor: active ? "primary.main" : "divider",
                     bgcolor: active ? "action.selected" : "transparent",
                     fontWeight: active ? 800 : 700,
@@ -239,12 +248,15 @@ function Navbar({ currentUser, onLogout }) {
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {isSettings ? <SettingsRoundedIcon fontSize="small" /> : item.label}
-                  {item.to === APP_ROUTES.notifications && unreadNotificationsCount > 0 && (
-                    <Badge color="error" badgeContent={unreadNotificationsCount} max={99} aria-hidden="true"
-                      sx={{ "& .MuiBadge-badge": { position: "static", transform: "none", minWidth: 20,
-                        height: 20, borderRadius: 10, px: 0.5, fontWeight: 800 } }} />
-                  )}
+                  {isNotifications ? (
+                    <Badge color="error" badgeContent={unreadNotificationsCount} max={99}
+                      anchorOrigin={{ vertical: "top", horizontal: "right" }} aria-hidden="true"
+                      sx={{ "& .MuiBadge-badge": { minWidth: 18, height: 18, px: 0.5,
+                        fontSize: "0.625rem", fontWeight: 800, top: 2, right: 2,
+                        border: "2px solid", borderColor: "background.paper" } }}>
+                      <NotificationsRoundedIcon sx={{ fontSize: 22 }} />
+                    </Badge>
+                  ) : isSettings ? <SettingsRoundedIcon fontSize="small" /> : item.label}
                 </Button>
               );
             })}
