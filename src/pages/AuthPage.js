@@ -753,6 +753,9 @@ function AuthPage({ onLogin }) {
                       {pageCopy.switchAction}
                     </Box>
                   </Box>
+                  <Button component={RouterLink} to={APP_ROUTES.support} size="small" sx={{ alignSelf: "center" }}>
+                    Help &amp; support
+                  </Button>
                 </Stack>
               </CardContent>
             </Card>

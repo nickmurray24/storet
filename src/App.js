@@ -14,6 +14,7 @@ import CreateListingPage from "./pages/CreateListingPage";
 import EditListingPage from "./pages/EditListingPage";
 import ProfilePage from "./pages/ProfilePage";
 import SettingsPage from "./pages/SettingsPage";
+import SupportPage from "./pages/SupportPage";
 import NotificationsPage from "./pages/NotificationsPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import NotFoundPage from "./pages/NotFoundPage";
@@ -131,6 +132,8 @@ function AppRoutes() {
         />
 
         <Route path={APP_ROUTES.settings} element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
+
+        <Route path={APP_ROUTES.support} element={<SupportPage />} />
 
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
